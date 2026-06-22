@@ -47,6 +47,25 @@ class AppMenuEntry<T> {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AppContextMenuIconAction — פעולת אייקון בודדת בשורת האייקונים העליונה
+// (סגנון Windows 11: שורת כפתורי אייקון בראש תפריט ההקשר)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class AppContextMenuIconAction {
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onTap;
+  final bool enabled;
+
+  const AppContextMenuIconAction({
+    required this.tooltip,
+    required this.icon,
+    this.onTap,
+    this.enabled = true,
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // AppContextMenuEntry — פריט בתפריט הקשר (right-click)
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -71,6 +90,10 @@ class AppContextMenuEntry {
   // חלונית תצוגה מקדימה צפה שנפתחת ברפרוף על השורה בתפריט.
   final WidgetBuilder? hoverPreviewBuilder;
 
+  /// כשמוגדר, הערך מרונדר כשורה אופקית של כפתורי אייקון בראש התפריט
+  /// (סגנון Windows 11) במקום שורת טקסט רגילה.
+  final List<AppContextMenuIconAction>? iconRowActions;
+
   const AppContextMenuEntry({
     required this.label,
     this.key,
@@ -86,7 +109,26 @@ class AppContextMenuEntry {
     this.childrenBuilder,
     this.childrenRefreshStream,
     this.hoverPreviewBuilder,
-  }) : isDivider = false;
+  })  : iconRowActions = null,
+        isDivider = false;
+
+  /// שורת כפתורי אייקון בראש התפריט (סגנון Windows 11).
+  const AppContextMenuEntry.iconRow(this.iconRowActions)
+      : key = null,
+        label = null,
+        labelWidget = null,
+        icon = null,
+        enabled = true,
+        isDivider = false,
+        isDestructive = false,
+        isSelected = false,
+        isHighlighted = false,
+        onTap = null,
+        trailing = null,
+        children = null,
+        childrenBuilder = null,
+        childrenRefreshStream = null,
+        hoverPreviewBuilder = null;
 
   const AppContextMenuEntry.divider()
       : key = null,
@@ -103,7 +145,8 @@ class AppContextMenuEntry {
         children = null,
         childrenBuilder = null,
         childrenRefreshStream = null,
-        hoverPreviewBuilder = null;
+        hoverPreviewBuilder = null,
+        iconRowActions = null;
 }
 
 bool hasEnabledAppContextMenuEntries(List<AppContextMenuEntry> entries) {

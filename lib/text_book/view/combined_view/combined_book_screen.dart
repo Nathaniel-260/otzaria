@@ -738,51 +738,71 @@ class _CombinedViewState extends State<CombinedView> {
               )),
         ];
 
+    // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת לשימוש
+    // בשורת האייקונים, בתווית התפריט ובשאילתת החיפוש בפועל.
+    final rawText = selectedText?.trim() ?? '';
+    final cleanedText =
+        utils.hasNikud(rawText) ? utils.removeVolwels(rawText).trim() : rawText;
+    final hasSelectedText = cleanedText.isNotEmpty;
+    final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
+
     return [
-      () {
-        // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
-        // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
-        final rawText = selectedText?.trim() ?? '';
-        final cleanedText = utils.hasNikud(rawText)
-            ? utils.removeVolwels(rawText).trim()
-            : rawText;
-        final hasSelectedText = cleanedText.isNotEmpty;
-        final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
-        return AppContextMenuEntry(
-          label: 'חיפוש',
-          icon: FluentIcons.search_24_regular,
-          enabled: true,
-          // ללא טקסט נבחר: פתיחת חיפוש רגיל בספר ללא שאילתה.
-          onTap: hasSelectedText ? null : () => widget.openLeftPaneTab(1),
-          children: hasSelectedText
-              ? [
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בספר זה",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בספר זה',
-                    ),
-                    icon: FluentIcons.search_24_regular,
-                    onTap: () =>
-                        widget.openLeftPaneTab(1, searchText: cleanedText),
+      // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.
+      AppContextMenuEntry.iconRow([
+        AppContextMenuIconAction(
+          tooltip: 'חיפוש בכל המאגר',
+          icon: FluentIcons.library_24_regular,
+          enabled: hasSelectedText,
+          onTap: () =>
+              openGlobalSearch(context, cleanedText, insertAdjacent: true),
+        ),
+        AppContextMenuIconAction(
+          tooltip: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: hasSelectedText,
+          onTap: () => _copyFormattedText(selectedText),
+        ),
+        AppContextMenuIconAction(
+          tooltip: 'הוסף הערה אישית',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _showNoteEditor(selectedText),
+        ),
+      ]),
+      const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: 'חיפוש',
+        icon: FluentIcons.search_24_regular,
+        enabled: true,
+        // ללא טקסט נבחר: פתיחת חיפוש רגיל בספר ללא שאילתה.
+        onTap: hasSelectedText ? null : () => widget.openLeftPaneTab(1),
+        children: hasSelectedText
+            ? [
+                AppContextMenuEntry(
+                  label: "חפש '$preview' בספר זה",
+                  labelWidget: buildSearchMenuLabel(
+                    selectedText: cleanedText,
+                    suffix: 'בספר זה',
                   ),
-                  AppContextMenuEntry(
-                    label: "חפש '$preview' בכל הספרים",
-                    labelWidget: buildSearchMenuLabel(
-                      selectedText: cleanedText,
-                      suffix: 'בכל הספרים',
-                    ),
-                    icon: FluentIcons.library_24_regular,
-                    onTap: () => openGlobalSearch(
-                      context,
-                      cleanedText,
-                      insertAdjacent: true,
-                    ),
+                  icon: FluentIcons.search_24_regular,
+                  onTap: () =>
+                      widget.openLeftPaneTab(1, searchText: cleanedText),
+                ),
+                AppContextMenuEntry(
+                  label: "חפש '$preview' בכל הספרים",
+                  labelWidget: buildSearchMenuLabel(
+                    selectedText: cleanedText,
+                    suffix: 'בכל הספרים',
                   ),
-                ]
-              : null,
-        );
-      }(),
+                  icon: FluentIcons.library_24_regular,
+                  onTap: () => openGlobalSearch(
+                    context,
+                    cleanedText,
+                    insertAdjacent: true,
+                  ),
+                ),
+              ]
+            : null,
+      ),
       AppContextMenuEntry(
         label: 'מפרשים',
         icon: FluentIcons.book_24_regular,

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppContextMenuRegion — תפריט הקשר (right-click) בסגנון האפליקציה
@@ -128,7 +129,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     return menuRect.contains(globalPosition);
   }
 
-  Offset _calculateMenuOffset(
+  (Offset, bool) _calculateMenuOffset(
     RenderBox overlayRenderBox,
     Offset overlayPosition,
     List<AppContextMenuEntry> entries,
@@ -159,7 +160,23 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
         .toDouble();
     final dy = rawDy.clamp(_contextMenuScreenPadding, maxDy).toDouble();
 
-    return Offset(dx, dy);
+    return (Offset(dx, dy), shouldOpenAbove);
+  }
+
+  /// כשהתפריט נפתח כלפי מעלה, שורת האייקונים (שמטבעה בראש) מתרחקת מהעכבר.
+  /// מעבירים אותה לתחתית כדי שתישאר צמודה לעכבר — כמו ב-Windows 11.
+  List<AppContextMenuEntry> _iconRowAtBottom(
+      List<AppContextMenuEntry> entries) {
+    final index = entries.indexWhere((e) => e.iconRowActions != null);
+    if (index < 0) return entries;
+    final iconRow = entries[index];
+    final rest = [
+      for (var i = 0; i < entries.length; i++)
+        if (i != index && !(i == index + 1 && entries[i].isDivider)) entries[i],
+    ];
+    final normalized = _normalizeEntries(rest);
+    if (normalized.isEmpty) return [iconRow];
+    return [...normalized, const AppContextMenuEntry.divider(), iconRow];
   }
 
   void _repositionContextMenuWithinOverlay(Size overlaySize) {
@@ -213,12 +230,13 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     _menuAnchorX = overlayPosition.dx;
     final metrics = Theme.of(context).extension<AppMenuMetrics>() ??
         AppMenuMetrics.create(compactMenus: false);
-    final menuOffset = _calculateMenuOffset(
+    final (menuOffset, openAbove) = _calculateMenuOffset(
       overlayRenderObject,
       overlayPosition,
       entries,
       metrics,
     );
+    final orderedEntries = openAbove ? _iconRowAtBottom(entries) : entries;
     final menuStyle = _menuStyle(context, metrics);
     final maxMenuWidth = _resolveContextMenuMaxWidth(
       overlayRenderObject.size.width,
@@ -233,7 +251,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
 
     // Create controllers once per menu open — stable across overlay rebuilds
     final submenuControllers = <AppContextMenuEntry, MenuController>{
-      for (final entry in entries)
+      for (final entry in orderedEntries)
         if (((entry.children != null && entry.children!.isNotEmpty) ||
                 entry.childrenBuilder != null) &&
             entry.enabled)
@@ -274,7 +292,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
                   maintainState: true,
                   child: _AppContextMenuPanel(
                     key: _menuPanelKey,
-                    entries: entries,
+                    entries: orderedEntries,
                     metrics: metrics,
                     menuStyle: menuStyle,
                     maxWidth: maxMenuWidth,
@@ -374,6 +392,17 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
     // התווית לא יגלוש (כמו submenuContentMaxWidth בתת-התפריט).
     final contentMaxWidth = maxWidth - metrics.itemPadding.horizontal;
     return entries.map<Widget>((entry) {
+      if (entry.iconRowActions != null) {
+        return _AppContextMenuIconRow(
+          actions: entry.iconRowActions!,
+          metrics: metrics,
+          onActionTap: (action) {
+            _closeContextMenu();
+            action.onTap?.call();
+          },
+        );
+      }
+
       if (entry.isDivider) {
         return SizedBox(
           height: metrics.dividerHeight,
@@ -1346,6 +1375,78 @@ class _HoverableHighlightedRow extends StatelessWidget {
                 Icon(icon, size: metrics.iconSize, color: primary),
               ],
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// _AppContextMenuIconRow — שורת כפתורי אייקון בראש התפריט (סגנון Windows 11)
+// ═══════════════════════════════════════════════════════════════════════════
+
+class _AppContextMenuIconRow extends StatelessWidget {
+  final List<AppContextMenuIconAction> actions;
+  final AppMenuMetrics metrics;
+  final void Function(AppContextMenuIconAction action) onActionTap;
+
+  const _AppContextMenuIconRow({
+    required this.actions,
+    required this.metrics,
+    required this.onActionTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final action in actions)
+            _IconRowButton(
+              action: action,
+              metrics: metrics,
+              onTap: () => onActionTap(action),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconRowButton extends StatelessWidget {
+  final AppContextMenuIconAction action;
+  final AppMenuMetrics metrics;
+  final VoidCallback onTap;
+
+  const _IconRowButton({
+    required this.action,
+    required this.metrics,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final enabled = action.enabled && action.onTap != null;
+    final color =
+        enabled ? colorScheme.onSurface : Theme.of(context).disabledColor;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Tooltip(
+        message: action.tooltip,
+        child: InkWell(
+          onTap: enabled ? onTap : null,
+          borderRadius: BorderRadius.circular(8),
+          child: SizedBox(
+            width: 48,
+            height: 36,
+            child: Center(
+              child: RtlIcon(action.icon, size: metrics.iconSize, color: color),
+            ),
           ),
         ),
       ),
