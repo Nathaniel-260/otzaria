@@ -1307,6 +1307,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     entries.add(const AppContextMenuEntry.divider());
     final reportTargetBook = widget.reportBook ?? state.book;
     entries.addAll([
+      if (widget.isMainText)
+        AppContextMenuEntry(
+          label: 'הוסף סימניה לקטע זה',
+          icon: FluentIcons.bookmark_add_24_regular,
+          onTap: () => addTextSectionBookmark(context, state, index),
+        ),
       // בטקסט ראשי "הוסף הערה" ו"העתק" קיימים כאייקונים למעלה; במפרשים
       // (ללא שורת אייקונים) הם נשארים כאן ברשימה.
       if (!widget.isMainText)
