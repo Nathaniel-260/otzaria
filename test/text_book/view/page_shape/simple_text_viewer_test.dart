@@ -865,22 +865,23 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(find.text('העתק'), findsOneWidget,
-        reason: 'תפריט הקשר חייב להכיל פריט "העתק"');
+    // בטקסט ראשי "העתק" הוא אייקון בשורה העליונה (כיתוב "העתקה").
+    expect(find.text('העתקה'), findsOneWidget,
+        reason: 'שורת האייקונים חייבת להכיל את אייקון ההעתקה');
 
-    final copyButton = tester.widget<MenuItemButton>(
+    final copyInkWell = tester.widget<InkWell>(
       find
           .ancestor(
-            of: find.text('העתק'),
-            matching: find.byType(MenuItemButton),
+            of: find.text('העתקה'),
+            matching: find.byType(InkWell),
           )
           .first,
     );
     expect(
-      copyButton.onPressed,
+      copyInkWell.onTap,
       isNull,
-      reason:
-          '"העתק" חייב להיות מנוטרל כשאין בחירה — capturedText=null בזמן הבנייה',
+      reason: 'אייקון ההעתקה חייב להיות מנוטרל כשאין בחירה — '
+          'capturedText=null בזמן הבנייה',
     );
   });
 

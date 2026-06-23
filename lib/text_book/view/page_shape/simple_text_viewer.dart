@@ -1222,49 +1222,58 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final entries = <AppContextMenuEntry>[];
 
     if (widget.isMainText) {
-      // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת
-      // לשימוש גם בתווית התפריט וגם בשאילתת החיפוש בפועל.
+      // החיפוש עובד תמיד על טקסט ללא ניקוד וטעמים — מנקים פעם אחת לשימוש
+      // בשורת האייקונים, בכיתובי החיפוש ובשאילתת החיפוש בפועל.
       final rawText = capturedText?.trim() ?? '';
       final cleanedText = utils.hasNikud(rawText)
           ? utils.removeVolwels(rawText).trim()
           : rawText;
       final hasSelectedText = cleanedText.isNotEmpty;
-      final preview = hasSelectedText ? previewForLabel(cleanedText) : '';
+      // ציטוט קצר של הבחירה לכיתוב/tooltip: עד maxChars תווים ואז "...".
+      String quote(int maxChars) => cleanedText.length > maxChars
+          ? '${cleanedText.substring(0, maxChars)}...'
+          : cleanedText;
+
+      // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.
+      entries.add(AppContextMenuEntry.iconRow([
+        AppContextMenuIconAction(
+          label: 'חיפוש',
+          tooltip: hasSelectedText
+              ? 'חיפוש "${quote(10)}" בכל הספרים'
+              : 'חיפוש בכל הספרים',
+          icon: FluentIcons.library_24_regular,
+          enabled: hasSelectedText,
+          onTap: () =>
+              openGlobalSearch(context, cleanedText, insertAdjacent: true),
+        ),
+        AppContextMenuIconAction(
+          label: 'העתקה',
+          tooltip: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: hasSelectedText,
+          onTap: () => _copyFormattedText(capturedText),
+        ),
+        AppContextMenuIconAction(
+          label: 'הערה',
+          tooltip: 'הוסף הערה אישית',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _createNoteForCurrentLine(index, capturedText),
+        ),
+      ]));
+      entries.add(const AppContextMenuEntry.divider());
+
       entries.add(AppContextMenuEntry(
-        label: 'חיפוש',
-        icon: FluentIcons.search_24_regular,
+        label: hasSelectedText ? 'חפש "${quote(4)}" בספר זה' : 'חיפוש',
+        icon: FluentIcons.book_search_24_regular,
         enabled: hasSelectedText,
-        children: hasSelectedText
-            ? [
-                AppContextMenuEntry(
-                  label: "חפש '$preview' בספר זה",
-                  labelWidget: buildSearchMenuLabel(
-                    selectedText: cleanedText,
-                    suffix: 'בספר זה',
-                  ),
-                  icon: FluentIcons.book_search_24_regular,
-                  onTap: () {
-                    if (widget.onOpenSearch != null) {
-                      widget.onOpenSearch!(cleanedText);
-                    } else {
-                      UiSnack.show('חיפוש לא זמין בתצוגה זו');
-                    }
-                  },
-                ),
-                AppContextMenuEntry(
-                  label: "חפש '$preview' בכל הספרים",
-                  labelWidget: buildSearchMenuLabel(
-                    selectedText: cleanedText,
-                    suffix: 'בכל הספרים',
-                  ),
-                  icon: FluentIcons.library_24_regular,
-                  onTap: () => openGlobalSearch(
-                    context,
-                    cleanedText,
-                    insertAdjacent: true,
-                  ),
-                ),
-              ]
+        onTap: hasSelectedText
+            ? () {
+                if (widget.onOpenSearch != null) {
+                  widget.onOpenSearch!(cleanedText);
+                } else {
+                  UiSnack.show('חיפוש לא זמין בתצוגה זו');
+                }
+              }
             : null,
       ));
     }
@@ -1298,17 +1307,14 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     entries.add(const AppContextMenuEntry.divider());
     final reportTargetBook = widget.reportBook ?? state.book;
     entries.addAll([
-      if (widget.isMainText)
+      // בטקסט ראשי "הוסף הערה" ו"העתק" קיימים כאייקונים למעלה; במפרשים
+      // (ללא שורת אייקונים) הם נשארים כאן ברשימה.
+      if (!widget.isMainText)
         AppContextMenuEntry(
-          label: 'הוסף סימניה לקטע זה',
-          icon: FluentIcons.bookmark_add_24_regular,
-          onTap: () => addTextSectionBookmark(context, state, index),
+          label: 'הוסף הערה אישית ',
+          icon: FluentIcons.note_add_24_regular,
+          onTap: () => _createNoteForCurrentLine(index, capturedText),
         ),
-      AppContextMenuEntry(
-        label: 'הוסף הערה אישית ',
-        icon: FluentIcons.note_add_24_regular,
-        onTap: () => _createNoteForCurrentLine(index, capturedText),
-      ),
       if (!reportTargetBook.isUserBook)
         AppContextMenuEntry(
           label: 'דווח על טעות בספר',
@@ -1316,12 +1322,13 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           onTap: () => _openErrorReportDialog(capturedText ?? ''),
         ),
       const AppContextMenuEntry.divider(),
-      AppContextMenuEntry(
-        label: 'העתק',
-        icon: FluentIcons.copy_24_regular,
-        enabled: capturedText != null && capturedText.trim().isNotEmpty,
-        onTap: () => _copyFormattedText(capturedText),
-      ),
+      if (!widget.isMainText)
+        AppContextMenuEntry(
+          label: 'העתק',
+          icon: FluentIcons.copy_24_regular,
+          enabled: capturedText != null && capturedText.trim().isNotEmpty,
+          onTap: () => _copyFormattedText(capturedText),
+        ),
       AppContextMenuEntry(
         label: 'העתק את כל הפסקה',
         icon: FluentIcons.document_copy_24_regular,
