@@ -814,6 +814,11 @@ class _CombinedViewState extends State<CombinedView> {
         ];
       })(),
       const AppContextMenuEntry.divider(),
+      AppContextMenuEntry(
+        label: 'הוסף סימניה לקטע זה',
+        icon: FluentIcons.bookmark_add_24_regular,
+        onTap: () => addTextSectionBookmark(context, state, paragraphIndex),
+      ),
       if (!state.book.isUserBook)
         AppContextMenuEntry(
           label: 'דווח על טעות בספר',
