@@ -7,38 +7,6 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 
-String previewForLabel(String text, {int maxLen = 25}) {
-  final cleaned = text.trim().replaceAll(RegExp(r'\s+'), ' ');
-  if (cleaned.length <= maxLen) {
-    return cleaned;
-  }
-  return '${cleaned.substring(0, maxLen)}…';
-}
-
-/// בונה תווית "חפש '<טקסט>' <סיומת>" שבה רק הטקסט שבתוך המרכאות
-/// ייחתך עם `…` אם אין מספיק מקום, בעוד הקידומת "חפש '" והסיומת
-/// (לדוגמה "' בספר זה") נשארות תמיד גלויות במלואן.
-Widget buildSearchMenuLabel({
-  required String selectedText,
-  required String suffix,
-}) {
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      const Text("חפש '"),
-      Flexible(
-        child: Text(
-          selectedText,
-          overflow: TextOverflow.ellipsis,
-          softWrap: false,
-          maxLines: 1,
-        ),
-      ),
-      Text("' $suffix"),
-    ],
-  );
-}
-
 void openGlobalSearch(
   BuildContext context,
   String? selectedText, {

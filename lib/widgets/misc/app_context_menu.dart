@@ -139,7 +139,12 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
           metrics.menuPadding.vertical,
           (sum, entry) =>
               sum +
-              (entry.isDivider ? metrics.dividerHeight : metrics.itemHeight),
+              (entry.isDivider
+                  ? metrics.dividerHeight
+                  // שורת אייקונים גבוהה מפריט רגיל (אייקון + כיתוב + ריפודים).
+                  : entry.iconRowActions != null
+                      ? metrics.iconSize + 36
+                      : metrics.itemHeight),
         ) +
         8;
     final spaceAbove = overlayPosition.dy;
