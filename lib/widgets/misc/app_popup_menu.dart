@@ -52,6 +52,10 @@ class AppMenuEntry<T> {
 // ═══════════════════════════════════════════════════════════════════════════
 
 class AppContextMenuIconAction {
+  /// כיתוב קצר (מילה אחת) שמוצג מתחת לאייקון. בהיעדרו מוצג [tooltip].
+  final String? label;
+
+  /// טקסט הרחבה שמוצג בריחוף על האייקון.
   final String tooltip;
   final IconData icon;
   final VoidCallback? onTap;
@@ -60,6 +64,7 @@ class AppContextMenuIconAction {
   const AppContextMenuIconAction({
     required this.tooltip,
     required this.icon,
+    this.label,
     this.onTap,
     this.enabled = true,
   });

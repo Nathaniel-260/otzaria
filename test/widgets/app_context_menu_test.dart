@@ -1242,6 +1242,44 @@ void main() {
           reason: 'הרשימה הרגילה נשארת מתחת לשורת האייקונים');
     });
 
+    testWidgets('label מוצג ככיתוב מתחת לאייקון, נפרד מה-tooltip',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'חיפוש',
+            tooltip: 'חיפוש בכל המאגר',
+            icon: FluentIcons.library_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.text('חיפוש'), findsOneWidget,
+          reason: 'label הקצר מוצג ככיתוב מתחת לאייקון');
+      expect(find.text('חיפוש בכל המאגר'), findsNothing,
+          reason: 'ה-tooltip המלא אינו מוצג ככיתוב (מופיע רק בריחוף)');
+    });
+
+    testWidgets('בהיעדר label, ה-tooltip משמש ככיתוב', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            tooltip: 'העתק',
+            icon: FluentIcons.copy_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.text('העתק'), findsOneWidget,
+          reason: 'בהיעדר label, ה-tooltip מוצג ככיתוב');
+    });
+
     testWidgets('לחיצה על כפתור אייקון מפעילה onTap וסוגרת את התפריט',
         (tester) async {
       final key = GlobalKey<AppContextMenuRegionState>();

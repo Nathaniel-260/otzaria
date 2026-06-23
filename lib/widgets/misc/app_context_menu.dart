@@ -1401,16 +1401,20 @@ class _AppContextMenuIconRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final action in actions)
-            _IconRowButton(
-              action: action,
-              metrics: metrics,
-              onTap: () => onActionTap(action),
-            ),
-        ],
+      // Center ממרכז את שורת האייקונים בלי להפוך את ה-Row ל-mainAxisSize.max
+      // (max בתוך פאנל IntrinsicWidth שבר את הבחירה בעת פתיחת התפריט).
+      child: Center(
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final action in actions)
+              _IconRowButton(
+                action: action,
+                metrics: metrics,
+                onTap: () => onActionTap(action),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -1442,10 +1446,23 @@ class _IconRowButton extends StatelessWidget {
           onTap: enabled ? onTap : null,
           borderRadius: BorderRadius.circular(8),
           child: SizedBox(
-            width: 48,
-            height: 36,
-            child: Center(
-              child: RtlIcon(action.icon, size: metrics.iconSize, color: color),
+            width: 54,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  RtlIcon(action.icon, size: metrics.iconSize, color: color),
+                  const SizedBox(height: 3),
+                  Text(
+                    action.label ?? action.tooltip,
+                    style: TextStyle(fontSize: 11, color: color),
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
