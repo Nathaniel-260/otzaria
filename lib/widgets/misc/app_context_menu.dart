@@ -1446,8 +1446,9 @@ class _IconRowButton extends StatelessWidget {
     Widget button = InkWell(
       onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(8),
-      child: SizedBox(
-        width: 54,
+      // minWidth (ולא רוחב קבוע) כדי שהכיתוב יגדל עם textScaler במקום להיחתך
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minWidth: 48),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
           child: Column(

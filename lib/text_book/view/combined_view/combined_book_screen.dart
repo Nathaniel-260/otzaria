@@ -745,9 +745,13 @@ class _CombinedViewState extends State<CombinedView> {
         utils.hasNikud(rawText) ? utils.removeVolwels(rawText).trim() : rawText;
     final hasSelectedText = cleanedText.isNotEmpty;
     // ציטוט קצר של הבחירה לכיתוב/tooltip: עד maxChars תווים ואז "...".
-    String quote(int maxChars) => cleanedText.length > maxChars
-        ? '${cleanedText.substring(0, maxChars)}...'
-        : cleanedText;
+    // חיתוך לפי graphemes (לא code units) כדי לא לשבור תווים מורכבים.
+    String quote(int maxChars) {
+      final chars = cleanedText.characters;
+      return chars.length > maxChars
+          ? '${chars.take(maxChars)}...'
+          : cleanedText;
+    }
 
     return [
       // שורת אייקונים עליונה בסגנון Windows 11 — הרשימה המלאה נשארת מתחת.

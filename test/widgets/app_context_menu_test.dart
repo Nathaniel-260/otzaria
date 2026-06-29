@@ -1220,14 +1220,17 @@ void main() {
         key: key,
         actions: const [
           AppContextMenuIconAction(
+            label: 'חיפוש',
             tooltip: 'חיפוש בכל המאגר',
             icon: FluentIcons.library_24_regular,
           ),
           AppContextMenuIconAction(
+            label: 'העתקה',
             tooltip: 'העתק',
             icon: FluentIcons.copy_24_regular,
           ),
           AppContextMenuIconAction(
+            label: 'הערה',
             tooltip: 'הוסף הערה אישית',
             icon: FluentIcons.note_add_24_regular,
           ),
