@@ -1482,9 +1482,10 @@ class _IconRowButton extends StatelessWidget {
         menuStyle: menuStyle,
         closeMenu: closeMenu,
         enabled: enabled,
-        // minWidth (ולא רוחב קבוע) כדי שהכיתוב יגדל עם textScaler במקום להיחתך
+        // minWidth מאפשר גדילה עם textScaler; maxWidth מונע מ-label ארוך/טקסט
+        // מוגדל מאוד להרחיב את הכפתורים מעבר לרוחב התפריט (הכיתוב נחתך במקום).
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 48),
+          constraints: const BoxConstraints(minWidth: 48, maxWidth: 96),
           child: content,
         ),
       );
@@ -1498,7 +1499,7 @@ class _IconRowButton extends StatelessWidget {
             : null,
         borderRadius: BorderRadius.circular(8),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 48),
+          constraints: const BoxConstraints(minWidth: 48, maxWidth: 96),
           child: content,
         ),
       );

@@ -122,8 +122,10 @@ class AppContextMenuEntry {
         isDivider = false;
 
   /// שורת כפתורי אייקון בראש התפריט (סגנון Windows 11).
-  const AppContextMenuEntry.iconRow(this.iconRowActions)
-      : key = null,
+  const AppContextMenuEntry.iconRow(List<AppContextMenuIconAction> actions)
+      : assert(actions.length > 0, 'iconRow דורש לפחות פעולה אחת'),
+        iconRowActions = actions,
+        key = null,
         label = null,
         labelWidget = null,
         icon = null,
