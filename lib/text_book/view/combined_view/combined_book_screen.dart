@@ -780,7 +780,6 @@ class _CombinedViewState extends State<CombinedView> {
         if (state.book.id != null)
           AppContextMenuIconAction(
             label: 'קישור',
-            tooltip: 'העתק קישור ישיר',
             icon: FluentIcons.link_24_regular,
             submenuBuilder: () => buildDirectLinkContextMenuEntries(
               bookId: state.book.id!,
