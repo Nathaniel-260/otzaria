@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
-import 'package:otzaria/widgets/misc/rtl_icon.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // AppContextMenuRegion — תפריט הקשר (right-click) בסגנון האפליקציה
@@ -1454,7 +1453,7 @@ class _IconRowButton extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              RtlIcon(action.icon, size: metrics.iconSize, color: color),
+              Icon(action.icon, size: metrics.iconSize, color: color),
               const SizedBox(height: 3),
               Text(
                 action.label ?? action.tooltip ?? '',
