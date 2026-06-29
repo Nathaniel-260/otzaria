@@ -142,7 +142,7 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
                   ? metrics.dividerHeight
                   // שורת אייקונים גבוהה מפריט רגיל (אייקון + כיתוב + ריפודים).
                   : entry.iconRowActions != null
-                      ? metrics.iconSize + 36
+                      ? metrics.iconSize + 28
                       : metrics.itemHeight),
         ) +
         8;
@@ -400,10 +400,8 @@ class AppContextMenuRegionState extends State<AppContextMenuRegion> {
         return _AppContextMenuIconRow(
           actions: entry.iconRowActions!,
           metrics: metrics,
-          onActionTap: (action) {
-            _closeContextMenu();
-            action.onTap?.call();
-          },
+          menuStyle: _menuStyle(context, metrics),
+          closeMenu: _closeContextMenu,
         );
       }
 
@@ -1393,12 +1391,14 @@ class _HoverableHighlightedRow extends StatelessWidget {
 class _AppContextMenuIconRow extends StatelessWidget {
   final List<AppContextMenuIconAction> actions;
   final AppMenuMetrics metrics;
-  final void Function(AppContextMenuIconAction action) onActionTap;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
 
   const _AppContextMenuIconRow({
     required this.actions,
     required this.metrics,
-    required this.onActionTap,
+    required this.menuStyle,
+    required this.closeMenu,
   });
 
   @override
@@ -1415,7 +1415,8 @@ class _AppContextMenuIconRow extends StatelessWidget {
               _IconRowButton(
                 action: action,
                 metrics: metrics,
-                onTap: () => onActionTap(action),
+                menuStyle: menuStyle,
+                closeMenu: closeMenu,
               ),
           ],
         ),
@@ -1427,46 +1428,81 @@ class _AppContextMenuIconRow extends StatelessWidget {
 class _IconRowButton extends StatelessWidget {
   final AppContextMenuIconAction action;
   final AppMenuMetrics metrics;
-  final VoidCallback onTap;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
 
   const _IconRowButton({
     required this.action,
     required this.metrics,
-    required this.onTap,
+    required this.menuStyle,
+    required this.closeMenu,
   });
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final enabled = action.enabled && action.onTap != null;
+    final hasSubmenu = action.submenuBuilder != null;
+    final enabled = action.enabled && (action.onTap != null || hasSubmenu);
     final color =
         enabled ? colorScheme.onSurface : Theme.of(context).disabledColor;
 
-    Widget button = InkWell(
-      onTap: enabled ? onTap : null,
-      borderRadius: BorderRadius.circular(8),
-      // minWidth (ולא רוחב קבוע) כדי שהכיתוב יגדל עם textScaler במקום להיחתך
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(minWidth: 48),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-          child: Column(
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(action.icon, size: metrics.iconSize, color: color),
+          const SizedBox(height: 2),
+          Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(action.icon, size: metrics.iconSize, color: color),
-              const SizedBox(height: 3),
-              Text(
-                action.label ?? action.tooltip ?? '',
-                style: TextStyle(fontSize: 11, color: color),
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+              Flexible(
+                child: Text(
+                  action.label ?? action.tooltip ?? '',
+                  style: TextStyle(fontSize: 11, color: color),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
+              if (hasSubmenu)
+                Icon(FluentIcons.chevron_down_12_regular,
+                    size: 12, color: color),
             ],
           ),
-        ),
+        ],
       ),
     );
+
+    Widget button;
+    if (hasSubmenu) {
+      button = _IconRowSubmenu(
+        action: action,
+        metrics: metrics,
+        menuStyle: menuStyle,
+        closeMenu: closeMenu,
+        enabled: enabled,
+        // minWidth (ולא רוחב קבוע) כדי שהכיתוב יגדל עם textScaler במקום להיחתך
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48),
+          child: content,
+        ),
+      );
+    } else {
+      button = InkWell(
+        onTap: enabled
+            ? () {
+                closeMenu();
+                action.onTap?.call();
+              }
+            : null,
+        borderRadius: BorderRadius.circular(8),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 48),
+          child: content,
+        ),
+      );
+    }
 
     final tooltip = action.tooltip;
     if (tooltip != null && tooltip.isNotEmpty) {
@@ -1476,6 +1512,62 @@ class _IconRowButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: button,
+    );
+  }
+}
+
+/// כפתור אייקון בשורה העליונה שפותח תת-תפריט (סגנון Windows 11).
+/// משתמש ב-[MenuAnchor] שפותח את האפשרויות מתחת לכפתור; בחירת פריט סוגרת
+/// את כל תפריט ההקשר דרך [closeMenu].
+class _IconRowSubmenu extends StatelessWidget {
+  final AppContextMenuIconAction action;
+  final AppMenuMetrics metrics;
+  final MenuStyle menuStyle;
+  final VoidCallback closeMenu;
+  final bool enabled;
+  final Widget child;
+
+  const _IconRowSubmenu({
+    required this.action,
+    required this.metrics,
+    required this.menuStyle,
+    required this.closeMenu,
+    required this.enabled,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = action.submenuBuilder!();
+    return MenuAnchor(
+      style: menuStyle,
+      menuChildren: [
+        for (final entry in entries)
+          MenuItemButton(
+            requestFocusOnHover: false,
+            style: buildAppSubmenuItemStyle(context, metrics),
+            onPressed: entry.enabled
+                ? () {
+                    closeMenu();
+                    entry.onTap?.call();
+                  }
+                : null,
+            child: buildAppMenuRowContent(
+              context,
+              metrics,
+              label: entry.label ?? '',
+              icon: entry.icon,
+              enabled: entry.enabled,
+            ),
+          ),
+      ],
+      builder: (context, controller, _) => InkWell(
+        onTap: enabled
+            ? () => controller.isOpen ? controller.close() : controller.open()
+            : null,
+        borderRadius: BorderRadius.circular(8),
+        child: child,
+      ),
     );
   }
 }

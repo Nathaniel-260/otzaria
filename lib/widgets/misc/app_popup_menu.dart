@@ -61,12 +61,16 @@ class AppContextMenuIconAction {
   final VoidCallback? onTap;
   final bool enabled;
 
+  /// כשמוגדר, האייקון פותח תת-תפריט (עם חץ למטה) במקום פעולה ישירה.
+  final List<AppContextMenuEntry> Function()? submenuBuilder;
+
   const AppContextMenuIconAction({
     required this.icon,
     this.label,
     this.tooltip,
     this.onTap,
     this.enabled = true,
+    this.submenuBuilder,
   });
 }
 

@@ -1411,5 +1411,44 @@ void main() {
       expect(iconDy, lessThan(itemDy),
           reason: 'בפתיחה כלפי מטה שורת האייקונים נשארת בראש התפריט');
     });
+
+    testWidgets('פעולת אייקון עם submenuBuilder מציגה חץ ופותחת תת-תפריט',
+        (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      var optionTapped = false;
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: [
+          AppContextMenuIconAction(
+            label: 'קישור ישיר',
+            tooltip: 'העתק קישור ישיר',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => [
+              AppContextMenuEntry(
+                label: 'העתק קישור למקטע',
+                onTap: () => optionTapped = true,
+              ),
+            ],
+          ),
+        ],
+        trailingEntries: [AppContextMenuEntry(label: 'פריט', onTap: () {})],
+      );
+
+      expect(find.byIcon(FluentIcons.chevron_down_12_regular), findsOneWidget,
+          reason: 'פעולה עם submenuBuilder מציגה חץ למטה');
+
+      await tester.tap(find.byIcon(FluentIcons.link_24_regular));
+      await tester.pumpAndSettle();
+      expect(find.text('העתק קישור למקטע'), findsOneWidget,
+          reason: 'לחיצה על הכפתור פותחת את תת-התפריט');
+
+      await tester.tap(find.text('העתק קישור למקטע'));
+      await tester.pumpAndSettle();
+      expect(optionTapped, isTrue,
+          reason: 'בחירת אפשרות מפעילה את ה-onTap שלה');
+      expect(find.text('פריט'), findsNothing,
+          reason: 'בחירת אפשרות סוגרת את כל תפריט ההקשר');
+    });
   });
 }

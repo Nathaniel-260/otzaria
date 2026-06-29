@@ -777,6 +777,17 @@ class _CombinedViewState extends State<CombinedView> {
           icon: FluentIcons.note_add_24_regular,
           onTap: () => _showNoteEditor(selectedText),
         ),
+        if (state.book.id != null)
+          AppContextMenuIconAction(
+            label: 'קישור',
+            tooltip: 'העתק קישור ישיר',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => buildDirectLinkContextMenuEntries(
+              bookId: state.book.id!,
+              index: paragraphIndex,
+              selectedText: selectedText,
+            ),
+          ),
       ]),
       const AppContextMenuEntry.divider(),
       AppContextMenuEntry(
@@ -837,19 +848,6 @@ class _CombinedViewState extends State<CombinedView> {
         enabled: paragraphIndex >= 0 && paragraphIndex < widget.data.length,
         onTap: () => _copyParagraphByIndex(paragraphIndex),
       ),
-      // העתק קישור ישיר — מוצג רק אם יש book_id
-      if (state.book.id != null) ...[
-        const AppContextMenuEntry.divider(),
-        AppContextMenuEntry(
-          label: 'העתק קישור ישיר',
-          icon: FluentIcons.link_24_regular,
-          childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: state.book.id!,
-            index: paragraphIndex,
-            selectedText: selectedText,
-          ),
-        ),
-      ],
       // פריטי תפריט מפלאגינים
       ...() {
         final pluginItems = ContextMenuRegistry.instance.getAll();

@@ -1261,6 +1261,17 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
           icon: FluentIcons.note_add_24_regular,
           onTap: () => _createNoteForCurrentLine(index, capturedText),
         ),
+        if (state.book.id != null)
+          AppContextMenuIconAction(
+            label: 'קישור',
+            tooltip: 'העתק קישור ישיר',
+            icon: FluentIcons.link_24_regular,
+            submenuBuilder: () => buildDirectLinkContextMenuEntries(
+              bookId: state.book.id!,
+              index: index,
+              selectedText: capturedText,
+            ),
+          ),
       ]));
       entries.add(const AppContextMenuEntry.divider());
 
@@ -1345,22 +1356,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       ),
     ]);
 
-    // העתק קישור ישיר — מוצג בטקסט ראשי (לפי book_id של state.book)
-    // ובמפרשים (לפי book_id של widget.reportBook)
+    // העתק קישור ישיר — בטקסט ראשי מוצג כאייקון בשורה העליונה; במפרשים
+    // (ללא שורת אייקונים) נשאר כתת-תפריט ברשימה לפי book_id של widget.reportBook.
     if (widget.isMainText) {
-      if (state.book.id != null) {
-        entries.add(const AppContextMenuEntry.divider());
-        entries.add(AppContextMenuEntry(
-          label: 'העתק קישור ישיר',
-          icon: FluentIcons.link_24_regular,
-          childrenBuilder: () => buildDirectLinkContextMenuEntries(
-            bookId: state.book.id!,
-            index: index,
-            selectedText: capturedText,
-          ),
-        ));
-      }
-
       final pluginItems = ContextMenuRegistry.instance.getAll();
       if (pluginItems.isNotEmpty) {
         entries.add(const AppContextMenuEntry.divider());
