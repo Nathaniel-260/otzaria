@@ -1280,6 +1280,28 @@ void main() {
           reason: 'בהיעדר label, ה-tooltip מוצג ככיתוב');
     });
 
+    testWidgets('Tooltip נוצר רק לפעולה עם tooltip מוגדר', (tester) async {
+      final key = GlobalKey<AppContextMenuRegionState>();
+      await pumpWithIconRow(
+        tester,
+        key: key,
+        actions: const [
+          AppContextMenuIconAction(
+            label: 'הערה',
+            icon: FluentIcons.note_add_24_regular,
+          ),
+          AppContextMenuIconAction(
+            label: 'חיפוש',
+            tooltip: 'חיפוש בכל הספרים',
+            icon: FluentIcons.library_24_regular,
+          ),
+        ],
+      );
+
+      expect(find.byType(Tooltip), findsOneWidget,
+          reason: 'רק לאייקון עם tooltip מוגדר נוצר Tooltip; להערה אין');
+    });
+
     testWidgets('לחיצה על כפתור אייקון מפעילה onTap וסוגרת את התפריט',
         (tester) async {
       final key = GlobalKey<AppContextMenuRegionState>();

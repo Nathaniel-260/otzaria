@@ -1239,7 +1239,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         AppContextMenuIconAction(
           label: 'חיפוש',
           tooltip: hasSelectedText
-              ? 'חיפוש "${quote(10)}" בכל הספרים'
+              ? 'חיפוש "${quote(14)}" בכל הספרים'
               : 'חיפוש בכל הספרים',
           icon: FluentIcons.library_24_regular,
           enabled: hasSelectedText,
@@ -1248,14 +1248,12 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         ),
         AppContextMenuIconAction(
           label: 'העתקה',
-          tooltip: 'העתק',
           icon: FluentIcons.copy_24_regular,
           enabled: hasSelectedText,
           onTap: () => _copyFormattedText(capturedText),
         ),
         AppContextMenuIconAction(
           label: 'הערה',
-          tooltip: 'הוסף הערה אישית',
           icon: FluentIcons.note_add_24_regular,
           onTap: () => _createNoteForCurrentLine(index, capturedText),
         ),
@@ -1263,7 +1261,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       entries.add(const AppContextMenuEntry.divider());
 
       entries.add(AppContextMenuEntry(
-        label: hasSelectedText ? 'חפש "${quote(4)}" בספר זה' : 'חיפוש',
+        label: hasSelectedText ? 'חפש "${quote(10)}" בספר זה' : 'חיפוש',
         icon: FluentIcons.book_search_24_regular,
         enabled: hasSelectedText,
         onTap: hasSelectedText

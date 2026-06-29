@@ -55,16 +55,16 @@ class AppContextMenuIconAction {
   /// כיתוב קצר (מילה אחת) שמוצג מתחת לאייקון. בהיעדרו מוצג [tooltip].
   final String? label;
 
-  /// טקסט הרחבה שמוצג בריחוף על האייקון.
-  final String tooltip;
+  /// טקסט הרחבה שמוצג בריחוף על האייקון. null/ריק → אין tooltip.
+  final String? tooltip;
   final IconData icon;
   final VoidCallback? onTap;
   final bool enabled;
 
   const AppContextMenuIconAction({
-    required this.tooltip,
     required this.icon,
     this.label,
+    this.tooltip,
     this.onTap,
     this.enabled = true,
   });

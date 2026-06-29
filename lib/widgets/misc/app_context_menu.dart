@@ -1443,35 +1443,39 @@ class _IconRowButton extends StatelessWidget {
     final color =
         enabled ? colorScheme.onSurface : Theme.of(context).disabledColor;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2),
-      child: Tooltip(
-        message: action.tooltip,
-        child: InkWell(
-          onTap: enabled ? onTap : null,
-          borderRadius: BorderRadius.circular(8),
-          child: SizedBox(
-            width: 54,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  RtlIcon(action.icon, size: metrics.iconSize, color: color),
-                  const SizedBox(height: 3),
-                  Text(
-                    action.label ?? action.tooltip,
-                    style: TextStyle(fontSize: 11, color: color),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+    Widget button = InkWell(
+      onTap: enabled ? onTap : null,
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 54,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 2),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RtlIcon(action.icon, size: metrics.iconSize, color: color),
+              const SizedBox(height: 3),
+              Text(
+                action.label ?? action.tooltip ?? '',
+                style: TextStyle(fontSize: 11, color: color),
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
+            ],
           ),
         ),
       ),
+    );
+
+    final tooltip = action.tooltip;
+    if (tooltip != null && tooltip.isNotEmpty) {
+      button = Tooltip(message: tooltip, child: button);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: button,
     );
   }
 }
