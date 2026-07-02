@@ -29,11 +29,6 @@ import '../../test_helpers/memory_cache_provider.dart';
 //     ה-onPointerDown לדלג בלחיצה ימנית (kSecondaryButton).
 // (2) העתקה — פעולת "העתק" קראה את הטקסט הנבחר בזמן הלחיצה (כבר null אחרי
 //     שהבחירה שוחררה) במקום בזמן בניית התפריט. התיקון לוכד snapshot בבנייה.
-//
-// אימות אינטראקציית הפוקוס עצמה אינו בר-ביצוע כאן: מיקוד ProgressiveScroll
-// מפעיל את טיימר הגלילה הרקורסיבי שלו (16ms) שהופך pumpAndSettle ל-timeout,
-// ו-pump בודד אינו מממש את שינוי הפוקוס. לכן בודקים את ה-onPointerDown המקורי
-// של ה-widget מול הפרדיקט הצפוי (חיבור אמיתי + לוגיקה), ואת הלוגיקה עצמה ביחידה.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -71,10 +66,10 @@ void main() {
       (tester) async {
     await _pump(tester, textBookBloc: textBookBloc, settingsBloc: settingsBloc);
 
-    // הגארד חייב להישאר Listener translucent עם onPointerDown מעל
-    // ProgressiveScroll — שם התיקון בודק את event.buttons.
+    // ה-Listener הממקד הוא אב-קדמון של ProgressiveScroll (הוא עוטף את
+    // ה-AppFutureBuilder שמכיל אותו) — לכן find.ancestor ולא find.descendant.
     final guards = tester
-        .widgetList<Listener>(find.descendant(
+        .widgetList<Listener>(find.ancestor(
           of: find.byType(ProgressiveScroll),
           matching: find.byType(Listener),
         ))
@@ -85,7 +80,9 @@ void main() {
     expect(guards, isNotEmpty,
         reason: 'ה-Listener הממקד חייב להתקיים כדי שהגארד יחול עליו');
 
-    // לחיצה ימנית דרך ה-callback האמיתי חייבת לחזור בלי לזרוק ובלי למקד.
+    // מריצים את ה-callback האמיתי בלחיצה ימנית. עם התיקון הוא חוזר מוקדם ואינו
+    // ממקד; אם הגארד יוסר, requestFocus ימקד את ProgressiveScroll ו-hasPrimaryFocus
+    // יהפוך true — כך הרגרסיה נתפסת.
     final focusNode = tester
         .widget<ProgressiveScroll>(find.byType(ProgressiveScroll))
         .focusNode!;
@@ -96,20 +93,9 @@ void main() {
         kind: PointerDeviceKind.mouse,
       ));
     }
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(focusNode.hasPrimaryFocus, isFalse,
         reason: 'לחיצה ימנית לא תופסת פוקוס ראשי ב-ProgressiveScroll');
-  });
-
-  test('הפרדיקט של הגארד: ממקד בכל כפתור פרט לימני (kSecondaryButton)', () {
-    // התנאי הזהה לזה שב-onPointerDown של ה-Listener בפאנל: מיקוד רק כשאין
-    // כפתור ימני. שינוי התנאי הזה מחזיר את הבאג — ותפיל בדיקה זו.
-    bool focusesOn(int buttons) => buttons != kSecondaryButton;
-
-    expect(focusesOn(kPrimaryButton), isTrue, reason: 'שמאלי ממקד לגלילה');
-    expect(focusesOn(kMiddleMouseButton), isTrue, reason: 'אמצעי ממקד');
-    expect(focusesOn(kSecondaryButton), isFalse,
-        reason: 'ימני לא ממקד — אחרת הבחירה נמחקת');
   });
 
   group('לכידת טקסט נבחר בתפריט ההקשר', () {
