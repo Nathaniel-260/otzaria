@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/theme/app_tokens.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -1505,7 +1506,13 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           // לחיצה בכל מקום בחלונית ממקדת את ה-ProgressiveScroll
                           // כדי שגלילה עם החיצים תעבוד בלי לבחור טקסט קודם.
                           behavior: HitTestBehavior.translucent,
-                          onPointerDown: (_) => _focusNode.requestFocus(),
+                          // לחיצה ימנית לא ממקדת: מיקוד ה-ProgressiveScroll (אב
+                          // ל-SelectionArea) גוזל פוקוס מ-SelectableRegion ומנקה
+                          // את ההדגשה בזמן פתיחת תפריט ההקשר.
+                          onPointerDown: (event) {
+                            if (event.buttons == kSecondaryButton) return;
+                            _focusNode.requestFocus();
+                          },
                           child: AppFutureBuilder<List<CommentaryGroup>>(
                             future: _getCachedGroups(data),
                             loadingWidget: _buildSkeletonLoading(),
@@ -2020,28 +2027,32 @@ class _CollapsibleCommentaryGroupState
                                 ) ??
                                 true; // לא הוכרע — סלחני
                           },
-                          menuBuilder: (menuCtx, _) =>
-                              ContextMenuUtils.buildCommentaryContextMenu(
-                            context: menuCtx,
-                            link: link,
-                            openBookCallback: widget.openBookCallback,
-                            fontSize: widget.fontSize,
-                            savedSelectedText:
-                                widget.savedSelectedTextListenable.value,
-                            onCopySelected: () =>
-                                ContextMenuUtils.copyFormattedText(
+                          menuBuilder: (menuCtx, _) {
+                            // נלכד בזמן בניית התפריט; לחיצה ימנית עלולה לשחרר את
+                            // הבחירה (onSelectionChanged(null)) לפני שהמשתמש בוחר
+                            // "העתק", ואז קריאה חיה מהנוטיפייר הייתה מחזירה null.
+                            final savedTextAtBuild =
+                                widget.savedSelectedTextListenable.value;
+                            return ContextMenuUtils.buildCommentaryContextMenu(
                               context: menuCtx,
-                              savedSelectedText:
-                                  (widget.restoreLineBreaks ?? (s) => s)(
-                                      widget.savedSelectedTextListenable.value),
+                              link: link,
+                              openBookCallback: widget.openBookCallback,
                               fontSize: widget.fontSize,
-                              // במצב הפאנל/כרטיסייה אין מעקב פר-פריט אחר
-                              // המפרש הנבחר (אין SelectionArea פר-פריט), לכן
-                              // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
-                              link: widget.lastSelectedLinkListenable.value ??
-                                  link,
-                            ),
-                          ),
+                              savedSelectedText: savedTextAtBuild,
+                              onCopySelected: () =>
+                                  ContextMenuUtils.copyFormattedText(
+                                context: menuCtx,
+                                savedSelectedText: (widget.restoreLineBreaks ??
+                                    (s) => s)(savedTextAtBuild),
+                                fontSize: widget.fontSize,
+                                // במצב הפאנל/כרטיסייה אין מעקב פר-פריט אחר
+                                // המפרש הנבחר (אין SelectionArea פר-פריט), לכן
+                                // נופלים חזרה ל-link של הפריט שעליו נפתח התפריט.
+                                link: widget.lastSelectedLinkListenable.value ??
+                                    link,
+                              ),
+                            );
+                          },
                           child: CommentaryContent(
                             key: ValueKey(
                                 '${link.index1}_${link.path2}_${link.index2}'),
