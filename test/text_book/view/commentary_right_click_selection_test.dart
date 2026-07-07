@@ -98,6 +98,17 @@ void main() {
         reason: 'לחיצה ימנית לא תופסת פוקוס ראשי ב-ProgressiveScroll');
   });
 
+  // בודק את הפרדיקט של קוד הייצור עצמו (לא דמה) בשני הכיוונים: ימני לא ממקד,
+  // שאר הכפתורים כן. מימוש שיפסיק למקד בכל לחיצה יפיל את בדיקת השמאלי.
+  test('shouldFocusScrollOnPointerDown: ממקד בכל כפתור פרט לימני', () {
+    expect(shouldFocusScrollOnPointerDown(kPrimaryButton), isTrue,
+        reason: 'שמאלי ממקד — אחרת גלילת החיצים נשברת');
+    expect(shouldFocusScrollOnPointerDown(kMiddleMouseButton), isTrue,
+        reason: 'אמצעי ממקד');
+    expect(shouldFocusScrollOnPointerDown(kSecondaryButton), isFalse,
+        reason: 'ימני לא ממקד — אחרת הבחירה נמחקת');
+  });
+
   group('לכידת טקסט נבחר בתפריט ההקשר', () {
     Link makeLink() => Link(
           heRef: 'רש"י על בראשית א:א',
@@ -110,7 +121,7 @@ void main() {
     testWidgets(
         'תפריט שנבנה עם טקסט נבחר: enabled ומעתיק גם אחרי איפוס המקור החי',
         (tester) async {
-      // מדמה את savedSelectedTextListenable של CommentaryListBase.
+      // ה-listenable שהפאנל האמיתי מעביר ל-menuBuilder.
       final savedText = ValueNotifier<String?>('קטע מסומן להעתקה');
       addTearDown(savedText.dispose);
       String? copiedText;
@@ -120,8 +131,9 @@ void main() {
         MaterialApp(
           home: Builder(
             builder: (context) {
-              // כמו ב-menuBuilder: לוכדים את הטקסט הנבחר בזמן בניית התפריט.
-              final savedTextAtBuild = savedText.value;
+              // הלכידה דרך helper הייצור האמיתי: מחיקת ה-snapshot ממנו תגרום
+              // לקריאה חיה (null אחרי האיפוס) ותפיל את הבדיקה.
+              final savedTextAtBuild = captureSelectedTextForMenu(savedText);
               entries = ContextMenuUtils.buildCommentaryContextMenu(
                 context: context,
                 link: makeLink(),
@@ -146,6 +158,19 @@ void main() {
       copyEntry.onTap!();
       expect(copiedText, 'קטע מסומן להעתקה',
           reason: 'ההעתקה חייבת להשתמש בטקסט שנלכד בבנייה, לא בערך המנוקה');
+    });
+
+    // בדיקה ישירה של helper הלכידה: לוכד את הערך בזמן הקריאה ואינו רגיש
+    // לשינויים מאוחרים של ה-listenable.
+    test('captureSelectedTextForMenu לוכד את הערך הנוכחי בלבד', () {
+      final saved = ValueNotifier<String?>('לפני');
+      addTearDown(saved.dispose);
+
+      final snapshot = captureSelectedTextForMenu(saved);
+      saved.value = null;
+
+      expect(snapshot, 'לפני',
+          reason: 'ה-snapshot חייב להישאר יציב אחרי שהמקור החי השתנה');
     });
 
     testWidgets('טקסט נבחר ריק/רווחים בלבד — פריט "העתק" מושבת',

@@ -44,6 +44,17 @@ import 'package:otzaria/printing/view/printing_screen.dart';
 // Type alias לתאימות לאחור - משתמש ב-LinkGroup מה-Service
 typedef CommentaryGroup = LinkGroup;
 
+/// האם לחיצת ה-pointer צריכה למקד את אזור הגלילה (ProgressiveScroll).
+/// לחיצה ימנית מוחרגת: מיקוד ה-ProgressiveScroll (אב ל-SelectionArea) גוזל
+/// פוקוס מ-SelectableRegion ומוחק את ההדגשה בזמן פתיחת תפריט ההקשר.
+bool shouldFocusScrollOnPointerDown(int buttons) => buttons != kSecondaryButton;
+
+/// לוכד snapshot של הטקסט הנבחר לשימוש בפעולת ההעתקה של תפריט ההקשר.
+/// נדרש כי לחיצה ימנית עלולה לשחרר את הבחירה (onSelectionChanged(null)) לפני
+/// שהמשתמש בוחר "העתק" — קריאה חיה מהנוטיפייר באותו רגע הייתה מחזירה null.
+String? captureSelectedTextForMenu(ValueListenable<String?> saved) =>
+    saved.value;
+
 /// מייצג תוצאת חיפוש בודדת עם קטע טקסט וכתובת גלובלית לניווט
 class CommentarySearchSnippet {
   final String path;
@@ -1506,11 +1517,11 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
                           // לחיצה בכל מקום בחלונית ממקדת את ה-ProgressiveScroll
                           // כדי שגלילה עם החיצים תעבוד בלי לבחור טקסט קודם.
                           behavior: HitTestBehavior.translucent,
-                          // לחיצה ימנית לא ממקדת: מיקוד ה-ProgressiveScroll (אב
-                          // ל-SelectionArea) גוזל פוקוס מ-SelectableRegion ומנקה
-                          // את ההדגשה בזמן פתיחת תפריט ההקשר.
                           onPointerDown: (event) {
-                            if (event.buttons == kSecondaryButton) return;
+                            if (!shouldFocusScrollOnPointerDown(
+                                event.buttons)) {
+                              return;
+                            }
                             _focusNode.requestFocus();
                           },
                           child: AppFutureBuilder<List<CommentaryGroup>>(
@@ -2028,11 +2039,8 @@ class _CollapsibleCommentaryGroupState
                                 true; // לא הוכרע — סלחני
                           },
                           menuBuilder: (menuCtx, _) {
-                            // נלכד בזמן בניית התפריט; לחיצה ימנית עלולה לשחרר את
-                            // הבחירה (onSelectionChanged(null)) לפני שהמשתמש בוחר
-                            // "העתק", ואז קריאה חיה מהנוטיפייר הייתה מחזירה null.
-                            final savedTextAtBuild =
-                                widget.savedSelectedTextListenable.value;
+                            final savedTextAtBuild = captureSelectedTextForMenu(
+                                widget.savedSelectedTextListenable);
                             return ContextMenuUtils.buildCommentaryContextMenu(
                               context: menuCtx,
                               link: link,
