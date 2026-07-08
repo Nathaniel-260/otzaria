@@ -107,6 +107,10 @@ void main() {
         reason: 'אמצעי ממקד');
     expect(shouldFocusScrollOnPointerDown(kSecondaryButton), isFalse,
         reason: 'ימני לא ממקד — אחרת הבחירה נמחקת');
+    // buttons הוא bitmask: לחיצה משולבת שכוללת ימני לא צריכה למקד.
+    expect(shouldFocusScrollOnPointerDown(kPrimaryButton | kSecondaryButton),
+        isFalse,
+        reason: 'שמאלי+ימני יחד כולל ביט ימני — לא ממקד');
   });
 
   group('לכידת טקסט נבחר בתפריט ההקשר', () {

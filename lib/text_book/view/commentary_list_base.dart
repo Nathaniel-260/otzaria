@@ -45,9 +45,11 @@ import 'package:otzaria/printing/view/printing_screen.dart';
 typedef CommentaryGroup = LinkGroup;
 
 /// האם לחיצת ה-pointer צריכה למקד את אזור הגלילה (ProgressiveScroll).
-/// לחיצה ימנית מוחרגת: מיקוד ה-ProgressiveScroll (אב ל-SelectionArea) גוזל
-/// פוקוס מ-SelectableRegion ומוחק את ההדגשה בזמן פתיחת תפריט ההקשר.
-bool shouldFocusScrollOnPointerDown(int buttons) => buttons != kSecondaryButton;
+/// לחיצה שכוללת כפתור ימני מוחרגת: מיקוד ה-ProgressiveScroll (אב ל-SelectionArea)
+/// גוזל פוקוס מ-SelectableRegion ומוחק את ההדגשה בזמן פתיחת תפריט ההקשר.
+/// [buttons] הוא bitmask, ולכן בודקים את הביט הימני ולא שוויון מלא.
+bool shouldFocusScrollOnPointerDown(int buttons) =>
+    (buttons & kSecondaryButton) == 0;
 
 /// לוכד snapshot של הטקסט הנבחר לשימוש בפעולת ההעתקה של תפריט ההקשר.
 /// נדרש כי לחיצה ימנית עלולה לשחרר את הבחירה (onSelectionChanged(null)) לפני
