@@ -425,6 +425,14 @@ Future<void> _initializeSentry() async {
 }
 
 Future<void> _runAppBootstrap() async {
+  // חימום pdfium ברקע: האתחול (isolate נייטיבי) איטי, ובלעדיו פתיחת
+  // ה-PDF הראשון סופגת אותו. best-effort — כשל מטופל שוב בפתיחת ספר.
+  unawaited(Future(() async {
+    try {
+      await pdfrxFlutterInitialize();
+    } catch (_) {}
+  }));
+
   // Check for single instance - skip on Apple platforms (macOS/iOS) due to sandbox restrictions
   if (!Platform.isMacOS && !Platform.isIOS) {
     FlutterSingleInstance flutterSingleInstance = FlutterSingleInstance();

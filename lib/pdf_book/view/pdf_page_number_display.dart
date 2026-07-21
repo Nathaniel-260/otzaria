@@ -41,10 +41,20 @@ class _PageNumberDisplayState extends State<PageNumberDisplay> {
     super.dispose();
   }
 
+  int? _lastPage;
+  int? _lastCount;
+
+  // ה-controller מנוטרל בכל טיק גלילה/זום — setState רק כשהתצוגה
+  // (עמוד נוכחי / סה"כ עמודים) באמת משתנה.
   void _handlePageChange() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (!mounted) return;
+    final ready = widget.controller.isReady;
+    final page = ready ? widget.controller.pageNumber : null;
+    final count = ready ? widget.controller.pageCount : null;
+    if (page == _lastPage && count == _lastCount) return;
+    _lastPage = page;
+    _lastCount = count;
+    setState(() {});
   }
 
   void _handleSubmitted(String value) {

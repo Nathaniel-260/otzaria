@@ -21,6 +21,7 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
   final ScrollController _scrollController = ScrollController();
   bool _isManuallyScrolling = false;
   int? _lastScrolledPage;
+  int? _lastKnownPage;
 
   @override
   bool get wantKeepAlive => true;
@@ -57,11 +58,16 @@ class _ThumbnailsViewState extends State<ThumbnailsView>
     super.dispose();
   }
 
+  // ה-controller מנוטרל בכל טיק גלילה/זום של הצופה הראשי — בנייה מחדש
+  // של כל הרשימה מותרת רק כשמספר העמוד באמת השתנה.
   void _onControllerChanged() {
-    if (mounted) {
-      setState(() {});
-      _scrollToActiveItem();
-    }
+    if (!mounted) return;
+    final controller = widget.controller;
+    final page = (controller?.isReady ?? false) ? controller!.pageNumber : null;
+    if (page == _lastKnownPage) return;
+    _lastKnownPage = page;
+    setState(() {});
+    _scrollToActiveItem();
   }
 
   void _scrollToActiveItem() {
