@@ -361,6 +361,7 @@ class DictionaryLookupRepository {
   List<LaazDictionaryEntry> _laazEntries = <LaazDictionaryEntry>[];
   Map<String, List<LaazDictionaryEntry>> _laazByTranslit =
       <String, List<LaazDictionaryEntry>>{};
+  Set<String> _laazHoverSuppressed = <String>{};
 
   bool get isLoaded =>
       _areAcronymsLoaded && _areAramaicLoaded && _areLaazLoaded;
@@ -637,6 +638,23 @@ class DictionaryLookupRepository {
     return variants..remove(key);
   }
 
+  /// בודק אם יש לדכא את חלונית הריחוף ללעז [raw].
+  ///
+  /// מילים כמו מש"א או די"ל הן ברוב המכריע של הספרייה ראשי תיבות ולא לעז,
+  /// ולכן חלונית לעז עליהן שגויה. תפריט ההקשר אינו מושפע - שם המשתמש בוחר.
+  ///
+  /// כל עוד מילוני ראשי התיבות והארמית לא נטענו אי אפשר לאמת, ולכן מדכאים
+  /// הכל: פירוש שגוי גרוע מהיעדר חלונית.
+  ///
+  /// [raw] - המילה שמרחפים מעליה
+  /// Returns [bool] - true כשאין להציג חלונית לעז בריחוף
+  bool isLaazHoverSuppressed(String raw) {
+    if (!_areAcronymsLoaded || !_areAramaicLoaded) return true;
+    return _laazHoverSuppressed.contains(
+      _canonicalizeLaazTranslit(_normalizeAramaic(raw)),
+    );
+  }
+
   /// מחזיר את התאמות הלעז מקובצות: ערכים עם אותו תעתיק ואותו פירוש
   /// (ממקורות רש"י שונים) מאוחדים לקבוצה אחת, לפי סדר ההופעה בספר.
   List<List<LaazDictionaryEntry>> findLaazMatchGroups(String raw) {
@@ -683,6 +701,7 @@ class DictionaryLookupRepository {
       ),
     );
     _originalAcronymByKey = originalAcronyms;
+    _rebuildLaazHoverSuppression();
   }
 
   Future<void> _loadAramaicInternal() async {
@@ -701,6 +720,7 @@ class DictionaryLookupRepository {
 
     _aramaicEntries = List<AramaicDictionaryEntry>.unmodifiable(aramaicEntries);
     _aramaicTerms = Set<String>.unmodifiable(aramaicTerms);
+    _rebuildLaazHoverSuppression();
   }
 
   Future<void> _loadLaazInternal() async {
@@ -715,6 +735,18 @@ class DictionaryLookupRepository {
 
     _laazEntries = List<LaazDictionaryEntry>.unmodifiable(laazEntries);
     _laazByTranslit = byTranslit;
+    _rebuildLaazHoverSuppression();
+  }
+
+  /// נבנה מחדש בסיום כל טעינת מילון, כי סדר הטעינה אינו מובטח והסט תלוי
+  /// בשלושתם.
+  void _rebuildLaazHoverSuppression() {
+    _laazHoverSuppressed = _laazByTranslit.keys
+        .where(
+          (key) =>
+              _acronymsByKey.containsKey(key) || _aramaicTerms.contains(key),
+        )
+        .toSet();
   }
 
   /// מפתחות האינדוקס של תעתיק: המחרוזת המלאה, ובתעתיק רב-מילי גם כל מילה
@@ -866,17 +898,20 @@ class DictionaryLookupRepository {
     _acronymsByKey = <String, List<String>>{};
     _originalAcronymByKey = <String, String>{};
     _areAcronymsLoaded = false;
+    _rebuildLaazHoverSuppression();
   }
 
   void _resetAramaicCache() {
     _aramaicEntries = <AramaicDictionaryEntry>[];
     _aramaicTerms = <String>{};
     _areAramaicLoaded = false;
+    _rebuildLaazHoverSuppression();
   }
 
   void _resetLaazCache() {
     _laazEntries = <LaazDictionaryEntry>[];
     _laazByTranslit = <String, List<LaazDictionaryEntry>>{};
     _areLaazLoaded = false;
+    _rebuildLaazHoverSuppression();
   }
 }

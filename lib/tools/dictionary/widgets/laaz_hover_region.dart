@@ -9,6 +9,9 @@ import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
 
 /// מחזיר את קבוצות הלעז להצגה בריחוף עבור [word], או רשימה ריקה כשאין
 /// מה להציג (מילון לא טעון, המילה אינה תעתיק לעז, או שאין התאמה).
+///
+/// מילה שהיא גם ראשי תיבות או ערך ארמי מדוכאת - ריחוף אינו מאפשר בחירה,
+/// ולכן עדיף לא להציג כלום; בתפריט ההקשר הלעז עדיין זמין.
 List<List<LaazDictionaryEntry>> laazHoverGroupsFor(
   String? word,
   DictionaryLookupRepository repository,
@@ -16,6 +19,7 @@ List<List<LaazDictionaryEntry>> laazHoverGroupsFor(
   if (word == null || word.isEmpty) return const [];
   if (!repository.areLaazLoaded) return const [];
   if (!repository.isLikelyLaazTranslit(word)) return const [];
+  if (repository.isLaazHoverSuppressed(word)) return const [];
   return repository.findLaazMatchGroups(word);
 }
 
@@ -70,11 +74,18 @@ class _LaazHoverRegionState extends State<LaazHoverRegion> {
     // הסמן נשאר על המילה שכבר מוצגת — אין לפתוח מחדש (מונע הבהוב).
     if (hit.word == _shownWord) return;
     final repository = _repository;
-    // טעינת המילון רק כשהמילה נראית כתעתיק לעז — לא בכל ריחוף.
-    if (repository.isLikelyLaazTranslit(hit.word) &&
-        !repository.areLaazLoaded) {
-      unawaited(repository.ensureLaazLoaded().catchError((_) {}));
-      return;
+    // טעינת מילונים רק כשהמילה נראית כתעתיק לעז — לא בכל ריחוף. גם ראשי
+    // התיבות והארמית נדרשים, כי בלעדיהם אין דרך לאמת שאין התנגשות.
+    if (repository.isLikelyLaazTranslit(hit.word)) {
+      if (!repository.areLaazLoaded) {
+        unawaited(repository.ensureLaazLoaded().catchError((_) {}));
+        return;
+      }
+      if (!repository.areAcronymsLoaded || !repository.areAramaicLoaded) {
+        unawaited(repository.ensureAcronymsLoaded().catchError((_) {}));
+        unawaited(repository.ensureAramaicLoaded().catchError((_) {}));
+        return;
+      }
     }
     final groups = laazHoverGroupsFor(hit.word, repository);
     if (groups.isEmpty) {

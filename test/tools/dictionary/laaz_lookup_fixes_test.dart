@@ -155,7 +155,7 @@ void main() {
         lineMasiz,
         linePorels,
       ]);
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
     });
 
     test('isLikelyLaazTranslit מאשר תעתיק ללא גרשיים שקיים באינדקס', () {
@@ -406,7 +406,7 @@ void main() {
       tester,
     ) async {
       final repository = buildRepository(const <String>[lineChevile]);
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       final group = repository.findLaazMatchGroups('קיביל"א');
 
       await tester.pumpWidget(
@@ -428,7 +428,7 @@ void main() {
 
     testWidgets('אין חלונית לפני שחלף זמן ההשהיה, ויש אחריו', (tester) async {
       final repository = buildRepository(const <String>[lineGlaca]);
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
 
       final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
@@ -460,7 +460,7 @@ void main() {
 
     testWidgets('מגע (לא עכבר) אינו מפעיל חלונית', (tester) async {
       final repository = buildRepository(const <String>[lineGlaca]);
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
 
       final gesture = await tester.createGesture(kind: PointerDeviceKind.touch);

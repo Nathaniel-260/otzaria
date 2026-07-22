@@ -37,7 +37,7 @@ void main() {
   group('laazHoverGroupsFor', () {
     test('מחזיר ריק למילה ריקה או null', () async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
 
       expect(laazHoverGroupsFor(null, repository), isEmpty);
       expect(laazHoverGroupsFor('', repository), isEmpty);
@@ -51,7 +51,7 @@ void main() {
 
     test('מחזיר ריק למילה שאינה תעתיק לעז, גם כשהיא מילת ערך', () async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
 
       expect(laazHoverGroupsFor('כרתי', repository), isEmpty);
       expect(laazHoverGroupsFor('שלום', repository), isEmpty);
@@ -59,14 +59,14 @@ void main() {
 
     test('מחזיר ריק לתעתיק לעז ללא התאמה במילון', () async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
 
       expect(laazHoverGroupsFor('אב"ג', repository), isEmpty);
     });
 
     test('מחזיר קבוצות לתעתיק לעז עם התאמה', () async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
 
       final groups = laazHoverGroupsFor('פוריל"ש', repository);
 
@@ -123,7 +123,7 @@ void main() {
       tester,
     ) async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
       final gesture = await startMouse(tester);
 
@@ -149,7 +149,7 @@ void main() {
       tester,
     ) async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
       final gesture = await startMouse(tester);
 
@@ -182,7 +182,7 @@ void main() {
           '12 / (שבת י.) / <b>חציר</b> פוריל"ש / porels / <b>עשב מאכל</b>',
         ],
       );
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
       final gesture = await startMouse(tester);
 
@@ -212,7 +212,7 @@ void main() {
 
     testWidgets('הזזת הסמן למילה רגילה סוגרת את החלונית', (tester) async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
       final gesture = await startMouse(tester);
       // מחשבים את שני המיקומים לפני פתיחת החלונית — אחרי הפתיחה גם כותרת
@@ -237,7 +237,7 @@ void main() {
 
     testWidgets('ריחוף על מילה ללא התאמה אינו מציג חלונית', (tester) async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       await pumpRegion(tester, repository);
       final gesture = await startMouse(tester);
 
@@ -252,7 +252,7 @@ void main() {
       tester,
     ) async {
       final repository = buildRepository();
-      await repository.ensureLaazLoaded();
+      await repository.ensureLoaded();
       final recognizer = TapGestureRecognizer()..onTap = () {};
       addTearDown(recognizer.dispose);
       await pumpRegion(
