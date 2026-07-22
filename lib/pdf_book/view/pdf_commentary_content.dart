@@ -7,6 +7,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/utils/commentary_search_utils.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
@@ -79,14 +80,21 @@ class _PdfCommentaryContentState extends State<PdfCommentaryContent> {
 
   @override
   Widget build(BuildContext context) {
+    return LaazHoverRegion(child: _buildContent(context));
+  }
+
+  Widget _buildContent(BuildContext context) {
     return GestureDetector(
       onDoubleTap: () {
-        widget.openBookCallback(TextBookTab(
-          book: TextBook(title: utils.getTitleFromPath(widget.link.path2)),
-          index: widget.link.index2 - 1,
-          openLeftPane: (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
-              (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
-        ));
+        widget.openBookCallback(
+          TextBookTab(
+            book: TextBook(title: utils.getTitleFromPath(widget.link.path2)),
+            index: widget.link.index2 - 1,
+            openLeftPane:
+                (Settings.getValue<bool>('key-pin-sidebar') ?? false) ||
+                (Settings.getValue<bool>('key-default-sidebar-open') ?? false),
+          ),
+        );
       },
       child: FutureBuilder(
         future: content,

@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/tools/dictionary/widgets/aramaic_dictionary_entry_view.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_entry_view.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -207,66 +208,10 @@ Widget _buildLaazDialogContent(
   BuildContext context,
   List<LaazDictionaryEntry> group,
 ) {
-  final entry = group.first;
-  final lemmas = <String>{for (final e in group) e.lemma}.join(', ');
-  final references = <String>{
-    for (final e in group)
-      if (e.sourceReference.isNotEmpty) e.sourceReference,
-  }.join(', ');
-  final textTheme = Theme.of(context).textTheme;
-  final colorScheme = Theme.of(context).colorScheme;
-  final secondaryStyle = textTheme.bodySmall?.copyWith(
-    color: colorScheme.onSurfaceVariant,
-  );
-
   return SizedBox(
     width: 520,
     child: SingleChildScrollView(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$lemmas — ${entry.laazHebrew}',
-            style: textTheme.bodyLarge,
-          ),
-          if (entry.laazLatin.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(
-              entry.laazLatin,
-              textDirection: TextDirection.ltr,
-              style: textTheme.bodyMedium?.copyWith(
-                fontStyle: FontStyle.italic,
-              ),
-            ),
-          ],
-          if (entry.meaning.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              entry.meaning,
-              style: textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-          if (references.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text('רש"י $references', style: secondaryStyle),
-          ],
-          if (entry.note != null) ...[
-            const SizedBox(height: 8),
-            Text(entry.note!, style: secondaryStyle),
-          ],
-          if (entry.english != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              entry.english!,
-              textDirection: TextDirection.ltr,
-              style: secondaryStyle,
-            ),
-          ],
-        ],
-      ),
+      child: LaazEntryGroupView(group: group),
     ),
   );
 }

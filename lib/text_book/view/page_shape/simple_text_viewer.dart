@@ -12,6 +12,7 @@ import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -2015,6 +2016,10 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
 
   @override
   Widget build(BuildContext context) {
+    return LaazHoverRegion(child: _buildViewerBody(context));
+  }
+
+  Widget _buildViewerBody(BuildContext context) {
     return Column(
       children: [
         // כותרת אופציונלית

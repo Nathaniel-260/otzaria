@@ -5,6 +5,7 @@ import 'package:otzaria/settings/services/nikud_display_service.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/widgets/misc/app_popup_menu.dart';
+import 'package:otzaria/widgets/misc/link_preview_styles.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
 /// בונה פריט תפריט הקשר עבור קישור בודד בתת-תפריט "קישורים".
@@ -87,13 +88,10 @@ class LinkHoverPreviewContent extends StatelessWidget {
                   title,
                   maxLines: compact ? 1 : null,
                   overflow: compact ? TextOverflow.ellipsis : null,
-                  style: TextStyle(
-                    fontSize: compact
-                        ? 11
-                        : settingsState.commentatorsFontSize - 2,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: settingsState.commentatorsFontFamily,
-                    color: colorScheme.primary,
+                  style: LinkPreviewStyles.title(
+                    context,
+                    settingsState,
+                    compact: compact,
                   ),
                 );
                 if (onOpen == null) return titleText;
@@ -113,7 +111,7 @@ class LinkHoverPreviewContent extends StatelessWidget {
                 );
               },
             ),
-            Divider(height: compact ? 8 : 16),
+            LinkPreviewStyles.divider(compact: compact),
             FutureBuilder<String>(
               future: link.content,
               builder: (context, snapshot) {
@@ -174,18 +172,10 @@ class LinkHoverPreviewContent extends StatelessWidget {
                   builder: (context, nikudSnapshot) {
                     final content = SmartTextWidget(
                       text: cleanContent,
-                      settings: RenderSettings(
+                      settings: LinkPreviewStyles.content(
+                        settingsState,
                         removeNikud: nikudSnapshot.data ?? false,
                         removePunctuation: removePunctuation,
-                        removeTeamim: !settingsState.showTeamim,
-                        replaceHolyNames: settingsState.replaceHolyNames,
-                        fontSize: settingsState.commentatorsFontSize,
-                        fontFamily: settingsState.commentatorsFontFamily,
-                        fontWeight: settingsState.commentatorsFontBold
-                            ? FontWeight.bold
-                            : null,
-                        lineHeight: settingsState.lineHeight,
-                        justifyText: true,
                       ),
                     );
                     if (maxContentLines == null) return content;

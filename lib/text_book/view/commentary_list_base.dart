@@ -28,6 +28,7 @@ import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/tools/dictionary/dictionary_context_menu_entries.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/utils/text/word_at_position.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
@@ -1333,6 +1334,10 @@ class CommentaryListBaseState extends State<CommentaryListBase> {
 
   @override
   Widget build(BuildContext context) {
+    return LaazHoverRegion(child: _buildList(context));
+  }
+
+  Widget _buildList(BuildContext context) {
     return TextBookStateBuilder(
       buildWhen: (previous, current) {
         // מבטיח בניה מחדש רק כשיש שינוי בנתונים שמשפיעים על תצוגת המפרשים

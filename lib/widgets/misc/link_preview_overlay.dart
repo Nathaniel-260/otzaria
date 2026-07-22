@@ -146,6 +146,9 @@ class LinkPreviewOverlay {
     overlay.insert(_entry!);
   }
 
+  /// האם החלונית הפעילה מקובעת (נלחצה) — ריחוף חדש לא יחליף אותה.
+  static bool get hasPinnedPanel => _activePanel?._pinned ?? false;
+
   /// מתזמנת סגירה קרובה (הסמן עזב את העוגן). כניסת הסמן לחלונית מבטלת אותה.
   static void scheduleHide() => _activePanel?._scheduleHide();
 
