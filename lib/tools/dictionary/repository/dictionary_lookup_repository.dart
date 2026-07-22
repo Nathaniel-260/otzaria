@@ -336,12 +336,21 @@ class DictionaryLookupRepository {
   bool get areLaazLoaded => _areLaazLoaded;
 
   /// טוען את כל המילונים פעם אחת ומשאיר אותם בזיכרון.
+  ///
+  /// כשלון של מילון אחד אינו מבטל את האחרים; הקורא הישיר של
+  /// `ensureLaazLoaded` וחבריו עדיין מקבל את השגיאה.
   Future<void> ensureLoaded() async {
     await Future.wait<void>([
-      ensureAcronymsLoaded(),
-      ensureAramaicLoaded(),
-      ensureLaazLoaded(),
+      _ignoreFailure(ensureAcronymsLoaded()),
+      _ignoreFailure(ensureAramaicLoaded()),
+      _ignoreFailure(ensureLaazLoaded()),
     ]);
+  }
+
+  static Future<void> _ignoreFailure(Future<void> load) {
+    return load.catchError((Object error, StackTrace stackTrace) {
+      debugPrint('טעינת מילון נכשלה: $error\n$stackTrace');
+    });
   }
 
   /// טוען את מילון ראשי התיבות בלבד.
