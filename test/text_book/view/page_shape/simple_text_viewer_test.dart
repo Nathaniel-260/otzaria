@@ -22,6 +22,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
@@ -1389,6 +1390,55 @@ void main() {
 
     scrollController.dispose();
     focusNode.dispose();
+  });
+
+  // גארד: מחיקת ה-LaazHoverRegion מ-build תשתיק את ריחוף הלעז בצורת הדף
+  // בלי שאף בדיקה אחרת תיכשל.
+  testWidgets('LaazHoverRegion עוטף את גוף הצפייה בצורת הדף', (tester) async {
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: SimpleTextViewer(
+              content: const ['שורה א'],
+              fontSize: 18,
+              openBookCallback: (_) {},
+              isMainText: true,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(
+        of: find.byType(SimpleTextViewer),
+        matching: find.byType(LaazHoverRegion),
+      ),
+      findsOneWidget,
+      reason: 'בלי LaazHoverRegion אין ריחוף לעז בצורת הדף',
+    );
   });
 }
 

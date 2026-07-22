@@ -18,6 +18,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -93,6 +94,28 @@ void main() {
         expect(find.byType(ErrorWidget), findsNothing);
       },
     );
+  });
+
+  // גארד: מחיקת ה-LaazHoverRegion מ-build תשתיק את ריחוף הלעז בחלונית
+  // המפרשים בלי שאף בדיקה אחרת תיכשל.
+  group('CommentaryListBase - ריחוף לעזי רש"י מחובר', () {
+    testWidgets('LaazHoverRegion עוטף את רשימת המפרשים', (tester) async {
+      final bloc = _TestTextBookBloc(_stateWithoutLinks());
+      addTearDown(() async => bloc.close());
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      addTearDown(() async => settingsBloc.close());
+
+      await _pump(tester, textBookBloc: bloc, settingsBloc: settingsBloc);
+
+      expect(
+        find.descendant(
+          of: find.byType(CommentaryListBase),
+          matching: find.byType(LaazHoverRegion),
+        ),
+        findsOneWidget,
+        reason: 'בלי LaazHoverRegion אין ריחוף לעז בחלונית המפרשים',
+      );
+    });
   });
 }
 

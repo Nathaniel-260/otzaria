@@ -17,6 +17,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
 import 'package:otzaria/text_book/view/selection/enhanced_gesture_detector.dart';
+import 'package:otzaria/tools/dictionary/widgets/laaz_hover_region.dart';
 import 'package:otzaria/text_book/view/selection/selection_sync_controller.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
@@ -443,6 +444,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  // גארד: מחיקת ה-LaazHoverRegion מ-build תשתיק את ריחוף הלעז בתצוגה
+  // המשולבת בלי שאף בדיקה אחרת תיכשל.
+  testWidgets('LaazHoverRegion עוטף את התצוגה המשולבת', (tester) async {
+    final textBookBloc = _TestTextBookBloc(_loadedState());
+    addTearDown(() async => textBookBloc.close());
+    final personalNotesBloc = _TestPersonalNotesBloc(
+      PersonalNotesState(
+        isLoading: false,
+        bookId: 'ספר בדיקה',
+        locatedNotes: const [],
+        missingNotes: const [],
+        errorMessage: null,
+        filteredLocatedNotes: const [],
+        filteredMissingNotes: const [],
+      ),
+    );
+    addTearDown(() async => personalNotesBloc.close());
+    final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+    addTearDown(() async => settingsBloc.close());
+    final tab = TextBookTab(book: TextBook(title: 'ספר בדיקה'), index: 0);
+    addTearDown(tab.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: Scaffold(
+            body: CombinedView(
+              data: const ['שורה א'],
+              openBookCallback: (_) {},
+              openLeftPaneTab: (_, {searchText}) {},
+              textSize: 18,
+              showCommentaryAsExpansionTiles: false,
+              tab: tab,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byType(CombinedView),
+        matching: find.byType(LaazHoverRegion),
+      ),
+      findsOneWidget,
+      reason: 'בלי LaazHoverRegion אין ריחוף לעז בתצוגה המשולבת',
+    );
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(milliseconds: 20));
+  });
+
   group('applyDisplayTextPreferences', () {
     // קמץ (ניקוד) — נמצא ב-vowelsAndCantillation אך לא ב-cantillationOnly
     const niqqud = 'ָ';
@@ -644,6 +704,16 @@ TextBookLoaded _loadedState() {
     scrollController: ItemScrollController(),
     positionsListener: ItemPositionsListener.create(),
   );
+}
+
+class _TestTextBookBloc extends Bloc<TextBookEvent, TextBookState>
+    implements TextBookBloc {
+  _TestTextBookBloc(super.initialState) {
+    on<TextBookEvent>((event, emit) {});
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _ClosedTextBookBloc extends Bloc<TextBookEvent, TextBookState>
