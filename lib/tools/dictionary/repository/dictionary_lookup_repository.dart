@@ -76,6 +76,39 @@ class LaazDictionaryEntry {
   static final RegExp _joinedLatinAndHebrew = RegExp(
     r'^([^א-ת]*[a-zA-Z])([א-ת].*)$',
   );
+  static final RegExp _bidiMarks = RegExp('[\u200E\u200F\u202A-\u202E]');
+  static final RegExp _bracket = RegExp(r'[()\[\]]');
+  static final RegExp _translitEdgePunctuation = RegExp(
+    '^[^א-ת"״]+|[^א-ת"״]+\$',
+  );
+
+  /// מנקה מהתעתיק העברי שאריות לטיניות/סוגריים שנגררו מהשדה המודפס.
+  ///
+  /// [raw] - התעתיק כפי שחולץ מהשורה
+  /// Returns [String] - רק מילות התעתיק העברי, בלי הזנב הלטיני
+  static String cleanLaazHebrew(String raw) {
+    final words = <String>[];
+    for (final token
+        in raw
+            .replaceAll(_bidiMarks, '')
+            .trim()
+            .split(
+              RegExp(r'\s+'),
+            )) {
+      if (token.isEmpty) continue;
+      // הזנב הלטיני/סוגריים מתחיל במילה הראשונה שאינה עברית - משם קוצצים.
+      if (_latinLetter.hasMatch(token) ||
+          _bracket.hasMatch(token) ||
+          !_hebrewLetter.hasMatch(token)) {
+        break;
+      }
+      final trimmed = token.replaceAll(_translitEdgePunctuation, '');
+      if (trimmed.isEmpty) break;
+      words.add(trimmed);
+    }
+    // כשאין ולו מילה עברית נקייה, עדיף להשאיר את המקור מאשר לאבד את הערך.
+    return words.isEmpty ? raw.trim() : words.join(' ');
+  }
 
   /// מפרק את כל שורות הספר לערכי מילון; שורות כותרת ושורות לא-תקינות מדולגות.
   static List<LaazDictionaryEntry> parseLines(List<String> lines) {
@@ -169,7 +202,7 @@ class LaazDictionaryEntry {
       entryNumber: entryNumber,
       sourceReference: sourceReference,
       lemma: lemma,
-      laazHebrew: laazHebrew,
+      laazHebrew: cleanLaazHebrew(laazHebrew),
       laazLatin: laazLatin,
       meaning: meaning,
       note: note,
@@ -460,8 +493,15 @@ class DictionaryLookupRepository {
   );
 
   /// בודק אם הטקסט נראה כתעתיק לעז: גרשיים בין אותיות בתוך המילה.
+  ///
+  /// חלק מהתעתיקים מודפסים בלי גרשיים (למשל "גלצא"), ולכן מילה שאינה
+  /// עוברת את בדיקת הגרשיים נבדקת מול האינדקס - התאמה מדויקת בו היא לעז.
   bool isLikelyLaazTranslit(String raw) {
-    return _innerGershayim.hasMatch(raw.trim());
+    final trimmed = raw.trim();
+    if (_innerGershayim.hasMatch(trimmed)) return true;
+    return _laazByTranslit.containsKey(
+      _canonicalizeLaazTranslit(_normalizeAramaic(trimmed)),
+    );
   }
 
   /// מחזיר את כל הפירושים לראשי תיבות אם קיימים.
@@ -553,11 +593,48 @@ class DictionaryLookupRepository {
   }
 
   /// מחזיר התאמות מדויקות ללעז לפי התעתיק העברי, עמיד לחילופי כתיב בין דפוסים.
+  ///
+  /// כשאין התאמה מילולית מנסים וריאנטים של כתיב (א/אי בראש, ו' אמצעית).
+  /// וריאנט מתקבל רק כשהוא יחיד - שני מועמדים שונים מחזירים ריק ולא ניחוש.
   List<LaazDictionaryEntry> findLaazMatches(String raw) {
     final key = _canonicalizeLaazTranslit(_normalizeAramaic(raw));
     if (key.isEmpty) return const <LaazDictionaryEntry>[];
 
-    return _laazByTranslit[key] ?? const <LaazDictionaryEntry>[];
+    final exact = _laazByTranslit[key];
+    if (exact != null) return exact;
+
+    List<LaazDictionaryEntry>? single;
+    for (final variant in _spellingVariants(key)) {
+      final match = _laazByTranslit[_canonicalizeLaazTranslit(variant)];
+      if (match == null || identical(match, single)) continue;
+      if (single != null) return const <LaazDictionaryEntry>[];
+      single = match;
+    }
+    return single ?? const <LaazDictionaryEntry>[];
+  }
+
+  /// וריאנטים של כתיב לתעתיק: א' פותחת מול "אי", ותוספת/השמטה של ו' אמצעית.
+  static Set<String> _spellingVariants(String key) {
+    final alefForms = <String>{key};
+    if (key.startsWith('אי')) {
+      alefForms.add('א${key.substring(2)}');
+    } else if (key.startsWith('א')) {
+      alefForms.add('אי${key.substring(1)}');
+    }
+
+    final variants = <String>{};
+    for (final form in alefForms) {
+      variants.add(form);
+      for (var i = 1; i < form.length - 1; i++) {
+        if (form[i] == 'ו') {
+          variants.add(form.substring(0, i) + form.substring(i + 1));
+        }
+      }
+      for (var i = 1; i < form.length; i++) {
+        variants.add('${form.substring(0, i)}ו${form.substring(i)}');
+      }
+    }
+    return variants..remove(key);
   }
 
   /// מחזיר את התאמות הלעז מקובצות: ערכים עם אותו תעתיק ואותו פירוש
@@ -631,18 +708,33 @@ class DictionaryLookupRepository {
     final byTranslit = <String, List<LaazDictionaryEntry>>{};
 
     for (final entry in laazEntries) {
-      final translit = _canonicalizeLaazTranslit(
-        _normalizeAramaic(entry.laazHebrew),
-      );
-      if (translit.isNotEmpty) {
-        byTranslit
-            .putIfAbsent(translit, () => <LaazDictionaryEntry>[])
-            .add(entry);
+      for (final key in _laazIndexKeys(entry.laazHebrew)) {
+        byTranslit.putIfAbsent(key, () => <LaazDictionaryEntry>[]).add(entry);
       }
     }
 
     _laazEntries = List<LaazDictionaryEntry>.unmodifiable(laazEntries);
     _laazByTranslit = byTranslit;
+  }
+
+  /// מפתחות האינדוקס של תעתיק: המחרוזת המלאה, ובתעתיק רב-מילי גם כל מילה
+  /// בנפרד - כדי שריחוף על מילה אחת מתוך "בו"ן מלנ"ט" ימצא את הערך.
+  static Set<String> _laazIndexKeys(String laazHebrew) {
+    final keys = <String>{};
+    final whole = _canonicalizeLaazTranslit(_normalizeAramaic(laazHebrew));
+    if (whole.isEmpty) return keys;
+    keys.add(whole);
+
+    final words = laazHebrew.trim().split(RegExp(r'\s+'));
+    if (words.length < 2) return keys;
+    for (final word in words) {
+      // רק מילה שנושאת גרשיים היא לעז; בלעדי התנאי מילות קישור צרפתיות
+      // קצרות ("א"י", "ד"י") היו נרשמות ומתנגשות בראשי תיבות נפוצים.
+      if (!_innerGershayim.hasMatch(word)) continue;
+      final key = _canonicalizeLaazTranslit(_normalizeAramaic(word));
+      if (key.length >= 3) keys.add(key);
+    }
+    return keys;
   }
 
   static Future<Map<String, List<String>>> _defaultLoadAcronyms() async {
@@ -721,7 +813,11 @@ class DictionaryLookupRepository {
 
   /// מאחד רק חילופי כתיב שנמצאו בפועל, בלי למזג ראשי תיבות ומילים אחרות.
   static String _canonicalizeLaazTranslit(String normalized) {
-    return _laazTranslitAliases[normalized] ?? normalized;
+    // ה' סופית וא' סופית הן אותו תעתיק בדפוסים שונים (צואיט"ה/צואיט"א).
+    final unified = normalized.endsWith('ה')
+        ? '${normalized.substring(0, normalized.length - 1)}א'
+        : normalized;
+    return _laazTranslitAliases[unified] ?? unified;
   }
 
   static String _normalizeCommon(String raw, {required bool keepQuotes}) {
