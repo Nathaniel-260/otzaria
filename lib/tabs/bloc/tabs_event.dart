@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 abstract class TabsEvent extends Equatable {
@@ -208,13 +210,17 @@ class EnableSideBySideMode extends TabsEvent {
   final OpenedTab rightTab;
   final OpenedTab leftTab;
 
+  /// ציר הפיצול בין שני הטאבים.
+  final SplitAxis axis;
+
   const EnableSideBySideMode({
     required this.rightTab,
     required this.leftTab,
+    this.axis = SplitAxis.horizontal,
   });
 
   @override
-  List<Object?> get props => [rightTab, leftTab];
+  List<Object?> get props => [rightTab, leftTab, axis];
 }
 
 class DisableSideBySideMode extends TabsEvent {
@@ -228,12 +234,58 @@ class DisableSideBySideMode extends TabsEvent {
 class UpdateSplitRatio extends TabsEvent {
   final double ratio;
 
-  const UpdateSplitRatio(this.ratio);
+  /// נתיב צומת הפיצול בטאב הנוכחי. ריק = צומת השורש.
+  final PanePath path;
+
+  const UpdateSplitRatio(this.ratio, {this.path = const []});
 
   @override
-  List<Object?> get props => [ratio];
+  List<Object?> get props => [ratio, path];
 }
 
 class SwapSideBySideTabs extends TabsEvent {
-  const SwapSideBySideTabs();
+  /// נתיב צומת הפיצול שצדדיו יוחלפו. ריק = צומת השורש.
+  final PanePath path;
+
+  /// הטאב שבו הצומת. `null` = הטאב הפעיל.
+  final int? tabIndex;
+
+  const SwapSideBySideTabs({this.path = const [], this.tabIndex});
+
+  @override
+  List<Object?> get props => [path, tabIndex];
+}
+
+/// הפלת טאב על חלונית בטאב הנוכחי — פיצול, החלפה או הזזה פנימית.
+///
+/// [sourcePath] מסומן כשהטאב הנגרר הוא חלונית באותו טאב; אחרת הטאב מגיע
+/// משורת הכרטיסיות ומוסר ממנה.
+class DropTabOnPane extends TabsEvent {
+  final OpenedTab tab;
+  final PanePath targetPath;
+  final PaneDropPosition position;
+  final PanePath? sourcePath;
+
+  const DropTabOnPane({
+    required this.tab,
+    required this.targetPath,
+    required this.position,
+    this.sourcePath,
+  });
+
+  @override
+  List<Object?> get props => [tab, targetPath, position, sourcePath];
+}
+
+/// סגירת חלונית בודדת בתוך טאב מפוצל. סגירת החלונית האחרונה סוגרת את הטאב.
+class ClosePane extends TabsEvent {
+  final PanePath path;
+
+  /// הטאב שבו החלונית. `null` = הטאב הפעיל.
+  final int? tabIndex;
+
+  const ClosePane(this.path, {this.tabIndex});
+
+  @override
+  List<Object?> get props => [path, tabIndex];
 }

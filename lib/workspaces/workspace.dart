@@ -1,6 +1,7 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
@@ -46,13 +47,21 @@ class Workspace extends Equatable {
     );
   }
 
+  /// טאבי מפרשי PDF אינם נשמרים בשולחן עבודה: שחזורם בונה `sourceTab` חדש
+  /// במקום להתחבר לספר החי. הגיזום חל בכל עומק פיצול, שאם לא כן הם היו
+  /// נכנסים דרך חלונית מקוננת.
+  static OpenedTab? _withoutPdfCommentators(OpenedTab tab) =>
+      prunePanes(tab, (pane) => pane is! PdfCommentatorsTab);
+
   factory Workspace.fromJson(Map<String, dynamic> json) {
     OpenedTab? decodeTab(Map<String, dynamic> map) {
+      // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס
+      // ומפענח אותו כטאב חיפוש ריק — טאב רפאים בשם "מפרשים | ...".
       if (map['type'] == 'PdfCommentatorsTab') return null;
-      if (map['type'] == 'CommentatorsTab') {
-        return CommentatorsTab.fromJson(map);
-      }
-      return OpenedTab.fromJson(map);
+      final decoded = map['type'] == 'CommentatorsTab'
+          ? CommentatorsTab.fromJson(map)
+          : OpenedTab.fromJson(map);
+      return _withoutPdfCommentators(decoded);
     }
 
     return Workspace(
@@ -72,9 +81,10 @@ class Workspace extends Equatable {
     final persistedTabs = <OpenedTab>[];
     var remappedIndex = 0;
     for (var i = 0; i < tabs.length; i++) {
-      if (tabs[i] is PdfCommentatorsTab) continue;
+      final pruned = _withoutPdfCommentators(tabs[i]);
+      if (pruned == null) continue;
       if (i <= activeTabIndex) remappedIndex = persistedTabs.length;
-      persistedTabs.add(tabs[i]);
+      persistedTabs.add(pruned);
     }
     final safeIndex = persistedTabs.isEmpty
         ? 0

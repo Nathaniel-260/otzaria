@@ -77,6 +77,17 @@ class AppSurfaces {
   static Color dragTargetHighlight(ColorScheme cs) =>
       cs.primary.withValues(alpha: 0.08);
 
+  /// מילוי חיווי ההפלה של חלונית קריאה — המלבן שמסמן היכן תיפול החלונית.
+  ///
+  /// 16% primary — קריא מעל תוכן ספר, ועדיין שקוף מספיק כדי לראות
+  /// לאיזה חלק מהתצוגה החלונית תיכנס.
+  static Color paneDropPreview(ColorScheme cs) =>
+      cs.primary.withValues(alpha: 0.16);
+
+  /// מסגרת חיווי ההפלה של חלונית קריאה.
+  static Color paneDropPreviewBorder(ColorScheme cs) =>
+      cs.primary.withValues(alpha: 0.7);
+
   /// רקע רצועת [PanelOpenHandle] — מתפוגג מעט במצב רגיל, אטום יותר ב-hover.
   static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
       cs.surfaceContainerHighest.withValues(alpha: isHovering ? 0.95 : 0.8);
@@ -91,7 +102,6 @@ class AppSurfaces {
   static Color togglePill(ColorScheme cs, {required bool active}) => active
       ? cs.primaryContainer.withValues(alpha: 0.6)
       : cs.surfaceContainerHighest.withValues(alpha: 0.5);
-
 
   /// overlayColor ל-TabBar שמצייר hover מותאם אישית (foregroundPainter)
   /// ולכן רוצה לבטל את ה-hover/focus הגלובלי של [TabBarTheme].

@@ -19,11 +19,14 @@ import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/resolving_tab.dart';
 import 'package:otzaria/tabs/resolving_tab_screen.dart';
 import 'package:otzaria/tabs/utils/tab_swipe_direction.dart';
+import 'package:otzaria/tabs/view/pane_drop_target.dart';
+import 'package:otzaria/tabs/view/split_pane_view.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -32,7 +35,6 @@ import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
 import 'package:otzaria/pdf_book/view/pdf_commentators_tab_screen.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tour/tour_target_keys.dart';
-import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 class ReadingScreen extends StatefulWidget {
   const ReadingScreen({super.key});
@@ -229,11 +231,14 @@ class _ReadingScreenState extends State<ReadingScreen>
               _syncPageController();
               // ממקד את אזור הקריאה של הטאב הפעיל כדי שגלילה עם החיצים תעבוד
               // מיד במעבר טאב — הטאבים נשמרים חיים ולכן initState לא רץ שוב.
+              // בטאב מפוצל ממוקדת החלונית הראשונה: המסכים נרשמים לפוקוס לפי
+              // חלונית, ובקשה על הצומת העוטף הייתה נשארת תלויה ללא נמען.
               final activeTab = state.currentTab;
               if (activeTab != null) {
+                final focusTarget = leafPanes(activeTab).first;
                 final focusRepo = context.read<FocusRepository>();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
-                  focusRepo.requestTabContentFocus(activeTab);
+                  focusRepo.requestTabContentFocus(focusTarget);
                 });
               }
             }
@@ -360,17 +365,58 @@ class _ReadingScreenState extends State<ReadingScreen>
     );
   }
 
+  /// בונה את הטאב דרך עץ החלוניות שלו.
+  ///
+  /// גם טאב שאינו מפוצל עובר דרך [SplitPaneView], כדי שהמפתח היציב של כל
+  /// חלונית יהיה זהה בשני המצבים: כך מיזוג טאבים לתצוגה מפוצלת (ופירוקה
+  /// בחזרה) מעביר את החלונית הקיימת במקום לבנות אותה מחדש, ואין רגע שבו
+  /// שני מסכים מחוברים לאותו `scrollController`.
   Widget _buildTabView(
     OpenedTab tab, {
     required bool enableTourTargets,
   }) {
-    if (tab is CombinedTab) {
-      // הצגת שני הספרים זה לצד זה
-      return _buildCombinedTabView(tab);
-    } else if (tab is PdfBookTab) {
+    final isSplit = tab is CombinedTab;
+    return SplitPaneView(
+      root: tab,
+      onRatioChanged: (path, ratio) {
+        context.read<TabsBloc>().add(UpdateSplitRatio(ratio, path: path));
+      },
+      paneBuilder: (pane, path) => PaneDropTarget(
+        path: path,
+        pane: pane,
+        onDrop: (data, targetPath, position) {
+          context.read<TabsBloc>().add(
+            DropTabOnPane(
+              tab: data.tab,
+              targetPath: targetPath,
+              position: position,
+              sourcePath: data.sourcePath,
+            ),
+          );
+        },
+        child: _buildPaneContent(
+          pane,
+          isInCombinedView: isSplit,
+          enableTourTargets: enableTourTargets && !isSplit,
+          // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל כמה חלוניות
+          // היו מחממות ספרים גדולים במקביל ומכפילות את צריכת הזיכרון.
+          allowBackgroundWarming: !isSplit,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPaneContent(
+    OpenedTab tab, {
+    required bool isInCombinedView,
+    required bool enableTourTargets,
+    bool allowBackgroundWarming = true,
+  }) {
+    if (tab is PdfBookTab) {
       return PdfBookScreen(
         key: ValueKey(tab),
         tab: tab,
+        isInCombinedView: isInCombinedView,
         enableTourTargets: enableTourTargets,
       );
     } else if (tab is TextBookTab) {
@@ -379,6 +425,7 @@ class _ReadingScreenState extends State<ReadingScreen>
         value: tab.bloc,
         child: _TabVisibilityBridge(
           bloc: tab.bloc,
+          allowBackgroundWarming: allowBackgroundWarming,
           child: TextBookViewerBloc(
             openBookCallback: (tab, {int index = 1}) {
               context.read<TabsBloc>().add(
@@ -386,6 +433,7 @@ class _ReadingScreenState extends State<ReadingScreen>
               );
             },
             tab: tab,
+            isInCombinedView: isInCombinedView,
             enableTourTargets: enableTourTargets,
           ),
         ),
@@ -396,6 +444,7 @@ class _ReadingScreenState extends State<ReadingScreen>
       return _TabVisibilityBridge(
         key: ValueKey(tab),
         bloc: tab.bloc,
+        allowBackgroundWarming: allowBackgroundWarming,
         child: CommentatorsTabScreen(
           tab: tab,
           openBookCallback: (t, {int index = 1}) {
@@ -414,193 +463,6 @@ class _ReadingScreenState extends State<ReadingScreen>
       return ResolvingTabScreen(key: ValueKey(tab), tab: tab);
     }
     return const SizedBox.shrink();
-  }
-
-  Widget _buildCombinedTabView(CombinedTab combinedTab) {
-    return _SideBySideViewWidget(
-      key: ValueKey(
-        'combined_${combinedTab.rightTab.title}_${combinedTab.leftTab.title}',
-      ),
-      rightTab: combinedTab.rightTab,
-      leftTab: combinedTab.leftTab,
-      initialSplitRatio: combinedTab.splitRatio,
-      onSplitRatioChanged: (ratio) {
-        context.read<TabsBloc>().add(UpdateSplitRatio(ratio));
-      },
-      buildTabView: (tab) =>
-          _buildSingleTabContent(tab, isInCombinedView: true),
-    );
-  }
-
-  Widget _buildSingleTabContent(
-    OpenedTab tab, {
-    bool isInCombinedView = false,
-  }) {
-    if (tab is PdfBookTab) {
-      return PdfBookScreen(
-        key: ValueKey(tab),
-        tab: tab,
-        isInCombinedView: isInCombinedView,
-        enableTourTargets: false,
-      );
-    } else if (tab is TextBookTab) {
-      return BlocProvider.value(
-        value: tab.bloc,
-        child: _TabVisibilityBridge(
-          bloc: tab.bloc,
-          child: TextBookViewerBloc(
-            openBookCallback: (tab, {int index = 1}) {
-              context.read<TabsBloc>().add(
-                OpenOrFocusTab(tab, insertAdjacent: true),
-              );
-            },
-            tab: tab,
-            isInCombinedView: isInCombinedView,
-            enableTourTargets: false,
-          ),
-        ),
-      );
-    } else if (tab is SearchingTab) {
-      return FullTextSearchScreen(tab: tab);
-    } else if (tab is CommentatorsTab) {
-      return _TabVisibilityBridge(
-        key: ValueKey(tab),
-        bloc: tab.bloc,
-        child: CommentatorsTabScreen(
-          tab: tab,
-          openBookCallback: (t, {int index = 1}) {
-            context.read<TabsBloc>().add(
-              OpenOrFocusTab(t, insertAdjacent: true),
-            );
-          },
-        ),
-      );
-    } else if (tab is PdfCommentatorsTab) {
-      return PdfCommentatorsTabScreen(
-        key: ValueKey(tab),
-        tab: tab,
-      );
-    } else if (tab is ResolvingTab) {
-      return ResolvingTabScreen(key: ValueKey(tab), tab: tab);
-    }
-    return const SizedBox.shrink();
-  }
-}
-
-// Widget להצגת 2 ספרים זה לצד זה
-class _SideBySideViewWidget extends StatefulWidget {
-  final OpenedTab rightTab;
-  final OpenedTab leftTab;
-  final double initialSplitRatio;
-  final Function(double) onSplitRatioChanged;
-  final Widget Function(OpenedTab) buildTabView;
-
-  const _SideBySideViewWidget({
-    super.key,
-    required this.rightTab,
-    required this.leftTab,
-    required this.initialSplitRatio,
-    required this.onSplitRatioChanged,
-    required this.buildTabView,
-  });
-
-  @override
-  State<_SideBySideViewWidget> createState() => _SideBySideViewWidgetState();
-}
-
-class _SideBySideViewWidgetState extends State<_SideBySideViewWidget> {
-  static const double _combinedDividerWidth = 12;
-  late double _splitRatio;
-
-  @override
-  void initState() {
-    super.initState();
-    _splitRatio = widget.initialSplitRatio;
-  }
-
-  @override
-  void didUpdateWidget(_SideBySideViewWidget oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    // עדכון היחס אם השתנה (למשל, אחרי החלפת צדדים)
-    if (widget.initialSplitRatio != oldWidget.initialSplitRatio) {
-      setState(() {
-        _splitRatio = widget.initialSplitRatio;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final totalWidth = constraints.maxWidth;
-        final rightWidth = totalWidth * _splitRatio;
-        final colorScheme = Theme.of(context).colorScheme;
-
-        // כל חלונית נצמדת לדופן החלון (הידית יושבת על הדופן), והשוליים מוזרקים
-        // פנימה סביב תוכן הקריאה בלבד — בצד הדופן החיצוני של אותה חלונית.
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // ספר ימני (בגלל RTL, זה יופיע בצד ימין)
-            SizedBox(
-              width: rightWidth,
-              child: ClipRect(
-                child: SplitPaneContentInset(
-                  // ספר זה יושב בקצה ההתחלתי של השורה (ימין ב-RTL) — השוליים
-                  // מוזרקים בצד הדופן החיצוני שלו.
-                  contentInset: const EdgeInsetsDirectional.only(
-                    start: _combinedDividerWidth,
-                  ),
-                  child: widget.buildTabView(widget.rightTab),
-                ),
-              ),
-            ),
-            // מפריד ניתן לגרירה
-            SizedBox(
-              width: _combinedDividerWidth,
-              child: Stack(
-                fit: StackFit.expand,
-                alignment: Alignment.center,
-                children: [
-                  ColoredBox(color: colorScheme.surfaceContainer),
-                  MouseRegion(
-                    cursor: SystemMouseCursors.resizeColumn,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onPanUpdate: (details) {
-                        setState(() {
-                          // תיקון: הפיכת הכיוון כי אנחנו ב-RTL
-                          final ratioDelta = -details.delta.dx / totalWidth;
-                          _splitRatio = (_splitRatio + ratioDelta).clamp(
-                            0.2,
-                            0.8,
-                          );
-                        });
-                      },
-                      onPanEnd: (_) => widget.onSplitRatioChanged(_splitRatio),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // ספר שמאלי - Expanded כדי למלא את שאר המקום ללא גלישה
-            Expanded(
-              child: ClipRect(
-                child: SplitPaneContentInset(
-                  // ספר זה יושב בקצה הסופי של השורה (שמאל ב-RTL) — השוליים
-                  // מוזרקים בצד הדופן החיצוני שלו.
-                  contentInset: const EdgeInsetsDirectional.only(
-                    end: _combinedDividerWidth,
-                  ),
-                  child: widget.buildTabView(widget.leftTab),
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
   }
 }
 
@@ -610,10 +472,14 @@ class _TabVisibilityBridge extends StatefulWidget {
   final TextBookBloc bloc;
   final Widget child;
 
+  /// מועבר ל-[SetTabVisibility]; מכובה כשהחלונית חולקת טאב עם אחרות.
+  final bool allowBackgroundWarming;
+
   const _TabVisibilityBridge({
     super.key,
     required this.bloc,
     required this.child,
+    this.allowBackgroundWarming = true,
   });
 
   @override
@@ -622,15 +488,21 @@ class _TabVisibilityBridge extends StatefulWidget {
 
 class _TabVisibilityBridgeState extends State<_TabVisibilityBridge> {
   ValueListenable<TickerModeData>? _tickerModeNotifier;
-  bool? _lastReported;
+  ({bool visible, bool warming})? _lastReported;
 
   void _report() {
     final visible = _tickerModeNotifier?.value.enabled ?? true;
-    if (_lastReported == visible || widget.bloc.isClosed) {
+    final next = (visible: visible, warming: widget.allowBackgroundWarming);
+    if (_lastReported == next || widget.bloc.isClosed) {
       return;
     }
-    _lastReported = visible;
-    widget.bloc.add(SetTabVisibility(visible));
+    _lastReported = next;
+    widget.bloc.add(
+      SetTabVisibility(
+        visible,
+        allowBackgroundWarming: widget.allowBackgroundWarming,
+      ),
+    );
   }
 
   @override
@@ -650,8 +522,9 @@ class _TabVisibilityBridgeState extends State<_TabVisibilityBridge> {
     super.didUpdateWidget(oldWidget);
     if (!identical(oldWidget.bloc, widget.bloc)) {
       _lastReported = null;
-      _report();
     }
+    // מדווח גם על שינוי בחימום: פיצול הטאב מכבה אותו וסגירת חלונית מחזירה.
+    _report();
   }
 
   @override

@@ -29,7 +29,7 @@ void main() {
       await Settings.init(cacheProvider: _MemoryCacheProvider());
     });
 
-    test('יוצר CombinedTab עם עותקים נפרדים של הטאבים', () async {
+    test('מיזוג לתצוגה מפוצלת משמר את אותן חלוניות ואינו משחרר אותן', () async {
       final bloc = TabsBloc(repository: _FakeTabsRepository());
       final rightTab = _createTextTab('ספר ימין', categoryId: 1);
       final leftTab = _createTextTab('ספר שמאל', categoryId: 2);
@@ -43,56 +43,76 @@ void main() {
         (s) => s.tabs.length == 1 && s.currentTab is CombinedTab,
       );
 
-      final currentState = bloc.state;
-      expect(currentState.tabs, hasLength(1));
-      expect(currentState.currentTab, isA<CombinedTab>());
+      final combinedTab = bloc.state.currentTab! as CombinedTab;
+      expect(bloc.state.tabs, hasLength(1));
 
-      final combinedTab = currentState.currentTab! as CombinedTab;
-      expect(combinedTab.rightTab, isNot(same(rightTab)));
-      expect(combinedTab.leftTab, isNot(same(leftTab)));
+      // אותם אובייקטים נכנסים לטאב המפוצל: המפתח היציב של כל חלונית מעביר
+      // את המסך שלה במקום לבנות אותו מחדש, ולכן מצב הקריאה נשמר. שכפול
+      // היה מאבד אותו, ו-scrollController משותף בין שני מסכים חיים היה
+      // קורס — מה שמונע כאן על ידי כך שהחלונית עוברת ולא משוכפלת.
+      expect(combinedTab.rightTab, same(rightTab));
+      expect(combinedTab.leftTab, same(leftTab));
 
-      final combinedRightTab = combinedTab.rightTab as TextBookTab;
-      final combinedLeftTab = combinedTab.leftTab as TextBookTab;
+      // המתנה מעבר לחלון השחרור הדחוי, שבו הקוד הישן היה הורג את הטאבים.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(rightTab.bloc.isClosed, isFalse);
+      expect(leftTab.bloc.isClosed, isFalse);
 
-      expect(
-        combinedRightTab.scrollController,
-        isNot(same(rightTab.scrollController)),
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
+
+    test('פירוק תצוגה מפוצלת מחזיר את אותן חלוניות לרשימה', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final rightTab = _createTextTab('ספר א', categoryId: 1);
+      final leftTab = _createTextTab('ספר ב', categoryId: 2);
+
+      bloc.add(AddTab(rightTab));
+      bloc.add(AddTab(leftTab));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      bloc.add(EnableSideBySideMode(rightTab: rightTab, leftTab: leftTab));
+      await bloc.stream.firstWhere(
+        (s) => s.tabs.length == 1 && s.currentTab is CombinedTab,
       );
-      expect(
-        combinedLeftTab.scrollController,
-        isNot(same(leftTab.scrollController)),
-      );
+
+      bloc.add(const DisableSideBySideMode(0));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+
+      expect(bloc.state.tabs[0], same(rightTab));
+      expect(bloc.state.tabs[1], same(leftTab));
+
+      // שחרור הצומת העוטף היה הורג רקורסיבית את שתי החלוניות ששבו לרשימה.
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(rightTab.bloc.isClosed, isFalse);
+      expect(leftTab.bloc.isClosed, isFalse);
 
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
 
     test(
-      'פירוק CombinedTab מחזיר טאבים חדשים ולא את מופעי המשנה הישנים',
+      'פירוק טאב מקונן מחזיר את כל החלוניות ולא רק את הרמה העליונה',
       () async {
         final bloc = TabsBloc(repository: _FakeTabsRepository());
-        final rightTab = _createTextTab('ספר א', categoryId: 1);
-        final leftTab = _createTextTab('ספר ב', categoryId: 2);
+        final outer = _createTextTab('חיצוני', categoryId: 1);
+        final innerA = _createTextTab('פנימי א', categoryId: 2);
+        final innerB = _createTextTab('פנימי ב', categoryId: 3);
 
-        bloc.add(AddTab(rightTab));
-        bloc.add(AddTab(leftTab));
-        await bloc.stream.firstWhere((s) => s.tabs.length == 2);
-
-        bloc.add(EnableSideBySideMode(rightTab: rightTab, leftTab: leftTab));
-        await bloc.stream.firstWhere(
-          (s) => s.tabs.length == 1 && s.currentTab is CombinedTab,
+        final nested = CombinedTab(
+          rightTab: outer,
+          leftTab: CombinedTab(
+            rightTab: innerA,
+            leftTab: innerB,
+            axis: SplitAxis.vertical,
+          ),
         );
 
-        final combinedTab = bloc.state.currentTab! as CombinedTab;
-        final combinedRightTab = combinedTab.rightTab;
-        final combinedLeftTab = combinedTab.leftTab;
+        bloc.add(AddTab(nested));
+        await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
         bloc.add(const DisableSideBySideMode(0));
-        await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+        await bloc.stream.firstWhere((s) => s.tabs.length == 3);
 
-        final restoredState = bloc.state;
-        expect(restoredState.tabs, hasLength(2));
-        expect(restoredState.tabs[0], isNot(same(combinedRightTab)));
-        expect(restoredState.tabs[1], isNot(same(combinedLeftTab)));
+        expect(bloc.state.tabs, [same(outer), same(innerA), same(innerB)]);
 
         await _closeBlocAndAllowDeferredDispose(bloc);
       },

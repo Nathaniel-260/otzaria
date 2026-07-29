@@ -3,42 +3,93 @@ import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
-/// Represents a combined tab that displays two books side-by-side.
+/// ציר הפיצול בין שתי החלוניות של [CombinedTab].
+enum SplitAxis {
+  /// זו לצד זו — ב-RTL החלונית הראשונה יושבת בימין.
+  horizontal,
+
+  /// זו מעל זו — החלונית הראשונה למעלה.
+  vertical;
+
+  static SplitAxis fromId(String? id) =>
+      id == vertical.name ? vertical : horizontal;
+}
+
+/// צומת פיצול בעץ החלוניות של טאב: מציג שתי חלוניות עם מפריד ניתן לגרירה.
 ///
-/// This tab wraps two existing tabs (right and left) and displays them
-/// together in a split view. When closed, both underlying tabs are closed.
+/// כל חלונית היא עצמה [OpenedTab] — ולכן יכולה להיות [CombinedTab] נוספת.
+/// קינון כזה נותן כל פריסה אפשרית (רבעים, חצי + שני רבעים וכו').
+///
+/// סגירת הטאב סוגרת את כל החלוניות שתחתיו.
 class CombinedTab extends OpenedTab {
-  /// The tab displayed on the right side
+  /// החלונית הראשונה — ימנית ב-[SplitAxis.horizontal], עליונה ב-[SplitAxis.vertical].
   final OpenedTab rightTab;
 
-  /// The tab displayed on the left side
+  /// החלונית השנייה — שמאלית ב-[SplitAxis.horizontal], תחתונה ב-[SplitAxis.vertical].
   final OpenedTab leftTab;
 
-  /// The split ratio between the two tabs (0.0-1.0)
-  /// Represents how much of the screen the right tab takes
+  /// ציר הפיצול בין שתי החלוניות.
+  final SplitAxis axis;
+
+  /// חלקה של החלונית הראשונה מהמקום הפנוי (0.0-1.0).
+  ///
+  /// משתנה במקום (mutable) בכוונה: גרירת המפריד לא אמורה ליצור צומת חדש,
+  /// שהיה מחליף את מפתח הטאב ומאתחל מחדש את תוכן החלוניות.
   double splitRatio;
 
-  /// Creates a new instance of [CombinedTab].
-  ///
-  /// The [rightTab] and [leftTab] parameters represent the two tabs
-  /// to be displayed side-by-side.
   CombinedTab({
     required this.rightTab,
     required this.leftTab,
+    this.axis = SplitAxis.horizontal,
     this.splitRatio = 0.5,
     bool isPinned = false,
   }) : super(
-         'משולב: ${rightTab.title} | ${leftTab.title}',
+         buildTitle(rightTab, leftTab),
          isPinned: isPinned,
        );
 
-  /// Updates the title when tabs change
-  void updateTitle() {
-    title = 'משולב: ${rightTab.title} | ${leftTab.title}';
+  /// החלונית הראשונה בסדר התצוגה (ימין/למעלה).
+  OpenedTab get first => rightTab;
+
+  /// החלונית השנייה בסדר התצוגה (שמאל/למטה).
+  OpenedTab get second => leftTab;
+
+  /// כותרת המורכבת משמות כל חלוניות העלה, ולא משמות הצמתים המקוננים —
+  /// בלעדיה קינון היה מייצר "משולב: משולב: א | ב | ג".
+  static String buildTitle(OpenedTab first, OpenedTab second) {
+    final names = <String>[];
+    void collect(OpenedTab tab) {
+      if (tab is CombinedTab) {
+        collect(tab.rightTab);
+        collect(tab.leftTab);
+      } else {
+        names.add(tab.title);
+      }
+    }
+
+    collect(first);
+    collect(second);
+    return 'משולב: ${names.join(' | ')}';
   }
 
-  /// Cleanup when the tab is disposed
-  /// This will also dispose both underlying tabs
+  /// יוצרת עותק עם חלוניות ו/או ציר מוחלפים, תוך שמירת [splitRatio] והצמדה.
+  CombinedTab copyWith({
+    OpenedTab? rightTab,
+    OpenedTab? leftTab,
+    SplitAxis? axis,
+    double? splitRatio,
+    bool? isPinned,
+  }) {
+    return CombinedTab(
+      rightTab: rightTab ?? this.rightTab,
+      leftTab: leftTab ?? this.leftTab,
+      axis: axis ?? this.axis,
+      splitRatio: splitRatio ?? this.splitRatio,
+      isPinned: isPinned ?? this.isPinned,
+    );
+  }
+
+  /// משחררת את הטאב ואת כל החלוניות שתחתיו.
   @override
   void dispose() {
     rightTab.dispose();
@@ -46,7 +97,6 @@ class CombinedTab extends OpenedTab {
     super.dispose();
   }
 
-  /// Creates a new instance of [CombinedTab] from a JSON map.
   factory CombinedTab.fromJson(Map<String, dynamic> json) {
     OpenedTab decodeTab(Map<String, dynamic> map) {
       if (map['type'] == 'PdfCommentatorsTab') {
@@ -61,17 +111,18 @@ class CombinedTab extends OpenedTab {
     return CombinedTab(
       rightTab: decodeTab(castMap(json['rightTab'])),
       leftTab: decodeTab(castMap(json['leftTab'])),
+      axis: SplitAxis.fromId(json['axis'] as String?),
       splitRatio: (json['splitRatio'] as num?)?.toDouble() ?? 0.5,
       isPinned: json['isPinned'] ?? false,
     );
   }
 
-  /// Converts the [CombinedTab] instance into a JSON map.
   @override
   Map<String, dynamic> toJson() {
     return {
       'rightTab': rightTab.toJson(),
       'leftTab': leftTab.toJson(),
+      'axis': axis.name,
       'splitRatio': splitRatio,
       'isPinned': isPinned,
       'type': 'CombinedTab',
