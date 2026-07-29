@@ -29,6 +29,7 @@ import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.da
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
@@ -720,10 +721,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final current = context.read<TabsBloc>().state.currentTab;
     if (current == null) return false;
     if (identical(current, tab)) return true;
-    if (current is CombinedTab) {
-      return identical(current.rightTab, tab) ||
-          identical(current.leftTab, tab);
-    }
+    // חיפוש בכל עומק הפיצול: בדיקת שתי החלוניות העליונות בלבד הייתה
+    // משאירה חלונית מקוננת בלי פוקוס, ומשביתה בה גלילה בחיצים.
+    if (current is CombinedTab) return pathOfPane(current, tab) != null;
     return false;
   }
 

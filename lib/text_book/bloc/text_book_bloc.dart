@@ -90,6 +90,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   /// האם הטאב שמציג את ה-bloc נראה כרגע (ראו [SetTabVisibility]).
   bool _isTabVisible = true;
 
+  /// האם מותר לחמם את מטמון התוכן ברקע (ראו [SetTabVisibility]).
+  bool _allowBackgroundWarming = true;
+
   /// true רק אחרי שטעינת-טווחים הוכחה כעובדת לספר. ספרי מסלול preview/קובץ
   /// אינם ניתנים לשחזור אחרי שחרור — אסור לשחרר את תוכנם.
   bool _supportsContentRangeLoading = false;
@@ -183,10 +186,13 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     SetTabVisibility event,
     Emitter<TextBookState> emit,
   ) {
-    if (_isTabVisible == event.visible) {
+    final warmingChanged =
+        _allowBackgroundWarming != event.allowBackgroundWarming;
+    if (_isTabVisible == event.visible && !warmingChanged) {
       return;
     }
     _isTabVisible = event.visible;
+    _allowBackgroundWarming = event.allowBackgroundWarming;
 
     final currentState = state;
     if (currentState is! TextBookLoaded) {
@@ -2314,7 +2320,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
   }
 
   Future<void> _warmContentCacheInBackground(TextBook book) async {
-    if (_isWarmingContentCache) {
+    if (_isWarmingContentCache || !_allowBackgroundWarming) {
       return;
     }
 
@@ -2331,9 +2337,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       if (pendingChunks.isEmpty || isClosed) {
         return;
       }
-      // טאב שהוסתר בינתיים: אין טעם להחיל chunks שישוחררו מיד —
-      // _loadedContentRanges מתעדכן רק בהחלה, כך שהוויתור בטוח.
-      if (!_isTabVisible) {
+      // טאב שהוסתר בינתיים, או חלונית שהחימום בה כובה: אין טעם להחיל
+      // chunks שישוחררו מיד — _loadedContentRanges מתעדכן רק בהחלה,
+      // כך שהוויתור בטוח.
+      if (!_isTabVisible || !_allowBackgroundWarming) {
         pendingChunks.clear();
         return;
       }
@@ -2355,8 +2362,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
           return;
         }
 
-        // טאב רקע לא מחמם — החימום מתחדש ב-SetTabVisibility(true).
-        if (!_isTabVisible) {
+        // טאב רקע או חלונית בטאב מפוצל אינם מחממים — החימום מתחדש
+        // ב-SetTabVisibility כשהטאב חוזר לחזית או כשנותרה חלונית אחת.
+        if (!_isTabVisible || !_allowBackgroundWarming) {
           return;
         }
 

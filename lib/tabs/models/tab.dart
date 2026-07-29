@@ -73,6 +73,7 @@ abstract class OpenedTab {
       return CombinedTab(
         rightTab: OpenedTab.from(tab.rightTab),
         leftTab: OpenedTab.from(tab.leftTab),
+        axis: tab.axis,
         splitRatio: tab.splitRatio,
         isPinned: tab.isPinned,
       );
