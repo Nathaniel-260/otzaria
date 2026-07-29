@@ -759,12 +759,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       final textRange = await pdfTextLineRangeForPageRange(
         startPage: range.startPage,
         endPageExclusive: range.endPageExclusive,
-        resolveTextIndex: (pdfPage) => pdfToTextPage(
-          widget.tab.book,
-          outline,
-          pdfPage,
-          context,
-        ),
+        resolveTextIndex: (pdfPage) =>
+            pdfToTextPage(widget.tab.book, outline, pdfPage),
         isActive: () => mounted,
       );
       if (textRange != null) {
@@ -4459,7 +4455,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       widget.tab.book,
       currentOutline,
       currentPage,
-      context,
     );
 
     if (!context.mounted) return;
@@ -4666,7 +4661,6 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   book,
                   currentOutline,
                   currentPage,
-                  context,
                 );
 
                 if (!context.mounted) return;
