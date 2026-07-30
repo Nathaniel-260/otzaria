@@ -29,6 +29,8 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/tool_tab.dart';
+import 'package:otzaria/tools/tools_launcher_controller.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -952,8 +954,9 @@ class PluginBridgeAdapter {
         return true;
       case 'getCurrentState':
         final tabsState = _dependencies.tabsBloc.state;
-        final tabs = tabsState.tabs;
-        final currentTab = tabsState.currentTab;
+        // טאבי כלים אינם ספרים ולכן אינם נכללים ב-openTabs: דיווחם היה מציג
+        // את שם הכלי כ-bookId.
+        final tabs = tabsState.tabs.where((t) => t is! ToolTab).toList();
         final panes = tabs.map(_paneForPlugins).toList();
         // Use the same resolver as getCurrentRef for consistent currentRef values
         final snapshots = await Future.wait(panes.map(resolveReaderLocation));
@@ -968,7 +971,8 @@ class PluginBridgeAdapter {
             'currentRef': snapshots[i]?.currentRef,
           };
         });
-        if (currentTab == null) {
+        final currentPane = tabsState.readingPane;
+        if (currentPane == null) {
           return {
             'currentBook': null,
             'currentIndex': 0,
@@ -976,11 +980,7 @@ class PluginBridgeAdapter {
             'openTabs': openTabs,
           };
         }
-        final currentPane = _paneForPlugins(currentTab);
-        final currentTabIndex = tabs.indexOf(currentTab);
-        final currentSnapshot = currentTabIndex >= 0
-            ? snapshots[currentTabIndex]
-            : null;
+        final currentSnapshot = await resolveReaderLocation(currentPane);
         return {
           'currentBook': currentPane.title,
           'currentBookId': currentPane.title,
@@ -992,7 +992,7 @@ class PluginBridgeAdapter {
         };
       case 'getCurrentRef':
         final snapshot = await resolveReaderLocation(
-          _dependencies.tabsBloc.state.activePane,
+          _dependencies.tabsBloc.state.readingPane,
         );
         if (snapshot == null) {
           return {
@@ -1004,7 +1004,7 @@ class PluginBridgeAdapter {
         }
         return snapshot.toJson();
       case 'getSelection':
-        final currentPane = _dependencies.tabsBloc.state.activePane;
+        final currentPane = _dependencies.tabsBloc.state.readingPane;
         final snapshot = await resolveReaderLocation(currentPane);
         return _buildCurrentSelection(currentPane, snapshot?.currentRef);
       case 'findTextOccurrences':
@@ -1252,7 +1252,7 @@ class PluginBridgeAdapter {
     // סריקת חלוניות ולא טאבים: ספר שיושב רק בחלונית של טאב מפוצל לא נמצא,
     // והקריאה נפלה למסלול ה-DB שמאבד את מצב הניקוד החי. החלונית הפעילה
     // ראשונה, כי אותו ספר בשתי חלוניות יכול להיות בהגדרות ניקוד שונות.
-    final activePane = _dependencies.tabsBloc.state.activePane;
+    final activePane = _dependencies.tabsBloc.state.readingPane;
     final panes = <OpenedTab>[
       ?activePane,
       ..._dependencies.tabsBloc.state.tabs.expand(leafPanes),
@@ -1264,7 +1264,7 @@ class PluginBridgeAdapter {
         continue;
       }
       final snapshot =
-          identical(tab, _dependencies.tabsBloc.state.activePane) &&
+          identical(tab, _dependencies.tabsBloc.state.readingPane) &&
               tab.index == sectionIndex
           ? await resolveReaderLocation(tab)
           : null;
@@ -1445,7 +1445,7 @@ class PluginBridgeAdapter {
         if (target == null) {
           throw Exception("target required");
         }
-        Screen? screen;
+        final Screen screen;
         switch (target) {
           case 'library':
             screen = Screen.library;
@@ -1453,9 +1453,11 @@ class PluginBridgeAdapter {
           case 'reading':
             screen = Screen.reading;
             break;
+          // 'more' נשמר כ-alias תואם-אחורה: הכלים עברו לכרטיסיות בעיון,
+          // והיעד פותח כעת את פאנל הכלים.
           case 'more':
-            screen = Screen.more;
-            break;
+            ToolsLauncherController.instance.open();
+            return true;
           case 'settings':
             screen = Screen.settings;
             break;
@@ -2651,9 +2653,9 @@ class PluginBridgeAdapter {
   }
 
   String? _currentBookId() {
-    // החלונית הפעילה: הכותרת המשולבת אינה מזהה ספר, ולכן scope של `book:<id>`
-    // לא היה תואם לאף אירוע בטאב מפוצל.
-    return _dependencies.tabsBloc.state.activePane?.title;
+    // החלונית הקוראת ולא הפעילה: הכותרת המשולבת אינה מזהה ספר, וטאב כלי אינו
+    // ספר כלל — scope של `book:<id>` היה מקבל את שם הכלי.
+    return _dependencies.tabsBloc.state.readingPane?.title;
   }
 
   String? _currentWorkspaceId() {
