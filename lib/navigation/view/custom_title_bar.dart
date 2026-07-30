@@ -1215,9 +1215,16 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             for (final path in leafPanePaths(tab))
               AppContextMenuEntry(
                 label: paneAt(tab, path)!.title,
-                onTap: () => context.read<TabsBloc>().add(
-                  ClosePane(path, tabIndex: tabIndex),
-                ),
+                onTap: () {
+                  // רישום לפני הסגירה, כמו ב-closeTab: אחרי ההסרה החלונית
+                  // אינה בעץ ומיקום הקריאה שלה היה נעלם.
+                  context.read<HistoryBloc>().add(
+                    AddHistory(paneAt(tab, path)!),
+                  );
+                  context.read<TabsBloc>().add(
+                    ClosePane(path, tabIndex: tabIndex),
+                  );
+                },
               ),
           ],
         ),

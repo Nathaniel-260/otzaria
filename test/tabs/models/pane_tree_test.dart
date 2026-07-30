@@ -394,6 +394,15 @@ void main() {
       expect(t.root.title, 'משולב: א | ב | ג');
     });
 
+    test('מתעדכנת כשכותרת חלונית משתנה אחרי הבנייה', () {
+      final t = _nestedTree();
+      // ספר טוען את כותרתו אחרי הפתיחה; כותרת שהוקפאה בבנייה נשארה מיושנת
+      // ב-tooltip וברשימת הקיצורים של Windows.
+      t.b.title = 'ב מעודכן';
+
+      expect(t.root.title, 'משולב: א | ב מעודכן | ג');
+    });
+
     test('מתעדכנת אחרי שינוי מבנה', () {
       final t = _nestedTree();
       final result =

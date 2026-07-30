@@ -43,10 +43,18 @@ class CombinedTab extends OpenedTab {
     this.axis = SplitAxis.horizontal,
     this.splitRatio = 0.5,
     bool isPinned = false,
-  }) : super(
-         buildTitle(rightTab, leftTab),
-         isPinned: isPinned,
-       );
+  }) : super('', isPinned: isPinned);
+
+  /// מחושבת בכל קריאה: כותרת חלונית משתנה אחרי טעינת הספר, וכותרת שהוקפאה
+  /// בבנייה נשארה מיושנת ב-tooltip וברשימת הקיצורים של Windows.
+  @override
+  String get title => buildTitle(rightTab, leftTab);
+
+  /// הכותרת נגזרת מהחלוניות; השדה שבבסיס אינו נקרא, ולכן כתיבה אליו נבלעת
+  /// בשקט. חוסמים אותה במפורש כדי שהמלכוד לא יתגלה רק בזמן ריצה.
+  @override
+  set title(String value) =>
+      throw UnsupportedError('כותרת טאב מפוצל נגזרת מהחלוניות שבו');
 
   /// החלונית הראשונה בסדר התצוגה (ימין/למעלה).
   OpenedTab get first => rightTab;

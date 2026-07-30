@@ -50,6 +50,8 @@ Widget _host(
   Widget Function(OpenedTab, PanePath)? paneBuilder,
 }) {
   return MaterialApp(
+    // עובי המפריד תלוי בפלטפורמה (רחב יותר במגע); כאן נבדקת התנהגות העכבר.
+    theme: ThemeData(platform: TargetPlatform.windows),
     home: Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(

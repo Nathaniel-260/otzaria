@@ -1,4 +1,6 @@
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// מצב הצגת 2 ספרים זה לצד זה
@@ -55,12 +57,22 @@ class TabsState extends Equatable {
   /// מצב זמני — אינו נשמר לדיסק.
   final List<OpenedTab> selectedTabs;
 
+  /// החלונית שהמשתמש עובד בה, כפי שנקבעה בלחיצה אחרונה.
+  ///
+  /// נשמרת כזהות אובייקט ולא כנתיב: נתיב מתיישן בכל שינוי מבנה — סגירת חלונית
+  /// מקוננת מקצרת אותו, החלפת צדדים הופכת את משמעותו, ונתיב מטאב אחר עלול
+  /// להיות "תקין במקרה" ולסמן ספר שהמשתמש לא נגע בו. זהות נוסעת עם החלונית.
+  ///
+  /// נקרא דרך [activePane].
+  final OpenedTab? rawActivePane;
+
   const TabsState({
     required this.tabs,
     required this.currentTabIndex,
     this.updateCounter = 0,
     this.sideBySideMode,
     this.selectedTabs = const [],
+    this.rawActivePane,
   });
 
   factory TabsState.initial() {
@@ -79,6 +91,7 @@ class TabsState extends Equatable {
     SideBySideMode? sideBySideMode,
     bool clearSideBySide = false,
     List<OpenedTab>? selectedTabs,
+    OpenedTab? rawActivePane,
   }) {
     return TabsState(
       tabs: tabs ?? this.tabs,
@@ -88,12 +101,37 @@ class TabsState extends Equatable {
           ? null
           : (sideBySideMode ?? this.sideBySideMode),
       selectedTabs: selectedTabs ?? this.selectedTabs,
+      rawActivePane: rawActivePane ?? this.rawActivePane,
     );
   }
 
   bool get hasOpenTabs => tabs.isNotEmpty;
   OpenedTab? get currentTab => hasOpenTabs ? tabs[currentTabIndex] : null;
   bool get isSideBySideMode => sideBySideMode != null;
+
+  /// החלונית שהמשתמש עובד בה. בטאב שאינו מפוצל — הטאב עצמו.
+  ///
+  /// חלונית ששמורה מטאב אחר, או שנסגרה, אינה נמצאת בעץ הנוכחי ולכן נופלת
+  /// לחלונית הראשונה שלו. כך אין צורך לנרמל את השדה בכל מטפל שמשנה מבנה.
+  OpenedTab? get activePane {
+    final tab = currentTab;
+    if (tab == null) return null;
+    final stored = rawActivePane;
+    if (stored != null &&
+        stored is! CombinedTab &&
+        pathOfPane(tab, stored) != null) {
+      return stored;
+    }
+    return leafPanes(tab).first;
+  }
+
+  /// נתיב החלונית הפעילה בטאב הנוכחי.
+  PanePath get activePanePath {
+    final tab = currentTab;
+    final pane = activePane;
+    if (tab == null || pane == null) return const [];
+    return pathOfPane(tab, pane) ?? const [];
+  }
 
   /// הקבוצה שסגירת הכרטיסיה הנוכחית סוגרת: הבחירה המרובה כשהכרטיסיה
   /// הפעילה חלק ממנה, אחרת הכרטיסיה הפעילה לבדה.
@@ -113,5 +151,6 @@ class TabsState extends Equatable {
     updateCounter,
     sideBySideMode,
     selectedTabs,
+    rawActivePane,
   ];
 }

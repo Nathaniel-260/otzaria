@@ -339,6 +339,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
+            // עובי המפריד (וממילא השוליים) רחב יותר במגע; כאן נבדק דסקטופ.
+            theme: ThemeData(platform: TargetPlatform.windows),
             home: Directionality(
               // כמו באפליקציה האמיתית (locale he) — כדי שהחלפת start/end
               // בשוליי SplitPaneContentInset תתגלה בכיוון הייצור.
