@@ -9,7 +9,6 @@ import 'package:otzaria/search/utils/facet_helper.dart';
 import 'package:otzaria/search/bloc/search_bloc.dart';
 import 'package:otzaria/search/bloc/search_event.dart';
 import 'package:otzaria/search/bloc/search_state.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
@@ -307,12 +306,13 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     _requestSearchFieldFocus();
   }
 
-  /// האם הטאב המוצג הוא זה של המסך — גם כשהוא חלונית בתוך טאב מפוצל.
+  /// האם זו החלונית שהמשתמש עובד בה. חלונית שאינה פעילה אסור לה לתפוס את
+  /// שדה החיפוש, אחרת חיצים ורווח מוקלדים לשדה במקום לגלול את הספר שנקרא.
   bool _isTabDisplayed(TabsState state) {
     if (!state.hasOpenTabs || state.currentTabIndex >= state.tabs.length) {
       return false;
     }
-    return pathOfPane(state.tabs[state.currentTabIndex], widget.tab) != null;
+    return identical(state.activePane, widget.tab);
   }
 
   void _requestSearchFieldFocus() {

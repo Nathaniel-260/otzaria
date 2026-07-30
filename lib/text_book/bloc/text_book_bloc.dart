@@ -206,6 +206,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       );
       _warmContentCacheInBackground(currentState.book);
     } else {
+      // שחרור רק בטאב רקע. שחרור בחזית מקריס את רשימת הסגמנטים במצב קריאה
+      // רציף, וה-ScrollablePositionedList מצמיד את היעד לאורך החדש — כלומר
+      // המשתמש מאבד את מקום הקריאה בדיוק בזמן הפיצול.
       _releaseContentOutsideWindow(currentState, emit);
     }
   }

@@ -277,6 +277,21 @@ class DropTabOnPane extends TabsEvent {
   List<Object?> get props => [tab, targetPath, position, sourcePath];
 }
 
+/// סימון החלונית שהמשתמש עובד בה בטאב הנוכחי.
+///
+/// נשלח בלחיצה בתוך חלונית. הפוקוס, ניווט מסימניה ושכבת התוספים נגזרים ממנה —
+/// בלעדיה כל חלוניות הטאב נחשבו "בחזית" והתחרו על פוקוס המקלדת.
+///
+/// החלונית עצמה ולא נתיבה: נתיב מתיישן בכל שינוי מבנה.
+class SetActivePane extends TabsEvent {
+  final OpenedTab pane;
+
+  const SetActivePane(this.pane);
+
+  @override
+  List<Object?> get props => [pane];
+}
+
 /// סגירת חלונית בודדת בתוך טאב מפוצל. סגירת החלונית האחרונה סוגרת את הטאב.
 class ClosePane extends TabsEvent {
   final PanePath path;

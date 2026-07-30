@@ -25,6 +25,7 @@ import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/resolving_tab.dart';
 import 'package:otzaria/tabs/resolving_tab_screen.dart';
 import 'package:otzaria/tabs/utils/tab_swipe_direction.dart';
+import 'package:otzaria/tabs/view/active_pane_marker.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
@@ -231,11 +232,10 @@ class _ReadingScreenState extends State<ReadingScreen>
               _syncPageController();
               // ממקד את אזור הקריאה של הטאב הפעיל כדי שגלילה עם החיצים תעבוד
               // מיד במעבר טאב — הטאבים נשמרים חיים ולכן initState לא רץ שוב.
-              // בטאב מפוצל ממוקדת החלונית הראשונה: המסכים נרשמים לפוקוס לפי
+              // בטאב מפוצל ממוקדת החלונית הפעילה: המסכים נרשמים לפוקוס לפי
               // חלונית, ובקשה על הצומת העוטף הייתה נשארת תלויה ללא נמען.
-              final activeTab = state.currentTab;
-              if (activeTab != null) {
-                final focusTarget = leafPanes(activeTab).first;
+              final focusTarget = state.activePane;
+              if (focusTarget != null) {
                 final focusRepo = context.read<FocusRepository>();
                 WidgetsBinding.instance.addPostFrameCallback((_) {
                   focusRepo.requestTabContentFocus(focusTarget);
@@ -246,6 +246,23 @@ class _ReadingScreenState extends State<ReadingScreen>
           listenWhen: (previous, current) =>
               previous.currentTabIndex != current.currentTabIndex ||
               previous.tabs.length != current.tabs.length,
+        ),
+        BlocListener<TabsBloc, TabsState>(
+          // שינוי מבנה בתוך אותו טאב (סגירת חלונית, החלפת צדדים, פיצול) מותיר
+          // את פוקוס המקלדת על חלונית שנעלמה או זזה. לחיצה בתוך חלונית אינה
+          // נכנסת לכאן — שם הפוקוס שייך למה שנלחץ.
+          listenWhen: (previous, current) =>
+              previous.currentTabIndex == current.currentTabIndex &&
+              previous.tabs.length == current.tabs.length &&
+              !identical(previous.currentTab, current.currentTab),
+          listener: (context, state) {
+            final pane = state.activePane;
+            if (pane == null) return;
+            final focusRepo = context.read<FocusRepository>();
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              focusRepo.requestTabContentFocus(pane);
+            });
+          },
         ),
         BlocListener<TabsBloc, TabsState>(
           listener: (context, state) {
@@ -266,6 +283,14 @@ class _ReadingScreenState extends State<ReadingScreen>
         ),
       ],
       child: BlocBuilder<TabsBloc, TabsState>(
+        // סימון החלונית הפעילה אינו משנה את מה שמצויר כאן — הוא מכוון פוקוס
+        // והקשר. בלי הסינון כל לחיצה בחלונית בנתה מחדש את כל הטאבים הפתוחים
+        // (כולם מותקנים בעץ בגלל KeepAlive).
+        buildWhen: (previous, current) =>
+            previous.tabs != current.tabs ||
+            previous.currentTabIndex != current.currentTabIndex ||
+            previous.updateCounter != current.updateCounter ||
+            previous.selectedTabs != current.selectedTabs,
         builder: (context, state) {
           // Scaffold יחיד לשני המצבים — Theme מפיץ את scaffoldBackgroundColor
           // לכל Scaffold פנימי (TextBookScreen, PdfBookScreen וכד').
@@ -376,6 +401,8 @@ class _ReadingScreenState extends State<ReadingScreen>
     required bool enableTourTargets,
   }) {
     final isSplit = tab is CombinedTab;
+    // רק חלוניות PDF מתחלקות בתקציב מטמון התמונות.
+    final pdfPanes = leafPanes(tab).whereType<PdfBookTab>().length;
     return SplitPaneView(
       root: tab,
       onRatioChanged: (path, ratio) {
@@ -394,13 +421,18 @@ class _ReadingScreenState extends State<ReadingScreen>
             ),
           );
         },
-        child: _buildPaneContent(
-          pane,
-          isInCombinedView: isSplit,
-          enableTourTargets: enableTourTargets && !isSplit,
-          // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל כמה חלוניות
-          // היו מחממות ספרים גדולים במקביל ומכפילות את צריכת הזיכרון.
-          allowBackgroundWarming: !isSplit,
+        child: ActivePaneMarker(
+          pane: pane,
+          enabled: isSplit,
+          child: _buildPaneContent(
+            pane,
+            isInCombinedView: isSplit,
+            enableTourTargets: enableTourTargets && !isSplit,
+            // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל כמה חלוניות
+            // היו מחממות ספרים גדולים במקביל ומכפילות את צריכת הזיכרון.
+            allowBackgroundWarming: !isSplit,
+            pdfPaneCount: pdfPanes,
+          ),
         ),
       ),
     );
@@ -411,6 +443,7 @@ class _ReadingScreenState extends State<ReadingScreen>
     required bool isInCombinedView,
     required bool enableTourTargets,
     bool allowBackgroundWarming = true,
+    int pdfPaneCount = 1,
   }) {
     if (tab is PdfBookTab) {
       return PdfBookScreen(
@@ -418,6 +451,7 @@ class _ReadingScreenState extends State<ReadingScreen>
         tab: tab,
         isInCombinedView: isInCombinedView,
         enableTourTargets: enableTourTargets,
+        pdfPaneCount: pdfPaneCount,
       );
     } else if (tab is TextBookTab) {
       return BlocProvider.value(

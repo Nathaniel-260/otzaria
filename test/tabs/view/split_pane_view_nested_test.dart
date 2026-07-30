@@ -19,10 +19,10 @@ Finder _dividerWithLabel(String label) => find.byWidgetPredicate(
 );
 
 final Finder _verticalDivider = _dividerWithLabel(
-  'מפריד בין חלוניות — גרירה למעלה ולמטה',
+  'מפריד בין חלוניות — גרירה או חצים למעלה ולמטה, Home לאיפוס',
 );
 final Finder _horizontalDivider = _dividerWithLabel(
-  'מפריד בין חלוניות — גרירה לצדדים',
+  'מפריד בין חלוניות — גרירה או חצים לצדדים, Home לאיפוס',
 );
 
 Widget _host(
@@ -30,6 +30,9 @@ Widget _host(
   void Function(PanePath, double)? onRatioChanged,
 }) {
   return MaterialApp(
+    // גיאומטריית הדסקטופ: עובי המפריד תלוי בפלטפורמה, וב-widget test
+    // ברירת המחדל היא android.
+    theme: ThemeData(platform: TargetPlatform.windows),
     home: Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(

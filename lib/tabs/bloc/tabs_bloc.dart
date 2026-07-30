@@ -82,6 +82,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<SwapSideBySideTabs>(_onSwapSideBySideTabs, transformer: sequential());
     on<DropTabOnPane>(_onDropTabOnPane, transformer: sequential());
     on<ClosePane>(_onClosePane, transformer: sequential());
+    on<SetActivePane>(_onSetActivePane);
   }
 
   void _onLoadTabs(LoadTabs event, Emitter<TabsState> emit) {
@@ -1331,6 +1332,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       ),
     );
     await _repository.saveTabs(newTabs, newIndex, null);
+  }
+
+  /// מצב זמני בלבד — אינו נשמר לדיסק, כמו הבחירה המרובה.
+  void _onSetActivePane(SetActivePane event, Emitter<TabsState> emit) {
+    final current = state.currentTab;
+    if (current == null) return;
+    if (event.pane is CombinedTab) return;
+    // רק חלונית שנמצאת בטאב המוצג: אחרת הסימון היה מצביע אל מחוץ למסך.
+    if (pathOfPane(current, event.pane) == null) return;
+    if (identical(state.activePane, event.pane)) return;
+    emit(state.copyWith(rawActivePane: event.pane));
   }
 
   Future<void> _onClosePane(ClosePane event, Emitter<TabsState> emit) async {
