@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
@@ -55,13 +56,19 @@ class Workspace extends Equatable {
 
   factory Workspace.fromJson(Map<String, dynamic> json) {
     OpenedTab? decodeTab(Map<String, dynamic> map) {
-      // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס
-      // ומפענח אותו כטאב חיפוש ריק — טאב רפאים בשם "מפרשים | ...".
+      // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס.
       if (map['type'] == 'PdfCommentatorsTab') return null;
-      final decoded = map['type'] == 'CommentatorsTab'
-          ? CommentatorsTab.fromJson(map)
-          : OpenedTab.fromJson(map);
-      return _withoutPdfCommentators(decoded);
+      try {
+        final decoded = map['type'] == 'CommentatorsTab'
+            ? CommentatorsTab.fromJson(map)
+            : OpenedTab.fromJson(map);
+        return _withoutPdfCommentators(decoded);
+      } catch (e) {
+        // טאב בודד פגום (למשל טיפוס מגרסה חדשה יותר) לא יפיל את פענוח
+        // שולחן העבודה כולו.
+        debugPrint('⚠️ Skipping workspace tab that failed to restore: $e');
+        return null;
+      }
     }
 
     return Workspace(

@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/models/tool_tab.dart';
 
 /// מצב הצגת 2 ספרים זה לצד זה
 class SideBySideMode extends Equatable {
@@ -66,6 +67,10 @@ class TabsState extends Equatable {
   /// נקרא דרך [activePane].
   final OpenedTab? rawActivePane;
 
+  /// החלונית הקוראת האחרונה — ראו [readingPane]. מתוחזק אוטומטית ב-[copyWith]
+  /// ולא על-ידי המטפלים.
+  final OpenedTab? lastReadingPane;
+
   const TabsState({
     required this.tabs,
     required this.currentTabIndex,
@@ -73,6 +78,7 @@ class TabsState extends Equatable {
     this.sideBySideMode,
     this.selectedTabs = const [],
     this.rawActivePane,
+    this.lastReadingPane,
   });
 
   factory TabsState.initial() {
@@ -93,16 +99,68 @@ class TabsState extends Equatable {
     List<OpenedTab>? selectedTabs,
     OpenedTab? rawActivePane,
   }) {
+    final nextTabs = tabs ?? this.tabs;
+    final nextIndex = currentTabIndex ?? this.currentTabIndex;
+    final nextRawActivePane = rawActivePane ?? this.rawActivePane;
     return TabsState(
-      tabs: tabs ?? this.tabs,
-      currentTabIndex: currentTabIndex ?? this.currentTabIndex,
+      tabs: nextTabs,
+      currentTabIndex: nextIndex,
       updateCounter: forceUpdate ? updateCounter + 1 : updateCounter,
       sideBySideMode: clearSideBySide
           ? null
           : (sideBySideMode ?? this.sideBySideMode),
       selectedTabs: selectedTabs ?? this.selectedTabs,
-      rawActivePane: rawActivePane ?? this.rawActivePane,
+      rawActivePane: nextRawActivePane,
+      lastReadingPane: _resolveLastReadingPane(
+        tabs: nextTabs,
+        currentTabIndex: nextIndex,
+        rawActivePane: nextRawActivePane,
+        previous: lastReadingPane,
+      ),
     );
+  }
+
+  /// חלונית קריאה = כל חלונית שאינה טאב כלי. טאב כלי אינו מקום קריאה, ולכן
+  /// אסור שהוא ידרוס את ההקשר שהתוסף שנפתח בא לקרוא.
+  static bool _isReadingPane(OpenedTab? pane) =>
+      pane != null && pane is! ToolTab;
+
+  static OpenedTab? _resolveActivePane(
+    List<OpenedTab> tabs,
+    int currentTabIndex,
+    OpenedTab? rawActivePane,
+  ) {
+    if (tabs.isEmpty) return null;
+    if (currentTabIndex < 0 || currentTabIndex >= tabs.length) return null;
+    final tab = tabs[currentTabIndex];
+    if (rawActivePane != null &&
+        rawActivePane is! CombinedTab &&
+        pathOfPane(tab, rawActivePane) != null) {
+      return rawActivePane;
+    }
+    return leafPanes(tab).first;
+  }
+
+  static OpenedTab? _resolveLastReadingPane({
+    required List<OpenedTab> tabs,
+    required int currentTabIndex,
+    required OpenedTab? rawActivePane,
+    required OpenedTab? previous,
+  }) {
+    final active = _resolveActivePane(tabs, currentTabIndex, rawActivePane);
+    if (_isReadingPane(active)) return active;
+    // הטאב הפעיל הוא כלי; מעדיפים חלונית ספר שנמצאת באותו טאב מפוצל.
+    if (currentTabIndex >= 0 && currentTabIndex < tabs.length) {
+      for (final pane in leafPanes(tabs[currentTabIndex])) {
+        if (_isReadingPane(pane)) return pane;
+      }
+    }
+    // נופלים לחלונית הקוראת הקודמת, כל עוד היא עדיין פתוחה.
+    if (previous == null) return null;
+    for (final tab in tabs) {
+      if (leafPanes(tab).contains(previous)) return previous;
+    }
+    return null;
   }
 
   bool get hasOpenTabs => tabs.isNotEmpty;
@@ -113,16 +171,18 @@ class TabsState extends Equatable {
   ///
   /// חלונית ששמורה מטאב אחר, או שנסגרה, אינה נמצאת בעץ הנוכחי ולכן נופלת
   /// לחלונית הראשונה שלו. כך אין צורך לנרמל את השדה בכל מטפל שמשנה מבנה.
-  OpenedTab? get activePane {
-    final tab = currentTab;
-    if (tab == null) return null;
-    final stored = rawActivePane;
-    if (stored != null &&
-        stored is! CombinedTab &&
-        pathOfPane(tab, stored) != null) {
-      return stored;
-    }
-    return leafPanes(tab).first;
+  OpenedTab? get activePane =>
+      _resolveActivePane(tabs, currentTabIndex, rawActivePane);
+
+  /// החלונית שממנה נגזר מיקום הקריאה עבור ה-API של התוספים ולהיסטוריה.
+  ///
+  /// זהה ל-[activePane] בכל מקרה, למעט טאב כלי: תוסף שנפתח מתפריט ההקשר של
+  /// ספר חייב להמשיך לקרוא את מיקום הספר וההדגשה שבגללם נפתח, ולכן טאב כלי
+  /// מדלג אל חלונית הספר שבאותו טאב מפוצל, ואם אין — אל הקודמת שנשמרה.
+  OpenedTab? get readingPane {
+    final pane = activePane;
+    if (_isReadingPane(pane)) return pane;
+    return lastReadingPane;
   }
 
   /// נתיב החלונית הפעילה בטאב הנוכחי.
@@ -152,5 +212,6 @@ class TabsState extends Equatable {
     sideBySideMode,
     selectedTabs,
     rawActivePane,
+    lastReadingPane,
   ];
 }
