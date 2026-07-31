@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
@@ -10,15 +11,22 @@ class _LeafTab extends OpenedTab {
   Map<String, dynamic> toJson() => {'type': '_LeafTab', 'title': title};
 }
 
-/// `א | (ב מעל ג)`
+/// חלונית עם כרטיסייה אחת — כך נראה כל עלה בעץ אחרי פיצול.
+PaneGroupTab _pane(OpenedTab tab) => PaneGroupTab(tabs: [tab]);
+
+/// `א | (ב מעל ג)`, כשכל עלה הוא חלונית עם כרטיסייה אחת.
 ({CombinedTab root, _LeafTab a, _LeafTab b, _LeafTab c}) _tree() {
   final a = _LeafTab('א');
   final b = _LeafTab('ב');
   final c = _LeafTab('ג');
   return (
     root: CombinedTab(
-      rightTab: a,
-      leftTab: CombinedTab(rightTab: b, leftTab: c, axis: SplitAxis.vertical),
+      rightTab: _pane(a),
+      leftTab: CombinedTab(
+        rightTab: _pane(b),
+        leftTab: _pane(c),
+        axis: SplitAxis.vertical,
+      ),
     ),
     a: a,
     b: b,
@@ -35,102 +43,129 @@ void main() {
       final t = _tree();
       final incoming = _LeafTab('חדש');
 
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t.root,
         incoming: incoming,
         targetPath: const [kFirstPane],
         position: PaneDropPosition.bottom,
-      );
+      )!;
 
-      expect(result.displaced, isNull);
-      expect(paneCount(result.root), 4);
-      expect(_titles(result.root), ['א', 'חדש', 'ב', 'ג']);
-      expect(paneAt(result.root, const [kSecondPane, kFirstPane]), same(t.b));
+      expect(paneCount(root), 4);
+      expect(_titles(root), ['א', 'חדש', 'ב', 'ג']);
+      expect(
+        paneAt(root, const [kSecondPane, kFirstPane]),
+        isA<PaneGroupTab>(),
+      );
+      expect(leafPanes(paneAt(root, const [kSecondPane, kFirstPane])!), [
+        same(t.b),
+      ]);
     });
 
-    test('הפלה במרכז דוחקת את החלונית הקיימת ומחזירה אותה', () {
+    test('הפלה במרכז מוסיפה כרטיסייה לחלונית ואינה דוחקת דבר', () {
       final t = _tree();
       final incoming = _LeafTab('חדש');
 
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t.root,
         incoming: incoming,
         targetPath: const [kSecondPane, kFirstPane],
         position: PaneDropPosition.center,
-      );
+      )!;
 
-      expect(result.displaced, same(t.b));
-      expect(paneCount(result.root), 3);
-      expect(_titles(result.root), ['א', 'חדש', 'ג']);
+      // מספר החלוניות לא השתנה — רק מספר הכרטיסיות שבאחת מהן.
+      expect(paneCount(root), 3);
+      expect(_titles(root), ['א', 'ב', 'חדש', 'ג']);
+      final pane =
+          paneAt(root, const [kSecondPane, kFirstPane]) as PaneGroupTab;
+      expect(pane.tabs, [same(t.b), same(incoming)]);
+      expect(pane.activeTab, same(incoming), reason: 'הנכנסת היא המוצגת');
     });
 
-    test('הפלה על חלונית יחידה מפצלת אותה', () {
+    test('הפלה על חלונית יחידה מפצלת אותה ועוטפת את שני הצדדים', () {
       final leaf = _LeafTab('יחיד');
-      final result = applyPaneDrop(
+      final root =
+          applyPaneDrop(
+                root: leaf,
+                incoming: _LeafTab('חדש'),
+                targetPath: const [],
+                position: PaneDropPosition.start,
+              )!
+              as CombinedTab;
+
+      expect(paneCount(root), 2);
+      expect(root.first, isA<PaneGroupTab>());
+      expect(root.first.title, 'חדש');
+      expect((root.second as PaneGroupTab).tabs, [same(leaf)]);
+    });
+
+    test('הפלה במרכז של טאב שאינו מפוצל אינה עושה דבר', () {
+      final leaf = _LeafTab('יחיד');
+
+      // בשורש אין רצועת כרטיסיות משלו — שורת הכרטיסיות של החלון היא הרצועה,
+      // והכרטיסייה כבר שם.
+      final root = applyPaneDrop(
         root: leaf,
         incoming: _LeafTab('חדש'),
         targetPath: const [],
-        position: PaneDropPosition.start,
+        position: PaneDropPosition.center,
       );
 
-      expect(paneCount(result.root), 2);
-      expect((result.root as CombinedTab).first.title, 'חדש');
-      expect((result.root as CombinedTab).second, same(leaf));
+      expect(root, isNull);
     });
   });
 
   group('הזזה פנימית', () {
-    test('הפלה במרכז מחליפה בין שתי החלוניות במקומן', () {
+    test('גרירת כרטיסייה למרכז חלונית אחרת מעבירה אותה אליה', () {
       final t = _tree();
 
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t.root,
         incoming: t.a,
         targetPath: const [kSecondPane, kSecondPane],
         sourcePath: const [kFirstPane],
         position: PaneDropPosition.center,
-      );
+      )!;
 
-      expect(result.displaced, isNull);
-      expect(paneCount(result.root), 3);
-      expect(paneAt(result.root, const [kFirstPane]), same(t.c));
-      expect(paneAt(result.root, const [kSecondPane, kSecondPane]), same(t.a));
-      expect(paneAt(result.root, const [kSecondPane, kFirstPane]), same(t.b));
+      // חלונית א' התרוקנה ונסגרה, והצומת שמעליה קרס.
+      expect(paneCount(root), 2);
+      expect(_titles(root), ['ב', 'ג', 'א']);
+      final target = paneAt(root, const [kSecondPane]) as PaneGroupTab;
+      expect(target.tabs, [same(t.c), same(t.a)]);
     });
 
     test('הזזה לקצה מקריסה את הצומת שהתרוקן ושומרת על מספר החלוניות', () {
       final t = _tree();
 
       // ב' עוברת מהצומת האנכי אל צדה של א'.
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t.root,
         incoming: t.b,
         targetPath: const [kFirstPane],
         sourcePath: const [kSecondPane, kFirstPane],
         position: PaneDropPosition.end,
-      );
+      )!;
 
-      expect(paneCount(result.root), 3);
-      expect(_titles(result.root), ['א', 'ב', 'ג']);
+      expect(paneCount(root), 3);
+      expect(_titles(root), ['א', 'ב', 'ג']);
       // הצומת האנכי התמוטט — ג' עלתה למקומו.
-      expect(paneAt(result.root, const [kSecondPane]), same(t.c));
+      expect(leafPanes(paneAt(root, const [kSecondPane])!), [same(t.c)]);
       // א' ו-ב' יושבות יחד בצומת החדש.
-      final inner = paneAt(result.root, const [kFirstPane]) as CombinedTab;
-      expect(inner.first, same(t.a));
-      expect(inner.second, same(t.b));
+      final inner = paneAt(root, const [kFirstPane]) as CombinedTab;
+      expect(leafPanes(inner.first), [same(t.a)]);
+      expect(leafPanes(inner.second), [same(t.b)]);
     });
 
-    test('כל חלוניות העץ שומרות על זהותן בהזזה', () {
+    test('כל כרטיסיות העץ שומרות על זהותן בהזזה', () {
       final t = _tree();
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t.root,
         incoming: t.c,
         targetPath: const [kFirstPane],
         sourcePath: const [kSecondPane, kSecondPane],
         position: PaneDropPosition.top,
-      );
+      )!;
 
-      final leaves = leafPanes(result.root);
+      final leaves = leafPanes(root);
       expect(leaves, containsAll([same(t.a), same(t.b), same(t.c)]));
       expect(leaves.length, 3);
     });
@@ -138,21 +173,42 @@ void main() {
     test('הזזה בין שתי חלוניות בלבד משנה ציר בלי לאבד חלונית', () {
       final a = _LeafTab('א');
       final b = _LeafTab('ב');
-      final root = CombinedTab(rightTab: a, leftTab: b);
+      final root = CombinedTab(rightTab: _pane(a), leftTab: _pane(b));
+
+      final result =
+          applyPaneDrop(
+                root: root,
+                incoming: a,
+                targetPath: const [kSecondPane],
+                sourcePath: const [kFirstPane],
+                position: PaneDropPosition.bottom,
+              )!
+              as CombinedTab;
+
+      expect(paneCount(result), 2);
+      expect(result.axis, SplitAxis.vertical);
+      expect(leafPanes(result.first), [same(b)]);
+      expect(leafPanes(result.second), [same(a)]);
+    });
+
+    test('גרירת כרטיסייה אל קצה חלוניתה שלה מפצלת אותה', () {
+      final a = _LeafTab('א');
+      final b = _LeafTab('ב');
+      final shared = PaneGroupTab(tabs: [a, b]);
+      final other = _LeafTab('ג');
+      final root = CombinedTab(rightTab: shared, leftTab: _pane(other));
 
       final result = applyPaneDrop(
         root: root,
-        incoming: a,
-        targetPath: const [kSecondPane],
+        incoming: b,
+        targetPath: const [kFirstPane],
         sourcePath: const [kFirstPane],
         position: PaneDropPosition.bottom,
-      );
+      )!;
 
-      expect(paneCount(result.root), 2);
-      final combined = result.root as CombinedTab;
-      expect(combined.axis, SplitAxis.vertical);
-      expect(combined.first, same(b));
-      expect(combined.second, same(a));
+      expect(paneCount(result), 3);
+      expect(shared.tabs, [same(a)], reason: 'ב\' יצאה מהחלונית המשותפת');
+      expect(_titles(result), ['א', 'ב', 'ג']);
     });
   });
 
@@ -184,24 +240,9 @@ void main() {
       );
     });
 
-    test('הזזת השורש עצמו אינה משנה דבר', () {
-      final leaf = _LeafTab('יחיד');
-      final result = applyPaneDrop(
-        root: leaf,
-        incoming: leaf,
-        targetPath: const [],
-        sourcePath: const [],
-        position: PaneDropPosition.end,
-      );
-
-      expect(result.root, same(leaf));
-      expect(result.displaced, isNull);
-    });
-
-    test('הזזת צומת אל חלונית שבתוכו אינה משנה דבר ואינה זורקת', () {
+    test('גרירת הכרטיסייה היחידה אל חלוניתה שלה אינה משנה דבר', () {
       final t = _tree();
 
-      // היעד נמצא בתוך המקור: הסרת המקור הייתה מוחקת גם את היעד.
       for (final position in [
         PaneDropPosition.end,
         PaneDropPosition.center,
@@ -209,14 +250,14 @@ void main() {
       ]) {
         final result = applyPaneDrop(
           root: t.root,
-          incoming: t.root,
+          incoming: t.a,
           targetPath: const [kFirstPane],
-          sourcePath: const [],
+          sourcePath: const [kFirstPane],
           position: position,
         );
-        expect(result.root, same(t.root), reason: 'מיקום $position');
-        expect(result.displaced, isNull);
+        expect(result, isNull, reason: 'מיקום $position');
       }
+      expect(paneCount(t.root), 3);
     });
   });
 }

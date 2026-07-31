@@ -18,21 +18,21 @@ class _LeafTab extends OpenedTab {
 /// באג רינדור בפועל: זהות כפולה מפילה את המסך במפתח כפול, ונתיב שאינו
 /// נפתר חזרה שולח אירועי bloc אל החלונית הלא נכונה.
 void _expectTreeInvariants(OpenedTab root, {required String after}) {
-  final leaves = leafPanes(root);
+  final panes = panesOf(root);
   final paths = leafPanePaths(root);
 
-  expect(paths, hasLength(leaves.length), reason: 'נתיב לכל עלה ($after)');
-  expect(paneCount(root), leaves.length, reason: 'מנייה עקבית ($after)');
+  expect(paths, hasLength(panes.length), reason: 'נתיב לכל חלונית ($after)');
+  expect(paneCount(root), panes.length, reason: 'מנייה עקבית ($after)');
 
-  for (var i = 0; i < leaves.length; i++) {
-    // הנתיב ה-i מצביע על העלה ה-i, לפי זהות אובייקט ולא לפי כותרת.
+  for (var i = 0; i < panes.length; i++) {
+    // הנתיב ה-i מצביע על החלונית ה-i, לפי זהות אובייקט ולא לפי כותרת.
     expect(
       paneAt(root, paths[i]),
-      same(leaves[i]),
-      reason: 'נתיב ↔ עלה ($after)',
+      same(panes[i]),
+      reason: 'נתיב ↔ חלונית ($after)',
     );
     expect(
-      pathOfPane(root, leaves[i]),
+      pathOfPane(root, panes[i]),
       paths[i],
       reason: 'pathOfPane הוא ההופכי של paneAt ($after)',
     );
@@ -40,11 +40,16 @@ void _expectTreeInvariants(OpenedTab root, {required String after}) {
   }
 
   // ייחוד לפי זהות: אותו אובייקט פעמיים בעץ = GlobalObjectKey כפול = קריסה.
+  final tabs = leafPanes(root);
   expect(
-    (Set<OpenedTab>.identity()..addAll(leaves)).length,
-    leaves.length,
-    reason: 'חלונית מופיעה פעמיים בעץ ($after)',
+    (Set<OpenedTab>.identity()..addAll(tabs)).length,
+    tabs.length,
+    reason: 'כרטיסייה מופיעה פעמיים בעץ ($after)',
   );
+  // כל כרטיסייה נפתרת לחלונית שלה — אחרת אירועי כרטיסייה מגיעים ליעד שגוי.
+  for (final tab in tabs) {
+    expect(paneContaining(root, tab), isNotNull, reason: after);
+  }
 }
 
 /// מתאר את מבנה העץ כטקסט: כותרות עלים, וצירים ויחסים של הצמתים.
@@ -60,6 +65,11 @@ String _shape(OpenedTab node) {
 /// אותו תיאור, אך מתוך ה-JSON — כדי להשוות מבנה לפני ואחרי סריאליזציה
 /// בלי להיזקק לעלים שניתן לשחזר.
 String _shapeFromJson(Map<String, dynamic> json) {
+  if (json['type'] == 'PaneGroupTab') {
+    final tabs = (json['tabs'] as List).cast<Map>();
+    final active = (json['activeIndex'] as num).toInt();
+    return tabs[active]['title'] as String;
+  }
   if (json['type'] == 'CombinedTab') {
     final axis = json['axis'] == 'vertical' ? 'v' : 'h';
     final ratio = (json['splitRatio'] as num).toDouble().toStringAsFixed(3);
@@ -133,15 +143,15 @@ void main() {
           if (targetIndex == sourceIndex) {
             targetIndex = (targetIndex + 1) % leaves.length;
           }
-          final result = applyPaneDrop(
+          final moved = applyPaneDrop(
             root: root,
             incoming: leaves[sourceIndex],
             targetPath: paths[targetIndex],
             position: positions[random.nextInt(positions.length)],
             sourcePath: paths[sourceIndex],
           );
-          root = result.root;
-          expect(result.displaced, isNull, reason: 'הזזה פנימית אינה דוחקת');
+          expect(moved, isNotNull, reason: 'הזזה בין חלוניות שונות מתבצעת');
+          root = moved!;
           _expectTreeInvariants(root, after: 'הזזה בצעד $step');
         }
       }
@@ -264,14 +274,13 @@ void main() {
 
       for (final position in positions) {
         final paths = leafPanePaths(root);
-        final result = applyPaneDrop(
+        root = applyPaneDrop(
           root: root,
           incoming: leafPanes(root).first,
           targetPath: paths.last,
           position: position,
           sourcePath: paths.first,
-        );
-        root = result.root;
+        )!;
         expect(paneCount(root), 4);
         expect(leafPanes(root).toSet(), before);
         _expectTreeInvariants(root, after: 'הזזה ל-$position');

@@ -1541,9 +1541,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookLoaded state,
     bool wideScreen,
   ) {
-    final maxButtons = maxToolbarButtonsForWidth(
-      MediaQuery.of(context).size.width,
-    );
+    // בחלונית של טאב מפוצל רוחב המסך אינו רוחב החלונית, ולכן החישוב לפי
+    // רוחב אינו תקף שם — נכנס מספר קבוע וקטן של כפתורים.
+    final maxButtons = widget.isInCombinedView
+        ? kSplitPaneMaxToolbarButtons
+        : maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
 
     return [
       Consumer<ShamorZachorDataProvider>(
@@ -1576,7 +1578,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
-    return [
+    final actions = [
       // 1) PDF Button (ראשון מימין - יעלם אחרון!)
       if (_hasPdfBook)
         ActionButtonData(
@@ -1711,6 +1713,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         },
       ),
     ];
+    return promoteSearchInSplitPane(actions, widget.isInCombinedView);
   }
 
   /// כפתורים שתמיד יהיו בתפריט "..." (בסדר הרצוי)

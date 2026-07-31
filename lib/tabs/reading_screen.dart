@@ -30,6 +30,7 @@ import 'package:otzaria/tools/view/tool_tab_screen.dart';
 import 'package:otzaria/tabs/utils/tab_swipe_direction.dart';
 import 'package:otzaria/tabs/view/active_pane_marker.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
+import 'package:otzaria/tabs/view/pane_view.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
 import 'package:otzaria/search/view/full_text_search_screen.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
@@ -421,40 +422,63 @@ class _ReadingScreenState extends State<ReadingScreen>
     required bool enableTourTargets,
   }) {
     final isSplit = tab is CombinedTab;
-    // רק חלוניות PDF מתחלקות בתקציב מטמון התמונות.
+    // רק חלוניות PDF מתחלקות בתקציב מטמון התמונות. הספירה כוללת כרטיסיות
+    // מוסתרות: הן נשארות בעץ הווידג'טים ומחזיקות מטמון משלהן.
     final pdfPanes = leafPanes(tab).whereType<PdfBookTab>().length;
+
+    Widget buildContent(OpenedTab paneTab) => ActivePaneMarker(
+      pane: paneTab,
+      enabled: isSplit,
+      child: _buildPaneContent(
+        paneTab,
+        isInCombinedView: isSplit,
+        enableTourTargets: enableTourTargets && !isSplit,
+        // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל כמה חלוניות
+        // היו מחממות ספרים גדולים במקביל ומכפילות את צריכת הזיכרון.
+        allowBackgroundWarming: !isSplit,
+        pdfPaneCount: pdfPanes,
+      ),
+    );
+
     return SplitPaneView(
       root: tab,
       onRatioChanged: (path, ratio) {
         context.read<TabsBloc>().add(UpdateSplitRatio(ratio, path: path));
       },
-      paneBuilder: (pane, path) => PaneDropTarget(
-        path: path,
-        pane: pane,
-        onDrop: (data, targetPath, position) {
-          context.read<TabsBloc>().add(
-            DropTabOnPane(
-              tab: data.tab,
-              targetPath: targetPath,
-              position: position,
-              sourcePath: data.sourcePath,
-            ),
-          );
-        },
-        child: ActivePaneMarker(
+      paneBuilder: (pane, path) {
+        final content = PaneDropTarget(
+          path: path,
           pane: pane,
-          enabled: isSplit,
-          child: _buildPaneContent(
-            pane,
-            isInCombinedView: isSplit,
-            enableTourTargets: enableTourTargets && !isSplit,
-            // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל כמה חלוניות
-            // היו מחממות ספרים גדולים במקביל ומכפילות את צריכת הזיכרון.
-            allowBackgroundWarming: !isSplit,
-            pdfPaneCount: pdfPanes,
+          onDrop: (data, targetPath, position) {
+            context.read<TabsBloc>().add(
+              DropTabOnPane(
+                tab: data.tab,
+                targetPath: targetPath,
+                position: position,
+                sourcePath: data.sourcePath,
+              ),
+            );
+          },
+          child: PaneView(
+            pane: pane,
+            path: path,
+            contentBuilder: buildContent,
           ),
-        ),
-      ),
+        );
+        if (!isSplit) return content;
+
+        // רק המסגרת מגיבה לשינוי החלונית הפעילה; התוכן נבנה פעם אחת ונלכד
+        // ב-closure, אחרת כל לחיצה בחלונית הייתה בונה מחדש את כל הספרים.
+        return BlocSelector<TabsBloc, TabsState, bool>(
+          selector: (state) {
+            final active = state.activePane;
+            return active != null &&
+                identical(paneContaining(pane, active), pane);
+          },
+          builder: (context, isActive) =>
+              PaneCard(isActive: isActive, child: content),
+        );
+      },
     );
   }
 

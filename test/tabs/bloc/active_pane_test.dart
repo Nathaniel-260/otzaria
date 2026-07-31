@@ -279,7 +279,7 @@ void main() {
       await bloc.close();
     });
 
-    test('פיצול נוסף אינו מזיז את הסימון', () async {
+    test('כרטיסייה שנגררה פנימה הופכת לחלונית הפעילה', () async {
       final worked = pdf('עבדתי כאן');
       final split = CombinedTab(rightTab: pdf('א'), leftTab: worked);
       final incoming = pdf('חדש');
@@ -297,7 +297,8 @@ void main() {
       );
       await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
-      expect(bloc.state.activePane, same(worked));
+      // הנגררת היא מה שהמשתמש הביא ומה שמוצג עכשיו, ולכן הפוקוס עובר אליה.
+      expect(bloc.state.activePane, same(incoming));
 
       await bloc.close();
     });

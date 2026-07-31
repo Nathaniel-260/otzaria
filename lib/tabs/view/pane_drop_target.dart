@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
@@ -52,15 +53,21 @@ class PaneDropTarget extends StatefulWidget {
 class _PaneDropTargetState extends State<PaneDropTarget> {
   PaneDropPosition? _position;
 
-  /// גרירה שלא תשנה דבר אינה מציגה חיווי: חלונית אל עצמה, או טאב שהחלונית
-  /// הזו כבר בתוכו — חיווי כזה מבטיח פיצול שה-bloc דוחה בשקט.
+  /// גרירה שלא תשנה דבר אינה מציגה חיווי: כרטיסייה יחידה אל חלוניתה שלה, או
+  /// טאב שהחלונית הזו כבר בתוכו — חיווי כזה מבטיח פעולה שה-bloc דוחה בשקט.
   bool _accepts(PaneDragData data) {
     final source = data.sourcePath;
-    if (source != null) return !_samePath(source, widget.path);
+    if (source != null) {
+      if (!_samePath(source, widget.path)) return true;
+      // מהחלונית אל עצמה אפשר רק לפצל, וגם זה רק כשנשארת כרטיסייה מאחור.
+      final pane = widget.pane;
+      return pane is PaneGroupTab && pane.tabs.length > 1;
+    }
     return pathOfPane(data.tab, widget.pane) == null;
   }
 
-  static bool _samePath(PanePath a, PanePath b) {
+  static bool _samePath(PanePath? a, PanePath? b) {
+    if (a == null || b == null) return false;
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -68,7 +75,7 @@ class _PaneDropTargetState extends State<PaneDropTarget> {
     return true;
   }
 
-  void _updatePosition(Offset globalOffset) {
+  void _updatePosition(Offset globalOffset, PaneDragData data) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
@@ -76,6 +83,11 @@ class _PaneDropTargetState extends State<PaneDropTarget> {
       localPosition: box.globalToLocal(globalOffset),
       size: box.size,
       textDirection: Directionality.of(context),
+      // הפלה במרכז מוסיפה כרטיסייה לרצועת החלונית; אין מרכז לחלונית שאין לה
+      // רצועה (טאב שאינו מפוצל), ולא לכרטיסייה שכבר יושבת ברצועה הזו.
+      allowCenter:
+          widget.pane is PaneGroupTab &&
+          !_samePath(data.sourcePath, widget.path),
     );
     if (next != _position) setState(() => _position = next);
   }
@@ -85,11 +97,13 @@ class _PaneDropTargetState extends State<PaneDropTarget> {
     return DragTarget<PaneDragData>(
       onWillAcceptWithDetails: (details) {
         if (!_accepts(details.data)) return false;
-        _updatePosition(details.offset);
+        _updatePosition(details.offset, details.data);
         return true;
       },
       onMove: (details) {
-        if (_accepts(details.data)) _updatePosition(details.offset);
+        if (_accepts(details.data)) {
+          _updatePosition(details.offset, details.data);
+        }
       },
       onLeave: (_) => setState(() => _position = null),
       onAcceptWithDetails: (details) {

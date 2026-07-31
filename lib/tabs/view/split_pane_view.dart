@@ -6,6 +6,7 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 /// עובי רצועת המפריד בעכבר.
@@ -14,11 +15,18 @@ const double kPaneDividerThickness = 12;
 /// עובי רצועת המפריד במגע — אצבע אינה מדייקת ל-12 פיקסלים.
 const double kPaneDividerThicknessTouch = 24;
 
-/// עובי הקו הנראה בתוך רצועת המפריד במצב מנוחה.
-const double _kDividerLineThickness = 1.5;
+/// עובי ידית המפריד כשהיא מוצגת. במנוחה אין ידית כלל — הרווח שבין כרטיסי
+/// החלוניות הוא ההפרדה.
+const double _kDividerHandleThickness = 4;
 
-/// עובי הקו הנראה בהצבעה או בגרירה.
-const double _kDividerLineThicknessActive = 4;
+/// אורך ידית המפריד לאורך הרצועה.
+const double _kDividerHandleLength = 40;
+
+/// עיגול פינות כרטיס החלונית.
+const double kPaneCardRadius = 10;
+
+/// שוליים סביב כרטיס החלונית, מעבר לרצועת המפריד.
+const double kPaneCardMargin = 3;
 
 /// סכום ה-flex בין שתי חלוניות — קובע את דיוק היחס (0.1%).
 const int _kFlexResolution = 1000;
@@ -74,10 +82,12 @@ class _PaneEdges {
 /// מציג את עץ החלוניות של טאב: חלונית בודדת, או פיצולים מקוננים עם
 /// מפרידים ניתנים לגרירה.
 ///
-/// [paneBuilder] נקרא לכל חלונית עלה עם הנתיב שלה בעץ. כל עלה נעטף
-/// ב-[GlobalObjectKey] לפי זהות האובייקט שלו, כך ששינוי מבנה העץ מעביר
-/// את ה-Element שלו (reparenting) במקום להרוס ולבנות אותו מחדש — בלי זה
-/// כל פיצול או גרירה היו טוענים מחדש את ה-PDF ומאבדים את מיקום הקריאה.
+/// [paneBuilder] נקרא לכל חלונית עלה עם הנתיב שלה בעץ.
+///
+/// שימור מיקום הקריאה בשינוי מבנה הוא באחריות הבונה: עליו לעטוף את תוכן
+/// הכרטיסייה ב-[GlobalObjectKey] לפי זהות הכרטיסייה (כפי ש-`PaneView` עושה),
+/// כי זהות *החלונית* מתחלפת בפיצול הראשון — ומפתח שמתחלף היה טוען מחדש את
+/// ה-PDF. כאן נשמרת רק זהות תיבת הפריסה.
 class SplitPaneView extends StatelessWidget {
   /// שורש עץ החלוניות של הטאב.
   final OpenedTab root;
@@ -98,7 +108,16 @@ class SplitPaneView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final thickness = paneDividerThicknessFor(Theme.of(context).platform);
-    return _buildNode(root, const [], const _PaneEdges(), thickness);
+    final tree = _buildNode(root, const [], const _PaneEdges(), thickness);
+    // טאב שאינו מפוצל ממלא את המסך כמו קודם; המסגור נועד להפריד בין חלוניות.
+    if (root is! CombinedTab) return tree;
+    return ColoredBox(
+      color: AppSurfaces.paneGutter(context),
+      child: Padding(
+        padding: const EdgeInsets.all(kPaneCardMargin),
+        child: tree,
+      ),
+    );
   }
 
   Widget _buildNode(
@@ -125,10 +144,45 @@ class SplitPaneView extends StatelessWidget {
       child: SplitPaneContentInset(
         contentInset: edges.contentInset(thickness),
         child: KeyedSubtree(
-          key: GlobalObjectKey(node),
+          key: ObjectKey(node),
           child: paneBuilder(node, path),
         ),
       ),
+    );
+  }
+}
+
+/// המסגור של חלונית בטאב מפוצל: משטח מעוגל שצף מעל הרווח שבין החלוניות.
+/// החלונית הפעילה מסומנת בקו דק — זה החיווי היחיד ל"במה אני עובד".
+class PaneCard extends StatelessWidget {
+  final bool isActive;
+  final Widget child;
+
+  const PaneCard({super.key, required this.isActive, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(kPaneCardRadius);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: AppSurfaces.paneCard(context),
+        borderRadius: radius,
+        border: Border.all(
+          color: AppSurfaces.paneCardBorder(cs, isActive: isActive),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppSurfaces.paneCardShadow(cs, isActive: isActive),
+            blurRadius: isActive ? 10 : 6,
+            offset: const Offset(0, 1),
+          ),
+        ],
+      ),
+      // חיתוך לפי אותו רדיוס: בלעדיו תוכן הספר יוצא מעבר לפינות המעוגלות.
+      child: ClipRRect(borderRadius: radius, child: child),
     );
   }
 }
@@ -410,9 +464,6 @@ class _PaneDividerState extends State<_PaneDivider> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final active = _hovering || _dragging || _focused;
-    final lineThickness = active
-        ? _kDividerLineThicknessActive
-        : _kDividerLineThickness;
 
     void handleDragStart(DragStartDetails _) {
       _setDragging(true);
@@ -508,16 +559,30 @@ class _PaneDividerState extends State<_PaneDivider> {
               width: isVertical ? null : widget.thickness,
               height: isVertical ? widget.thickness : null,
               child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
+                // ידית קצרה במרכז ולא קו לכל האורך: במנוחה הרווח שבין
+                // הכרטיסים הוא ההפרדה, והידית מופיעה רק כשמכוונים אליה.
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 140),
                   curve: Curves.easeOut,
-                  width: isVertical ? double.infinity : lineThickness,
-                  height: isVertical ? lineThickness : double.infinity,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? colorScheme.primary
-                        : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(lineThickness / 2),
+                  opacity: active ? 1 : 0,
+                  child: SizedBox(
+                    width: isVertical
+                        ? _kDividerHandleLength
+                        : _kDividerHandleThickness,
+                    height: isVertical
+                        ? _kDividerHandleThickness
+                        : _kDividerHandleLength,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppSurfaces.paneDividerHandle(
+                          colorScheme,
+                          isActive: active,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          _kDividerHandleThickness / 2,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

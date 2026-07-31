@@ -1,5 +1,4 @@
 import 'package:equatable/equatable.dart';
-import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
@@ -133,12 +132,14 @@ class TabsState extends Equatable {
     if (tabs.isEmpty) return null;
     if (currentTabIndex < 0 || currentTabIndex >= tabs.length) return null;
     final tab = tabs[currentTabIndex];
+    // חייבת להיות מוצגת ולא רק קיימת: כרטיסייה שהוסתרה מאחורי אחרת באותה
+    // חלונית עדיין בעץ, ופוקוס אליה היה הולך למסך שאינו נראה.
+    final visible = visiblePaneTabs(tab);
     if (rawActivePane != null &&
-        rawActivePane is! CombinedTab &&
-        pathOfPane(tab, rawActivePane) != null) {
+        visible.any((pane) => identical(pane, rawActivePane))) {
       return rawActivePane;
     }
-    return leafPanes(tab).first;
+    return visible.first;
   }
 
   static OpenedTab? _resolveLastReadingPane({

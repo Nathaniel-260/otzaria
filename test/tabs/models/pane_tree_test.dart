@@ -115,8 +115,9 @@ void main() {
               as CombinedTab;
 
       expect(result.axis, SplitAxis.horizontal);
-      expect(result.first, same(incoming));
-      expect(result.second, same(leaf));
+      // שני הצדדים נעטפים בחלונית: כל אחד מהם מקבל רצועת כרטיסיות משלו.
+      expect(leafPanes(result.first), [same(incoming)]);
+      expect(leafPanes(result.second), [same(leaf)]);
     });
 
     test('פיצול לשמאל מכניס את הנגררת שנייה', () {
@@ -126,8 +127,8 @@ void main() {
           splitPaneAt(leaf, const [], incoming, position: PaneDropPosition.end)
               as CombinedTab;
 
-      expect(result.first, same(leaf));
-      expect(result.second, same(incoming));
+      expect(leafPanes(result.first), [same(leaf)]);
+      expect(leafPanes(result.second), [same(incoming)]);
     });
 
     test('פיצול למעלה/למטה מייצר ציר אנכי', () {

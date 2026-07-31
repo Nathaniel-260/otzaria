@@ -5,6 +5,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -60,7 +61,7 @@ void main() {
       await bloc.close();
     });
 
-    test('הפלה במרכז מחזירה את החלונית שנדחקה לשורת הכרטיסיות', () async {
+    test('הפלה במרכז על טאב שאינו מפוצל אינה משנה דבר', () async {
       final target = leaf('יעד');
       final dragged = leaf('נגרר');
       final bloc = await blocWith([target, dragged]);
@@ -72,11 +73,38 @@ void main() {
           position: PaneDropPosition.center,
         ),
       );
-      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
 
-      // הנגרר תפס את מקום היעד, והיעד חזר לרשימה במקום להישרף.
-      expect(bloc.state.tabs[0], same(dragged));
-      expect(bloc.state.tabs[1], same(target));
+      // לשורש אין רצועת כרטיסיות משלו — הרצועה שלו היא שורת הכרטיסיות,
+      // ושם הנגרר כבר יושב. חשוב מכך: הוא לא נעלם מהשורה.
+      expect(bloc.state.tabs, [same(target), same(dragged)]);
+
+      await bloc.close();
+    });
+
+    test('הפלה במרכז חלונית מוסיפה אותה ככרטיסייה נוספת', () async {
+      final a = leaf('א');
+      final b = leaf('ב');
+      final dragged = leaf('נגרר');
+      final split = CombinedTab(
+        rightTab: PaneGroupTab(tabs: [a]),
+        leftTab: PaneGroupTab(tabs: [b]),
+      );
+      final bloc = await blocWith([split, dragged]);
+
+      bloc.add(
+        DropTabOnPane(
+          tab: dragged,
+          targetPath: const [kFirstPane],
+          position: PaneDropPosition.center,
+        ),
+      );
+      await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+
+      final pane = paneAt(bloc.state.currentTab!, const [kFirstPane]);
+      expect(pane, isA<PaneGroupTab>());
+      expect((pane! as PaneGroupTab).tabs, [same(a), same(dragged)]);
+      expect(bloc.state.activePane, same(dragged));
 
       await bloc.close();
     });
@@ -149,10 +177,14 @@ void main() {
       await bloc.close();
     });
 
-    test('הפלה פנימית במרכז מחליפה בין שתי החלוניות', () async {
+    test('הפלה פנימית במרכז מאחדת את שתי החלוניות לאחת', () async {
       final a = leaf('א');
       final b = leaf('ב');
-      final root = CombinedTab(rightTab: a, leftTab: b);
+      final targetPane = PaneGroupTab(tabs: [b]);
+      final root = CombinedTab(
+        rightTab: PaneGroupTab(tabs: [a]),
+        leftTab: targetPane,
+      );
       final bloc = await blocWith([root]);
 
       bloc.add(
@@ -163,12 +195,11 @@ void main() {
           sourcePath: const [kFirstPane],
         ),
       );
-      await bloc.stream.firstWhere((s) => s.currentTab != root);
+      await bloc.stream.firstWhere((s) => s.currentTab is! CombinedTab);
 
-      final updated = bloc.state.currentTab!;
+      // החלונית שהתרוקנה נסגרה, והפיצול קרס — שני הספרים באותה חלונית.
       expect(bloc.state.tabs, hasLength(1));
-      expect(paneAt(updated, const [kFirstPane]), same(b));
-      expect(paneAt(updated, const [kSecondPane]), same(a));
+      expect(targetPane.tabs, [same(b), same(a)]);
 
       await bloc.close();
     });

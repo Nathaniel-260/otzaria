@@ -1,11 +1,14 @@
-import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 /// נתיב לחלונית בעץ הפיצולים של טאב.
 ///
 /// כל צעד הוא `0` (החלונית הראשונה — ימנית/עליונה) או `1` (השנייה —
 /// שמאלית/תחתונה). נתיב ריק מציין את שורש הטאב.
+///
+/// הנתיב מצביע על חלונית, לא על כרטיסייה שבתוכה: [PaneGroupTab] הוא עלה
+/// לכל דבר, והכרטיסיות שבו מזוהות לפי אובייקט.
 typedef PanePath = List<int>;
 
 /// אינדקס החלונית הראשונה בצומת פיצול.
@@ -122,20 +125,24 @@ OpenedTab splitPaneAt(
   final axis = position.axis;
   if (axis == null) return replacePaneAt(root, path, incoming);
 
+  // כל צד בפיצול הוא חלונית עם רצועת כרטיסיות משלה, ולכן שתיהן נעטפות.
+  final targetPane = PaneGroupTab.wrap(target);
+  final incomingPane = PaneGroupTab.wrap(incoming);
+
   // הצומת יורש הצמדה מכל חלונית שהייתה מוצמדת: צומת חדש שאינו מוצמד היה
   // מבטל בשקט את ההצמדה, ו"סגור הכל" היה סוגר את הכרטיסיה שהמשתמש נעץ.
   final isPinned = target.isPinned || incoming.isPinned;
   final split = position.placesIncomingFirst
       ? CombinedTab(
-          rightTab: incoming,
-          leftTab: target,
+          rightTab: incomingPane,
+          leftTab: targetPane,
           axis: axis,
           splitRatio: ratio,
           isPinned: isPinned,
         )
       : CombinedTab(
-          rightTab: target,
-          leftTab: incoming,
+          rightTab: targetPane,
+          leftTab: incomingPane,
           axis: axis,
           splitRatio: ratio,
           isPinned: isPinned,
@@ -210,30 +217,99 @@ List<PanePath> leafPanePaths(OpenedTab root) {
   return paths;
 }
 
-/// כל חלוניות העלה, בסדר התצוגה.
-List<OpenedTab> leafPanes(OpenedTab root) {
-  final leaves = <OpenedTab>[];
+/// חלוניות העלה עצמן — קבוצות כרטיסיות, בסדר התצוגה.
+///
+/// זו החלוקה הגאומטרית של הטאב. לרשימת הספרים שבתוכן ראו [leafPanes].
+List<OpenedTab> panesOf(OpenedTab root) {
+  final panes = <OpenedTab>[];
   void walk(OpenedTab node) {
     if (node is CombinedTab) {
       walk(node.rightTab);
       walk(node.leftTab);
     } else {
-      leaves.add(node);
+      panes.add(node);
     }
   }
 
   walk(root);
+  return panes;
+}
+
+/// כל הכרטיסיות שבטאב, בסדר התצוגה — כולל אלו שמוסתרות מאחורי כרטיסייה
+/// אחרת באותה חלונית.
+///
+/// זו הרשימה שמעניינת כל מי ששואל "אילו ספרים פתוחים": היסטוריה, איתור טאב
+/// קיים, תקציב זיכרון. למי ששואל "כמה תיבות מוצגות" יש [panesOf].
+List<OpenedTab> leafPanes(OpenedTab root) {
+  final leaves = <OpenedTab>[];
+  for (final pane in panesOf(root)) {
+    if (pane is PaneGroupTab) {
+      leaves.addAll(pane.tabs);
+    } else {
+      leaves.add(pane);
+    }
+  }
   return leaves;
 }
 
-/// מספר חלוניות העלה בטאב. `1` לטאב שאינו מפוצל.
-int paneCount(OpenedTab root) => leafPanes(root).length;
+/// הכרטיסיות הנראות בפועל — אחת לכל חלונית.
+List<OpenedTab> visiblePaneTabs(OpenedTab root) => [
+  for (final pane in panesOf(root))
+    if (pane is PaneGroupTab) pane.activeTab else pane,
+];
 
-/// מסירה מהעץ כל חלונית עלה ש-[keep] דוחה, ומקריסה צמתים שהתרוקנו.
+/// מספר חלוניות העלה בטאב. `1` לטאב שאינו מפוצל.
+int paneCount(OpenedTab root) => panesOf(root).length;
+
+/// החלונית המחזיקה את [tab], או `null` אם אינו בעץ.
+OpenedTab? paneContaining(OpenedTab root, OpenedTab tab) {
+  for (final pane in panesOf(root)) {
+    if (identical(pane, tab)) return pane;
+    if (pane is PaneGroupTab && pane.tabs.any((t) => identical(t, tab))) {
+      return pane;
+    }
+  }
+  return null;
+}
+
+/// פורקת קבוצה שנותרה בשורש הטאב.
 ///
-/// מחזירה `null` אם לא נותרה אף חלונית. עץ שלא השתנה מוחזר כאובייקט
+/// לשורש אין רצועת כרטיסיות משלו — שורת הכרטיסיות של החלון היא הרצועה שלו —
+/// ולכן הכרטיסייה המוצגת נשארת כטאב, והשאר מוחזרות לקורא כדי שיכניס אותן
+/// לשורה. עץ שאינו קבוצה מוחזר כמות שהוא.
+({OpenedTab root, List<OpenedTab> released}) unwrapRootGroup(OpenedTab root) {
+  if (root is! PaneGroupTab) return (root: root, released: const []);
+  final kept = root.activeTab;
+  kept.isPinned = kept.isPinned || root.isPinned;
+  return (
+    root: kept,
+    released: [
+      for (final tab in root.tabs)
+        if (!identical(tab, kept)) tab,
+    ],
+  );
+}
+
+/// מסירה מהעץ כל כרטיסייה ש-[keep] דוחה, ומקריסה חלוניות וצמתים שהתרוקנו.
+///
+/// מחזירה `null` אם לא נותרה אף כרטיסייה. עץ שלא השתנה מוחזר כאובייקט
 /// המקורי, כדי לא לאבד את זהות החלוניות שנשמרו.
 OpenedTab? prunePanes(OpenedTab root, bool Function(OpenedTab pane) keep) {
+  if (root is PaneGroupTab) {
+    final kept = root.tabs.where(keep).toList();
+    if (kept.isEmpty) return null;
+    if (kept.length == root.tabs.length) return root;
+    // חלונית חדשה ולא שינוי במקום: הגיזום רץ גם על עץ חי בדרך לשמירה,
+    // ושם הסרת כרטיסייה הייתה מעלימה אותה מהמסך.
+    final activeIndex = kept.indexWhere(
+      (tab) => identical(tab, root.activeTab),
+    );
+    return PaneGroupTab(
+      tabs: kept,
+      activeIndex: activeIndex == -1 ? 0 : activeIndex,
+      isPinned: root.isPinned,
+    );
+  }
   if (root is! CombinedTab) return keep(root) ? root : null;
 
   final first = prunePanes(root.rightTab, keep);
@@ -246,28 +322,15 @@ OpenedTab? prunePanes(OpenedTab root, bool Function(OpenedTab pane) keep) {
   return root.copyWith(rightTab: first, leftTab: second);
 }
 
-/// תוצאת הפלת חלונית על עץ.
-@immutable
-class PaneDropResult {
-  /// שורש העץ אחרי ההפלה.
-  final OpenedTab root;
-
-  /// חלונית שנדחקה מהעץ ואין לה מקום — על הקורא להחליט אם לסגור אותה
-  /// או להחזירה לשורת הכרטיסיות. `null` כשלא נדחקה אף חלונית.
-  final OpenedTab? displaced;
-
-  const PaneDropResult({required this.root, this.displaced});
-}
-
-/// מחילה הפלה של [incoming] על החלונית ב-[targetPath].
+/// מחילה הפלה של הכרטיסייה [incoming] על החלונית ב-[targetPath], ומחזירה
+/// את שורש העץ החדש — או `null` כשההפלה לא שינתה דבר.
 ///
-/// [sourcePath] הוא מקום החלונית הנגררת באותו עץ, כשהגרירה פנימית. הפלה
-/// פנימית במרכז מחליפה בין שתי החלוניות במקומן; הפלה פנימית על קצה מזיזה
-/// את החלונית ומקריסה את הצומת שהתרוקן. הפלה חיצונית במרכז דוחקת את
-/// החלונית הקיימת ומחזירה אותה ב-[PaneDropResult.displaced].
+/// הפלה במרכז מוסיפה את הכרטיסייה לרצועת החלונית; הפלה על קצה מפצלת אותה
+/// לשתיים. [sourcePath] הוא החלונית שממנה נגררה הכרטיסייה, כשהגרירה פנימית —
+/// אז היא מוסרת משם, וחלונית שהתרוקנה נסגרת.
 ///
 /// זורקת [ArgumentError] אם אחד הנתיבים אינו תקין.
-PaneDropResult applyPaneDrop({
+OpenedTab? applyPaneDrop({
   required OpenedTab root,
   required OpenedTab incoming,
   required PanePath targetPath,
@@ -280,67 +343,73 @@ PaneDropResult applyPaneDrop({
     throw ArgumentError.value(targetPath, 'targetPath', 'נתיב חלונית לא תקין');
   }
 
-  if (sourcePath == null) {
-    if (position == PaneDropPosition.center) {
-      return PaneDropResult(
-        root: replacePaneAt(root, targetPath, incoming),
-        displaced: target,
+  var tree = root;
+  if (sourcePath != null) {
+    final source = paneAt(tree, sourcePath);
+    if (source == null) {
+      throw ArgumentError.value(
+        sourcePath,
+        'sourcePath',
+        'נתיב חלונית לא תקין',
       );
     }
-    return PaneDropResult(
-      root: splitPaneAt(
-        root,
-        targetPath,
-        incoming,
-        position: position,
-        ratio: ratio,
-      ),
-    );
+    // הכרטיסייה כבר במקומה: הפלה במרכז חלוניתה שלה אינה משנה דבר, וגרירת
+    // הכרטיסייה היחידה אל קצה חלוניתה הייתה מפצלת חלונית אל תוך עצמה.
+    if (identical(source, target) &&
+        (position == PaneDropPosition.center ||
+            source is! PaneGroupTab ||
+            source.tabs.length <= 1)) {
+      return null;
+    }
+    // נבדק לפני כל שינוי: אחרי הסרת הכרטיסייה מהמקור אין דרך חזרה.
+    if (position == PaneDropPosition.center && target is! PaneGroupTab) {
+      return null;
+    }
+
+    final removed = source is PaneGroupTab && source.removeTab(incoming);
+    if (!removed) {
+      // חלונית שנשארה בלי כרטיסיות נסגרת, ונתיב היעד מאותר מחדש לפי זהות —
+      // הסגירה מקריסה את צומת האב ומקצרת נתיבים.
+      final afterRemove = removePaneAt(tree, sourcePath);
+      if (afterRemove == null) return null;
+      tree = afterRemove;
+    }
   }
 
-  final source = paneAt(root, sourcePath);
-  if (source == null) {
-    throw ArgumentError.value(sourcePath, 'sourcePath', 'נתיב חלונית לא תקין');
-  }
-
-  // הזזה אל תוך עצמה אינה מוגדרת — היעד היה נעלם יחד עם המקור שהוסר.
-  if (identical(source, target) || pathOfPane(source, target) != null) {
-    return PaneDropResult(root: root);
-  }
+  final updatedTargetPath = pathOfPane(tree, target);
+  if (updatedTargetPath == null) return null;
 
   if (position == PaneDropPosition.center) {
-    final swappedSource = replacePaneAt(root, sourcePath, target);
-    return PaneDropResult(
-      root: replacePaneAt(swappedSource, targetPath, source),
-    );
+    final pane = paneAt(tree, updatedTargetPath);
+    // רק חלונית בתוך פיצול מחזיקה רצועת כרטיסיות; בשורש הרצועה היא שורת
+    // הכרטיסיות של החלון, והכרטיסייה כבר שם.
+    if (pane is! PaneGroupTab) return null;
+    pane.addTab(incoming);
+    return tree;
   }
 
-  // ההסרה קודמת לפיצול, ולכן נתיב היעד מאותר מחדש לפי זהות האובייקט —
-  // הסרת החלונית עשויה להקריס צומת ולקצר את הנתיב.
-  final afterRemove = removePaneAt(root, sourcePath);
-  if (afterRemove == null) return PaneDropResult(root: root);
-
-  final updatedTargetPath = pathOfPane(afterRemove, target);
-  if (updatedTargetPath == null) return PaneDropResult(root: root);
-
-  return PaneDropResult(
-    root: splitPaneAt(
-      afterRemove,
-      updatedTargetPath,
-      incoming,
-      position: position,
-      ratio: ratio,
-    ),
+  return splitPaneAt(
+    tree,
+    updatedTargetPath,
+    incoming,
+    position: position,
+    ratio: ratio,
   );
 }
 
 /// הנתיב אל [target] בתוך [root] לפי זהות אובייקט, או `null` אם אינו שם.
+///
+/// כרטיסייה שיושבת בתוך חלונית מקבלת את נתיב החלונית שלה — נתיבים מצביעים
+/// על חלוניות בלבד.
 PanePath? pathOfPane(OpenedTab root, OpenedTab target) {
   PanePath? walk(OpenedTab node, PanePath path) {
     if (identical(node, target)) return path;
     if (node is CombinedTab) {
       return walk(node.rightTab, [...path, kFirstPane]) ??
           walk(node.leftTab, [...path, kSecondPane]);
+    }
+    if (node is PaneGroupTab && node.tabs.any((t) => identical(t, target))) {
+      return path;
     }
     return null;
   }

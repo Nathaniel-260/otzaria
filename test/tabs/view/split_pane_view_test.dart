@@ -57,9 +57,15 @@ Widget _host(
       child: Scaffold(
         body: SplitPaneView(
           root: root,
+          // מפתח גלובלי לפי הכרטיסייה, כמו ב-`PaneView` שבמסך האמיתי: שימור
+          // ה-State בשינוי מבנה הוא באחריות הבונה ולא של תיבת הפריסה, והמפתח
+          // הוא של הכרטיסייה — זהות החלונית מתחלפת בפיצול.
           paneBuilder:
               paneBuilder ??
-              (pane, path) => _CountingPane(pane.title, key: ValueKey(pane)),
+              (pane, path) => _CountingPane(
+                pane.title,
+                key: GlobalObjectKey(visiblePaneTabs(pane).single),
+              ),
           onRatioChanged: onRatioChanged ?? (_, _) {},
         ),
       ),

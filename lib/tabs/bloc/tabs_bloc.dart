@@ -10,6 +10,7 @@ import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
@@ -83,6 +84,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<DropTabOnPane>(_onDropTabOnPane, transformer: sequential());
     on<ClosePane>(_onClosePane, transformer: sequential());
     on<SetActivePane>(_onSetActivePane);
+    on<ShowPaneTab>(_onShowPaneTab, transformer: sequential());
+    on<ClosePaneTab>(_onClosePaneTab, transformer: sequential());
+    on<ReorderPaneTab>(_onReorderPaneTab, transformer: sequential());
+    on<ExtractPaneTab>(_onExtractPaneTab, transformer: sequential());
   }
 
   void _onLoadTabs(LoadTabs event, Emitter<TabsState> emit) {
@@ -1192,8 +1197,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     // הקריאה של כל ספר נשמר, ו-GlobalObjectKey מעביר את החלוניות במקום
     // לבנות אותן מחדש.
     final combinedTab = CombinedTab(
-      rightTab: event.rightTab,
-      leftTab: event.leftTab,
+      rightTab: PaneGroupTab.wrap(event.rightTab),
+      leftTab: PaneGroupTab.wrap(event.leftTab),
       axis: event.axis,
       isPinned: event.rightTab.isPinned || event.leftTab.isPinned,
     );
@@ -1338,6 +1343,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       return;
     }
 
+    final newRoot = applyPaneDrop(
+      root: current,
+      incoming: event.tab,
+      targetPath: event.targetPath,
+      position: event.position,
+      sourcePath: event.sourcePath,
+    );
+    // הפלה שלא שינתה דבר אינה מוציאה את הטאב משורת הכרטיסיות — אחרת הוא
+    // היה נעלם בלי שנכנס לשום מקום.
+    if (newRoot == null) return;
+
     final newTabs = List<OpenedTab>.from(state.tabs);
     var newIndex = state.currentTabIndex;
 
@@ -1350,37 +1366,129 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       if (sourceIndex < newIndex) newIndex--;
     }
 
-    final result = applyPaneDrop(
-      root: current,
-      incoming: event.tab,
-      targetPath: event.targetPath,
-      position: event.position,
-      sourcePath: event.sourcePath,
-    );
-
-    newTabs[newIndex] = result.root;
-    // חלונית שנדחקה בהפלה במרכז חוזרת לשורת הכרטיסיות ואינה משוחררת.
-    final displaced = result.displaced;
-    if (displaced != null) {
-      newTabs.insert(newIndex + 1, displaced);
-    }
+    newTabs[newIndex] = newRoot;
 
     emit(
       state.copyWith(
         tabs: newTabs,
         currentTabIndex: newIndex,
         forceUpdate: true,
+        rawActivePane: event.tab,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
     await _repository.saveTabs(newTabs, newIndex, null);
   }
 
+  /// החלונית המחזיקה את [tab] בטאב הנוכחי, עם נתיבה. `null` אם אינו שם.
+  ({PaneGroupTab pane, PanePath path, int tabIndex})? _paneGroupOf(
+    OpenedTab tab,
+  ) {
+    final current = state.currentTab;
+    if (current == null) return null;
+    final path = pathOfPane(current, tab);
+    if (path == null) return null;
+    final pane = paneAt(current, path);
+    if (pane is! PaneGroupTab) return null;
+    final index = pane.tabs.indexWhere((t) => identical(t, tab));
+    if (index == -1) return null;
+    return (pane: pane, path: path, tabIndex: index);
+  }
+
+  /// שומרת שינוי שנעשה בתוך חלונית. מבנה העץ לא השתנה, ולכן אין רשימה חדשה
+  /// והרינדור מונע דרך מונה העדכון.
+  Future<void> _emitPaneMutation(Emitter<TabsState> emit, {OpenedTab? active}) {
+    emit(state.copyWith(forceUpdate: true, rawActivePane: active));
+    return _repository.saveTabs(state.tabs, state.currentTabIndex, null);
+  }
+
+  Future<void> _onShowPaneTab(
+    ShowPaneTab event,
+    Emitter<TabsState> emit,
+  ) async {
+    final found = _paneGroupOf(event.tab);
+    if (found == null) return;
+    if (found.pane.activeIndex == found.tabIndex &&
+        identical(state.activePane, event.tab)) {
+      return;
+    }
+    found.pane.showTab(event.tab);
+    await _emitPaneMutation(emit, active: event.tab);
+  }
+
+  Future<void> _onReorderPaneTab(
+    ReorderPaneTab event,
+    Emitter<TabsState> emit,
+  ) async {
+    final found = _paneGroupOf(event.tab);
+    if (found == null) return;
+    if (found.tabIndex == event.newIndex) return;
+    found.pane.moveTab(event.tab, event.newIndex);
+    await _emitPaneMutation(emit);
+  }
+
+  Future<void> _onClosePaneTab(
+    ClosePaneTab event,
+    Emitter<TabsState> emit,
+  ) async {
+    final found = _paneGroupOf(event.tab);
+    if (found == null) return;
+
+    // כרטיסייה אחרונה בחלונית: סוגרים את החלונית, שאם היא האחרונה בטאב
+    // תסגור גם אותו.
+    if (!found.pane.removeTab(event.tab)) {
+      add(ClosePane(found.path));
+      return;
+    }
+
+    await _emitPaneMutation(emit, active: found.pane.activeTab);
+    _disposeTabLater(event.tab);
+  }
+
+  Future<void> _onExtractPaneTab(
+    ExtractPaneTab event,
+    Emitter<TabsState> emit,
+  ) async {
+    final found = _paneGroupOf(event.tab);
+    if (found == null) return;
+
+    final newTabs = List<OpenedTab>.from(state.tabs);
+    final tabIndex = state.currentTabIndex;
+    var defaultInsert = tabIndex + 1;
+
+    if (!found.pane.removeTab(event.tab)) {
+      final newRoot = removePaneAt(state.tabs[tabIndex], found.path);
+      // החלונית האחרונה בטאב — הטאב עצמו הופך להיות הכרטיסייה שהוצאה.
+      if (newRoot == null) return;
+      final unwrapped = unwrapRootGroup(newRoot);
+      newTabs[tabIndex] = unwrapped.root;
+      newTabs.insertAll(tabIndex + 1, unwrapped.released);
+      // הכרטיסיות ששוחררו נשארות צמודות לטאב שלהן, והמוצאת נכנסת אחריהן.
+      defaultInsert += unwrapped.released.length;
+    }
+
+    final insertAt = (event.insertIndex ?? defaultInsert).clamp(
+      0,
+      newTabs.length,
+    );
+    newTabs.insert(insertAt, event.tab);
+
+    emit(
+      state.copyWith(
+        tabs: newTabs,
+        currentTabIndex: insertAt,
+        forceUpdate: true,
+        selectedTabs: _normalizedSelection(newTabs),
+      ),
+    );
+    await _repository.saveTabs(newTabs, insertAt, null);
+  }
+
   /// מצב זמני בלבד — אינו נשמר לדיסק, כמו הבחירה המרובה.
   void _onSetActivePane(SetActivePane event, Emitter<TabsState> emit) {
     final current = state.currentTab;
     if (current == null) return;
-    if (event.pane is CombinedTab) return;
+    if (event.pane is CombinedTab || event.pane is PaneGroupTab) return;
     // רק חלונית שנמצאת בטאב המוצג: אחרת הסימון היה מצביע אל מחוץ למסך.
     if (pathOfPane(current, event.pane) == null) return;
     if (identical(state.activePane, event.pane)) return;
@@ -1395,14 +1503,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final pane = paneAt(current, event.path);
     if (pane == null) return;
 
-    final newRoot = removePaneAt(current, event.path);
-    if (newRoot == null) {
+    final removed = removePaneAt(current, event.path);
+    if (removed == null) {
       add(RemoveTab(current));
       return;
     }
 
+    // החלונית ששרדה כבר אינה בפיצול ואין לה רצועה משלה; כרטיסיותיה הנוספות
+    // חוזרות לשורת הכרטיסיות במקום להיעלם מאחורי הפעילה.
+    final unwrapped = unwrapRootGroup(removed);
     final newTabs = List<OpenedTab>.from(state.tabs);
-    newTabs[indexToSave] = newRoot;
+    newTabs[indexToSave] = unwrapped.root;
+    newTabs.insertAll(indexToSave + 1, unwrapped.released);
 
     emit(
       state.copyWith(

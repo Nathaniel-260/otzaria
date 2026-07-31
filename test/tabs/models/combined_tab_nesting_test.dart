@@ -2,6 +2,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -21,17 +22,17 @@ void main() {
     pageNumber: 1,
   );
 
-  /// `(א | ב) מעל (ג | ד)` — עומק 2 בשני צירים.
+  /// `(א | ב) מעל (ג | ד)` — עומק 2 בשני צירים, כשכל עלה הוא חלונית.
   CombinedTab quadTree() {
     return CombinedTab(
       rightTab: CombinedTab(
-        rightTab: leaf('א'),
-        leftTab: leaf('ב'),
+        rightTab: PaneGroupTab(tabs: [leaf('א')]),
+        leftTab: PaneGroupTab(tabs: [leaf('ב')]),
         splitRatio: 0.4,
       ),
       leftTab: CombinedTab(
-        rightTab: leaf('ג'),
-        leftTab: leaf('ד'),
+        rightTab: PaneGroupTab(tabs: [leaf('ג')]),
+        leftTab: PaneGroupTab(tabs: [leaf('ד')]),
         splitRatio: 0.6,
       ),
       axis: SplitAxis.vertical,
@@ -151,41 +152,43 @@ void main() {
       final t = quadTree();
       final moving = paneAt(t, const [kFirstPane, kFirstPane])!;
 
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t,
-        incoming: moving,
+        incoming: leafPanes(moving).single,
         targetPath: const [kSecondPane, kFirstPane],
         sourcePath: const [kFirstPane, kFirstPane],
         position: PaneDropPosition.end,
-      );
+      )!;
 
-      final leaves = leafPanes(result.root);
+      final leaves = leafPanes(root);
       expect(leaves.length, 4);
       expect(leaves.toSet().length, 4);
-      expect(leaves, contains(same(moving)));
+      expect(leaves, contains(same(leafPanes(moving).single)));
     });
 
-    test('הזזה פנימית במרכז אינה מייצרת כפילות', () {
+    test('הזזה פנימית במרכז מאחדת שתי חלוניות לאחת', () {
       final t = quadTree();
-      final source = paneAt(t, const [kFirstPane, kFirstPane])!;
-      final target = paneAt(t, const [kSecondPane, kSecondPane])!;
+      final source = leafPanes(
+        paneAt(t, const [kFirstPane, kFirstPane])!,
+      ).single;
+      final targetPane =
+          paneAt(t, const [kSecondPane, kSecondPane])! as PaneGroupTab;
 
-      final result = applyPaneDrop(
+      final root = applyPaneDrop(
         root: t,
         incoming: source,
         targetPath: const [kSecondPane, kSecondPane],
         sourcePath: const [kFirstPane, kFirstPane],
         position: PaneDropPosition.center,
-      );
+      )!;
 
-      final leaves = leafPanes(result.root);
-      expect(leaves.length, 4);
+      final leaves = leafPanes(root);
+      expect(leaves.length, 4, reason: 'אף ספר לא נסגר');
       expect(leaves.toSet().length, 4);
-      expect(paneAt(result.root, const [kFirstPane, kFirstPane]), same(target));
-      expect(
-        paneAt(result.root, const [kSecondPane, kSecondPane]),
-        same(source),
-      );
+      // החלונית שהתרוקנה נסגרה, והצומת שמעליה קרס.
+      expect(paneCount(root), 3);
+      expect(targetPane.tabs, hasLength(2));
+      expect(targetPane.activeTab, same(source));
     });
   });
 
@@ -213,7 +216,7 @@ void main() {
         ratio: 0.25,
       );
 
-      expect((result.root as CombinedTab).splitRatio, 0.25);
+      expect((result! as CombinedTab).splitRatio, 0.25);
     });
   });
 }

@@ -4176,9 +4176,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   }
 
   List<Widget> _buildPdfActions(BuildContext context, bool wideScreen) {
-    final maxButtons = maxToolbarButtonsForWidth(
-      MediaQuery.of(context).size.width,
-    );
+    // בחלונית של טאב מפוצל רוחב המסך אינו רוחב החלונית, ולכן החישוב לפי
+    // רוחב אינו תקף שם — נכנס מספר קבוע וקטן של כפתורים.
+    final maxButtons = widget.isInCombinedView
+        ? kSplitPaneMaxToolbarButtons
+        : maxToolbarButtonsForWidth(MediaQuery.of(context).size.width);
 
     return [
       ResponsiveActionBar(
@@ -4203,7 +4205,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   List<ActionButtonData> _buildDisplayOrderPdfActions(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    return [
+    final actions = [
       ActionButtonData(
         widget: _buildTextButton(
           context,
@@ -4257,6 +4259,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         compact: isCompact,
       ),
     ];
+    return promoteSearchInSplitPane(actions, widget.isInCombinedView);
   }
 
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {

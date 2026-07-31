@@ -117,7 +117,7 @@ void main() {
       final root = roundTrip(workspace).tabs.single as CombinedTab;
       // הצומת הפנימי נשאר עם חלונית אחת בלבד ולכן התקרס אליה.
       expect(titles(root), ['ספר', 'שני']);
-      expect(root.leftTab, isA<PdfBookTab>());
+      expect(leafPanes(root.leftTab).single, isA<PdfBookTab>());
       expect(paneCount(root), 2);
     });
 

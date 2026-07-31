@@ -13,6 +13,8 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
+import 'package:otzaria/tabs/view/pane_tabs_scope.dart';
+import 'package:otzaria/tabs/view/pane_view.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
 
 import '../helpers/memory_settings_cache.dart';
@@ -60,6 +62,9 @@ void main() {
                         widths: [for (final _ in state.tabs) tabWidth],
                         onReorder: (tab, index) =>
                             bloc.add(MoveTab(tab, index)),
+                        onExtractFromPane: (tab, insertIndex) => bloc.add(
+                          ExtractPaneTab(tab, insertIndex: insertIndex),
+                        ),
                         tabBuilder: (tab, index, width) => SizedBox(
                           width: width,
                           child: ColoredBox(
@@ -88,9 +93,13 @@ void main() {
                                         sourcePath: data.sourcePath,
                                       ),
                                     ),
-                                child: _PaneBody(
+                                child: PaneView(
                                   pane: pane,
-                                  initCounts: initCounts,
+                                  path: path,
+                                  contentBuilder: (tab) => _PaneBody(
+                                    pane: tab,
+                                    initCounts: initCounts,
+                                  ),
                                 ),
                               ),
                             ),
@@ -191,18 +200,42 @@ void main() {
       );
     });
 
-    testWidgets('שחרור במרכז מחליף את החלונית ומחזיר את הקודמת לרצועה', (
+    testWidgets('שחרור במרכז טאב שאינו מפוצל מפצל לפי הצלע הארוכה', (
       tester,
     ) async {
       final (bloc, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
 
+      // לטאב שאינו מפוצל אין רצועת כרטיסיות משלו, ולכן אין מקום שאליו
+      // "מוסיפים כרטיסייה" — כל השטח מפצל, ובאזור קריאה רחב הפיצול אופקי.
       await dragTab(tester, 'ב', readingArea(tester).center);
 
-      expect(bloc.state.tabs, hasLength(2));
-      expect(bloc.state.currentTab!.title, 'ב');
-      expect(bloc.state.tabs[1].title, 'א');
-      expect(find.text('חלונית ב'), findsOneWidget);
-      expect(find.text('חלונית א'), findsNothing);
+      final root = bloc.state.currentTab! as CombinedTab;
+      expect(root.axis, SplitAxis.horizontal);
+      expect(titles(root), containsAll(['א', 'ב']));
+      expect(bloc.state.tabs, hasLength(1));
+    });
+
+    testWidgets('שחרור במרכז חלונית מוסיף אותה ככרטיסייה באותה חלונית', (
+      tester,
+    ) async {
+      final (bloc, _) = await pumpScreen(tester, [
+        leaf('א'),
+        leaf('ב'),
+        leaf('ג'),
+      ]);
+
+      final area = readingArea(tester);
+      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      // עכשיו יש שתי חלוניות; 'ג' נכנסת ככרטיסייה נוספת לחלונית התחתונה.
+      await dragTab(tester, 'ג', paneRect(tester, 'ב').center);
+
+      final root = bloc.state.currentTab!;
+      expect(bloc.state.tabs, hasLength(1));
+      expect(paneCount(root), 2, reason: 'לא נוצרה חלונית שלישית');
+      expect(leafPanes(root).map((t) => t.title), ['א', 'ב', 'ג']);
+      // 'ג' היא המוצגת בחלונית שאליה נכנסה, ו-'ב' מוסתרת מאחוריה.
+      expect(find.text('חלונית ג'), findsOneWidget);
+      expect(find.text('חלונית א'), findsOneWidget);
     });
 
     testWidgets('פיצול שני מקנן ומציג שלוש חלוניות', (tester) async {
@@ -281,6 +314,37 @@ void main() {
     });
   });
 
+  group('הוצאת כרטיסייה מחלונית', () {
+    testWidgets('גרירת כרטיסייה מהחלונית אל השורה מחזירה אותה לשם', (
+      tester,
+    ) async {
+      final (bloc, _) = await pumpScreen(tester, [
+        leaf('א'),
+        leaf('ב'),
+        leaf('ג'),
+      ]);
+
+      final area = readingArea(tester);
+      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      await dragTab(tester, 'ג', paneRect(tester, 'ב').center);
+
+      // 'ג' יושבת עכשיו ככרטיסייה בחלונית התחתונה; גוררים את הצ'יפ שלה
+      // חזרה לשורה — הדרך היחידה להוציא ספר מחלונית בלי לסגור אותו.
+      final strip = tester.getRect(find.byKey(const Key('strip')));
+      final chip = tester.getCenter(find.text('ג'));
+      final gesture = await tester.startGesture(chip);
+      await tester.pump(const Duration(milliseconds: 20));
+      await gesture.moveTo(Offset(strip.right - 4, strip.center.dy));
+      await tester.pump();
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(bloc.state.tabs, hasLength(2));
+      expect(bloc.state.tabs.map((t) => t.title), contains('ג'));
+      expect(paneCount(bloc.state.tabs.firstWhere((t) => t is CombinedTab)), 2);
+    });
+  });
+
   group('שחרור בתוך הרצועה', () {
     testWidgets('מסדר מחדש ואינו מפצל', (tester) async {
       final (bloc, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
@@ -310,6 +374,9 @@ void main() {
 }
 
 /// תוכן חלונית שמונה כמה פעמים נבנה ה-State שלו — כך נמדד שימור המצב.
+///
+/// מארח את רצועת הכרטיסיות כמו מסך אמיתי (שם היא נכנסת ל-[AppTopBar]);
+/// בלי מארח הרצועה לא הייתה מוצגת כלל.
 class _PaneBody extends StatefulWidget {
   final OpenedTab pane;
   final Map<String, int> initCounts;
@@ -333,9 +400,15 @@ class _PaneBodyState extends State<_PaneBody> {
 
   @override
   Widget build(BuildContext context) {
+    final strip = PaneTabsScope.stripOf(context);
     return ColoredBox(
       color: const Color(0xFFEEEEEE),
-      child: Center(child: Text('חלונית ${widget.pane.title}')),
+      child: Column(
+        children: [
+          if (strip != null) SizedBox(height: 36, child: strip),
+          Expanded(child: Center(child: Text('חלונית ${widget.pane.title}'))),
+        ],
+      ),
     );
   }
 }

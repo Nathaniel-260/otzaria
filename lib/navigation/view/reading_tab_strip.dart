@@ -36,6 +36,10 @@ class ReadingTabStrip extends StatefulWidget {
   /// נקרא כשמתחילה גרירת כרטיסיה.
   final VoidCallback? onDragStarted;
 
+  /// נקרא כשכרטיסייה נגררה מתוך חלונית של טאב מפוצל אל השורה — הדרך היחידה
+  /// להוציא ספר מחלונית בלי לסגור אותו.
+  final void Function(OpenedTab tab, int insertIndex)? onExtractFromPane;
+
   const ReadingTabStrip({
     super.key,
     required this.tabs,
@@ -43,6 +47,7 @@ class ReadingTabStrip extends StatefulWidget {
     required this.tabBuilder,
     required this.onReorder,
     this.onDragStarted,
+    this.onExtractFromPane,
     this.requireLongPressToDrag = false,
   });
 
@@ -103,15 +108,21 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
     if (next != _insertIndex) setState(() => _insertIndex = next);
   }
 
-  /// רק כרטיסיות מרצועה זו מסדרות אותה מחדש; חלונית שנגררת מתוך טאב מפוצל
-  /// (בעלת `sourcePath`) אינה יעד לסידור.
-  bool _accepts(PaneDragData data) =>
-      data.sourcePath == null && widget.tabs.contains(data.tab);
+  /// כרטיסייה מהשורה מסודרת מחדש; כרטיסייה שנגררה מתוך חלונית (בעלת
+  /// `sourcePath`) מוחזרת אל השורה.
+  bool _accepts(PaneDragData data) => data.sourcePath != null
+      ? widget.onExtractFromPane != null
+      : widget.tabs.contains(data.tab);
 
-  void _completeReorder(PaneDragData data) {
+  void _completeDrop(PaneDragData data) {
     final insertIndex = _insertIndex;
     setState(() => _insertIndex = null);
     if (insertIndex == null) return;
+
+    if (data.sourcePath != null) {
+      widget.onExtractFromPane?.call(data.tab, insertIndex);
+      return;
+    }
 
     final oldIndex = widget.tabs.indexOf(data.tab);
     if (oldIndex == -1) return;
@@ -138,7 +149,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
       onLeave: (_) {
         if (_insertIndex != null) setState(() => _insertIndex = null);
       },
-      onAcceptWithDetails: (details) => _completeReorder(details.data),
+      onAcceptWithDetails: (details) => _completeDrop(details.data),
       builder: (context, candidate, rejected) {
         // הרצועה נמתחת על כל הרוחב הפנוי ולא מתכווצת לרוחב הכרטיסיות: השטח
         // שנותר הוא "האזור הריק" שגרירת חלון ולחיצה כפולה למסך מלא מסתמכות

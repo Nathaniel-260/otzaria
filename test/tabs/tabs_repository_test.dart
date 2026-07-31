@@ -7,6 +7,7 @@ import 'package:hive_ce/hive.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
@@ -123,8 +124,8 @@ void main() {
         expect(loaded, hasLength(1));
         expect(loaded.single, isA<CombinedTab>());
         final restored = loaded.single as CombinedTab;
-        expect(restored.rightTab, isA<PdfCommentatorsTab>());
-        expect(restored.leftTab, isA<TextBookTab>());
+        expect(leafPanes(restored.rightTab).single, isA<PdfCommentatorsTab>());
+        expect(leafPanes(restored.leftTab).single, isA<TextBookTab>());
       },
     );
 

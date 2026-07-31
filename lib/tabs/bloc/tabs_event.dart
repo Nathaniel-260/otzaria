@@ -292,6 +292,50 @@ class SetActivePane extends TabsEvent {
   List<Object?> get props => [pane];
 }
 
+/// הצגת כרטיסייה בחלונית שבה היא יושבת, וסימון החלונית כפעילה.
+class ShowPaneTab extends TabsEvent {
+  final OpenedTab tab;
+
+  const ShowPaneTab(this.tab);
+
+  @override
+  List<Object?> get props => [tab];
+}
+
+/// סגירת כרטיסייה בתוך חלונית. סגירת האחרונה סוגרת את החלונית עצמה.
+class ClosePaneTab extends TabsEvent {
+  final OpenedTab tab;
+
+  const ClosePaneTab(this.tab);
+
+  @override
+  List<Object?> get props => [tab];
+}
+
+/// שינוי סדר כרטיסייה בתוך החלונית שלה, בקונבנציית הסרה-ואז-הכנסה.
+class ReorderPaneTab extends TabsEvent {
+  final OpenedTab tab;
+  final int newIndex;
+
+  const ReorderPaneTab(this.tab, this.newIndex);
+
+  @override
+  List<Object?> get props => [tab, newIndex];
+}
+
+/// הוצאת כרטיסייה מחלונית חזרה לשורת הכרטיסיות הראשית.
+///
+/// [insertIndex] הוא מקומה בשורה; `null` = אחרי הטאב הנוכחי.
+class ExtractPaneTab extends TabsEvent {
+  final OpenedTab tab;
+  final int? insertIndex;
+
+  const ExtractPaneTab(this.tab, {this.insertIndex});
+
+  @override
+  List<Object?> get props => [tab, insertIndex];
+}
+
 /// סגירת חלונית בודדת בתוך טאב מפוצל. סגירת החלונית האחרונה סוגרת את הטאב.
 class ClosePane extends TabsEvent {
   final PanePath path;

@@ -49,11 +49,12 @@ class ToolTab extends OpenedTab {
   /// מזהי התוספים שמוצגים בטאב [tab] — כולל חלוניות בתוך טאב מפוצל.
   ///
   /// מזין את `PluginRuntimeDispatcher.setVisiblePluginTabs`: תוסף שאינו כאן
-  /// מושהה כדי לא לצרוך CPU/RAM ברקע.
+  /// מושהה כדי לא לצרוך CPU/RAM ברקע. כרטיסייה שמוסתרת מאחורי אחרת באותה
+  /// חלונית אינה מוצגת, ולכן מושהית כמו טאב רקע.
   static Set<String> visiblePluginIdsOf(OpenedTab? tab) {
     if (tab == null) return const {};
     return {
-      for (final pane in leafPanes(tab))
+      for (final pane in visiblePaneTabs(tab))
         if (pane is ToolTab && pane.isPlugin) pane.toolId,
     };
   }

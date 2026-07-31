@@ -1,7 +1,21 @@
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
+
+/// מפענחת צומת בעץ החלוניות של טאב.
+///
+/// טאבי המפרשים אינם מוכרים ל-[OpenedTab.fromJson] הכללי, ולכן מטופלים כאן.
+OpenedTab decodePaneChild(Map<String, dynamic> json) {
+  if (json['type'] == 'PdfCommentatorsTab') {
+    return PdfCommentatorsTab.fromJson(json);
+  }
+  if (json['type'] == 'CommentatorsTab') {
+    return CommentatorsTab.fromJson(json);
+  }
+  return OpenedTab.fromJson(json);
+}
 
 /// ציר הפיצול בין שתי החלוניות של [CombinedTab].
 enum SplitAxis {
@@ -105,20 +119,12 @@ class CombinedTab extends OpenedTab {
     super.dispose();
   }
 
+  /// העטיפה ב-[PaneGroupTab] מנרמלת גם שמירות מגרסאות שבהן חלונית החזיקה
+  /// ספר בודד — בלעדיה היו בעץ שני סוגי עלים.
   factory CombinedTab.fromJson(Map<String, dynamic> json) {
-    OpenedTab decodeTab(Map<String, dynamic> map) {
-      if (map['type'] == 'PdfCommentatorsTab') {
-        return PdfCommentatorsTab.fromJson(map);
-      }
-      if (map['type'] == 'CommentatorsTab') {
-        return CommentatorsTab.fromJson(map);
-      }
-      return OpenedTab.fromJson(map);
-    }
-
     return CombinedTab(
-      rightTab: decodeTab(castMap(json['rightTab'])),
-      leftTab: decodeTab(castMap(json['leftTab'])),
+      rightTab: PaneGroupTab.wrap(decodePaneChild(castMap(json['rightTab']))),
+      leftTab: PaneGroupTab.wrap(decodePaneChild(castMap(json['leftTab']))),
       axis: SplitAxis.fromId(json['axis'] as String?),
       splitRatio: (json['splitRatio'] as num?)?.toDouble() ?? 0.5,
       isPinned: json['isPinned'] ?? false,

@@ -8,6 +8,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/resolving_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
@@ -50,8 +51,8 @@ void main() {
       // את המסך שלה במקום לבנות אותו מחדש, ולכן מצב הקריאה נשמר. שכפול
       // היה מאבד אותו, ו-scrollController משותף בין שני מסכים חיים היה
       // קורס — מה שמונע כאן על ידי כך שהחלונית עוברת ולא משוכפלת.
-      expect(combinedTab.rightTab, same(rightTab));
-      expect(combinedTab.leftTab, same(leftTab));
+      expect(leafPanes(combinedTab.rightTab), [same(rightTab)]);
+      expect(leafPanes(combinedTab.leftTab), [same(leftTab)]);
 
       // המתנה מעבר לחלון השחרור הדחוי, שבו הקוד הישן היה הורג את הטאבים.
       await Future<void>.delayed(const Duration(milliseconds: 400));

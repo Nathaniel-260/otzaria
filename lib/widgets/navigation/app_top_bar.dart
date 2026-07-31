@@ -16,6 +16,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:otzaria/tabs/view/pane_tabs_scope.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/ui/fullscreen_helper.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -249,6 +250,8 @@ class _AppTopBarState extends State<AppTopBar>
       },
       builder: (context, settingsState) {
         final isCompact = settingsState.compactMenuMode;
+        // בחלונית של טאב מפוצל הכותרת מוחלפת ברצועת הכרטיסיות של החלונית.
+        final paneTabs = PaneTabsScope.stripOf(context);
         final cs = Theme.of(context).colorScheme;
         final barColor =
             widget.backgroundColor ?? AppSurfaces.topBarBackground(context);
@@ -288,13 +291,15 @@ class _AppTopBarState extends State<AppTopBar>
               // רוחבו למקום הפנוי בין הצדדים — בלי חפיפה ובלי חסימת לחיצות.
               child: NavigationToolbar(
                 middleSpacing: 8.0,
+                // רצועת כרטיסיות נצמדת לתחילת השורה; כותרת ממורכזת כרגיל.
+                centerMiddle: paneTabs == null,
                 leading: leadingItems.isEmpty
                     ? null
                     : Row(
                         mainAxisSize: MainAxisSize.min,
                         children: _itemsToWidgets(context, leadingItems),
                       ),
-                middle: widget.center,
+                middle: paneTabs ?? widget.center,
                 trailing: widget.trailingItems.isEmpty
                     ? null
                     : Row(

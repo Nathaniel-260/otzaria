@@ -541,6 +541,11 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
               : tabWidths.unselected,
       ],
       requireLongPressToDrag: !isDesktop,
+      onExtractFromPane: (tab, insertIndex) {
+        context.read<TabsBloc>().add(
+          ExtractPaneTab(tab, insertIndex: insertIndex),
+        );
+      },
       onReorder: (tab, newIndex) {
         final bloc = context.read<TabsBloc>();
         bloc.add(MoveTab(tab, newIndex));
@@ -799,7 +804,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         // שמה עם דהייה בקצה. הסריקה היא על כל חלוניות העלה ולא על שתי הרמות
         // העליונות, אחרת בטאב עם ארבע חלוניות היו מוצגות רק שתי כותרות.
         // הפסים המפרידים מוצגים רק כשיש די רוחב, אחרת עוביים הקבוע גולש.
-        final paneTitles = leafPanes(tab).map((p) => p.title).toList();
+        final paneTitles = visiblePaneTabs(tab).map((p) => p.title).toList();
         final showDividers = tabWidth >= 100 * (paneTitles.length - 1);
         return Tooltip(
           message: tab.title,

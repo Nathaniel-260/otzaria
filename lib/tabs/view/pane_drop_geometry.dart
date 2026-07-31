@@ -23,6 +23,7 @@ PaneDropPosition dropPositionFor({
   required TextDirection textDirection,
   double edgeFraction = kPaneDropEdgeFraction,
   double minPaneExtent = kMinPaneExtent,
+  bool allowCenter = true,
 }) {
   if (size.width <= 0 || size.height <= 0) return PaneDropPosition.center;
 
@@ -50,7 +51,29 @@ PaneDropPosition dropPositionFor({
     }
   }
 
-  return minDistance <= edgeFraction ? closest : PaneDropPosition.center;
+  if (minDistance <= edgeFraction) return closest;
+  if (allowCenter) return PaneDropPosition.center;
+
+  // בלי אזור מרכז (חלונית שאין לה רצועת כרטיסיות) גם האמצע מפצל: הציר נקבע
+  // לפי הצלע הארוכה והצד לפי מיקום המצביע — "הקצה הקרוב" באמצע מדויק היה
+  // נופל על ציר שרירותי.
+  {
+    final horizontal = [
+      _leadingEdge(textDirection),
+      _trailingEdge(textDirection),
+    ];
+    const vertical = [PaneDropPosition.top, PaneDropPosition.bottom];
+    final byLongerSide = size.width >= size.height
+        ? [horizontal, vertical]
+        : [vertical, horizontal];
+    for (final pair in byLongerSide) {
+      final first = distances[pair.first];
+      final second = distances[pair.last];
+      if (first == null || second == null) continue;
+      return first <= second ? pair.first : pair.last;
+    }
+    return closest;
+  }
 }
 
 /// המלבן שהחלונית הנגררת תתפוס בחלונית בגודל [size] — הבסיס לחיווי הוויזואלי.

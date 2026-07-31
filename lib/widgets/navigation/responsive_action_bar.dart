@@ -18,6 +18,29 @@ int maxToolbarButtonsForWidth(double screenWidth) {
   return (available / buttonWidth).floor().clamp(0, 999);
 }
 
+/// מספר הכפתורים הגלויים בסרגל של חלונית בטאב מפוצל.
+///
+/// [maxToolbarButtonsForWidth] מודד את רוחב המסך ולא את רוחב החלונית, ולכן
+/// בפיצול הוא מציג כפתורים שאין להם מקום. השאר עוברים לתפריט ה-"...".
+const int kSplitPaneMaxToolbarButtons = 3;
+
+/// מקדמת את כפתור החיפוש לראש סרגל של חלונית מפוצלת.
+///
+/// הסרגל מסתיר מהסוף, ובסדר הרגיל החיפוש — הפעולה הנפוצה ביותר תוך כדי
+/// לימוד — היה נופל אל התפריט.
+List<ActionButtonData> promoteSearchInSplitPane(
+  List<ActionButtonData> actions,
+  bool isInCombinedView, {
+  String searchTooltip = 'חיפוש',
+}) {
+  if (!isInCombinedView) return actions;
+  final index = actions.indexWhere((action) => action.tooltip == searchTooltip);
+  if (index <= 0) return actions;
+  final reordered = List<ActionButtonData>.from(actions);
+  reordered.insert(0, reordered.removeAt(index));
+  return reordered;
+}
+
 /// רכיב שמציג כפתורי פעולה עם יכולת הסתרה במסכים צרים
 /// כשחלק מהכפתורים נסתרים, מוצג כפתור "..." שפותח תפריט
 ///

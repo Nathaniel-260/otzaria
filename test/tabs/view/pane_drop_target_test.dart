@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
+import 'package:otzaria/tabs/models/pane_group_tab.dart';
 import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
@@ -37,7 +38,9 @@ void main() {
     PanePath targetPath = const [],
     OpenedTab? pane,
   }) {
-    final targetPane = pane ?? _LeafTab('יעד');
+    // ברירת המחדל היא חלונית עם רצועת כרטיסיות — כך נראית כל חלונית בטאב
+    // מפוצל, ורק לה יש אזור מרכז.
+    final targetPane = pane ?? PaneGroupTab(tabs: [_LeafTab('יעד')]);
     return MaterialApp(
       home: Directionality(
         textDirection: TextDirection.rtl,
@@ -90,7 +93,7 @@ void main() {
   }
 
   group('מיפוי הפלה למיקום', () {
-    testWidgets('שחרור במרכז מדווח על החלפה', (tester) async {
+    testWidgets('שחרור במרכז מדווח על הוספת כרטיסייה', (tester) async {
       final log = _DropLog();
       await tester.pumpWidget(
         host(
@@ -339,6 +342,28 @@ void main() {
       // רוחב 240 לא מאפשר שתי חלוניות שמישות, ולכן הקצה נופל למרכז.
       expect(log.count, 1);
       expect(log.position, PaneDropPosition.center);
+    });
+  });
+
+  group('חלונית בלי רצועת כרטיסיות', () {
+    testWidgets('בטאב שאינו מפוצל אין אזור מרכז — גם האמצע מפצל', (
+      tester,
+    ) async {
+      final log = _DropLog();
+      await tester.pumpWidget(
+        host(
+          log: log,
+          dragData: PaneDragData(tab: _LeafTab('נגרר')),
+          // כרטיסייה בודדת בשורש: הרצועה שלה היא שורת הכרטיסיות של החלון,
+          // ולכן אין לאן "להוסיף כרטיסייה" והמרכז מפצל לפי הצלע הארוכה.
+          pane: _LeafTab('יעד'),
+        ),
+      );
+
+      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
+
+      expect(log.count, 1);
+      expect(log.position, isNot(PaneDropPosition.center));
     });
   });
 }

@@ -2586,7 +2586,7 @@ class PluginBridgeAdapter {
     if (tab is! CombinedTab) return tab;
     final state = _dependencies.tabsBloc.state;
     if (identical(tab, state.currentTab)) return state.activePane ?? tab;
-    return leafPanes(tab).first;
+    return visiblePaneTabs(tab).first;
   }
 
   Map<String, dynamic>? _buildCurrentSelection(

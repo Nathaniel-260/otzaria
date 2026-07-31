@@ -53,8 +53,9 @@ void main() {
 
       final root = bloc.state.currentTab! as CombinedTab;
       expect(root.axis, SplitAxis.vertical);
-      expect(root.rightTab, same(upper));
-      expect(root.leftTab, same(lower));
+      // כל צד נעטף בחלונית עם רצועת כרטיסיות משלה; הספר עצמו נשאר הוא-הוא.
+      expect(leafPanes(root.rightTab), [same(upper)]);
+      expect(leafPanes(root.leftTab), [same(lower)]);
 
       await bloc.close();
     });
