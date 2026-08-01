@@ -1186,7 +1186,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                 (otherTab) => AppContextMenuEntry(
                   label: otherTab.title,
                   onTap: () => context.read<TabsBloc>().add(
-                    EnableSideBySideMode(rightTab: tab, leftTab: otherTab),
+                    CreateCombinedTab(rightTab: tab, leftTab: otherTab),
                   ),
                 ),
               )
@@ -1224,7 +1224,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
         AppContextMenuEntry(
           label: 'חזרה לתצוגה רגילה',
           onTap: () =>
-              context.read<TabsBloc>().add(DisableSideBySideMode(tabIndex)),
+              context.read<TabsBloc>().add(ExpandCombinedTab(tabIndex)),
         ),
       ]);
     }
