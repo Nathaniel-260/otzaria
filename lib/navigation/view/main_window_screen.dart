@@ -2837,14 +2837,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
                                             AlignmentDirectional.centerStart,
                                         width: 400,
                                         deferChildBuildOnOpen: true,
-                                        child: Expanded(
-                                          child: ToolsLauncherPanel(
-                                            onClose: _closeToolsLauncher,
-                                            onToolSelected: (entry) {
-                                              _closeToolsLauncher();
-                                              openToolTab(context, entry);
-                                            },
-                                          ),
+                                        child: ToolsLauncherPanel(
+                                          onClose: _closeToolsLauncher,
+                                          onToolSelected: (entry) {
+                                            _closeToolsLauncher();
+                                            openToolTab(context, entry);
+                                          },
                                         ),
                                       ),
                                     ],
