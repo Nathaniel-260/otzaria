@@ -258,6 +258,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
     PluginRuntimeDispatcher.instance.registerReloadCallback(
       widget.plugin.pluginId,
       _reloadFromDisk,
+      token: this,
     );
   }
 
@@ -353,12 +354,21 @@ class _PluginTabPageState extends State<PluginTabPage> {
     // של האפליקציה שלא יספיק להריץ async writes.
     PluginCrashGuard.markLoadSuccessSync(widget.plugin.pluginId);
     _adapter.dispose();
-    PluginPageLauncher.instance.markPageClosed(widget.plugin.pluginId);
-    PluginRuntimeDispatcher.instance.unregisterController(
+    // ביטול הרישום רק אם הדף הזה עדיין הבעלים. עדכון תוסף משנה את ה-key,
+    // ו-initState של הדף החדש רץ *לפני* ה-dispose של הישן — בלי הבדיקה הישן
+    // היה מוחק את הרישום של החדש ומשתיק אותו.
+    if (PluginRuntimeDispatcher.instance.ownsForegroundController(
       widget.plugin.pluginId,
-    );
+      webViewController,
+    )) {
+      PluginPageLauncher.instance.markPageClosed(widget.plugin.pluginId);
+      PluginRuntimeDispatcher.instance.unregisterController(
+        widget.plugin.pluginId,
+      );
+    }
     PluginRuntimeDispatcher.instance.unregisterReloadCallback(
       widget.plugin.pluginId,
+      token: this,
     );
     super.dispose();
   }
