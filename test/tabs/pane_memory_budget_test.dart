@@ -1,7 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 
 class _LeafTab extends OpenedTab {
@@ -50,27 +49,21 @@ void main() {
     });
   });
 
-  group('paneCount כמקור החלוקה', () {
+  group('מספר החלוניות כמקור החלוקה', () {
     test('טאב שאינו מפוצל הוא חלונית אחת', () {
-      expect(paneCount(_LeafTab('בודד')), 1);
+      expect(leafPanes(_LeafTab('בודד')).length, 1);
     });
 
-    test('עץ מקונן מדווח את מספר העלים', () {
-      final tree = CombinedTab(
+    test('טאב מפוצל מדווח שתי חלוניות, וכל אחת מקבלת חצי תקציב', () {
+      final split = CombinedTab(
         rightTab: _LeafTab('א'),
-        leftTab: CombinedTab(
-          rightTab: _LeafTab('ב'),
-          leftTab: CombinedTab(
-            rightTab: _LeafTab('ג'),
-            leftTab: _LeafTab('ד'),
-          ),
-        ),
+        leftTab: _LeafTab('ב'),
       );
 
-      expect(paneCount(tree), 4);
+      expect(leafPanes(split).length, 2);
       expect(
-        pdfImageCacheBytesForPanes(paneCount(tree)),
-        kPdfImageCacheMinBytesPerPane,
+        pdfImageCacheBytesForPanes(leafPanes(split).length),
+        kPdfImageCacheBudgetBytes ~/ 2,
       );
     });
   });

@@ -2,7 +2,7 @@ import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/commentators_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
@@ -49,8 +49,8 @@ class Workspace extends Equatable {
   }
 
   /// טאבי מפרשי PDF אינם נשמרים בשולחן עבודה: שחזורם בונה `sourceTab` חדש
-  /// במקום להתחבר לספר החי. הגיזום חל בכל עומק פיצול, שאם לא כן הם היו
-  /// נכנסים דרך חלונית מקוננת.
+  /// במקום להתחבר לספר החי. חלונית כזו בטאב מפוצל מוסרת, ואחותה תופסת את
+  /// מקום הטאב.
   static OpenedTab? _withoutPdfCommentators(OpenedTab tab) =>
       prunePanes(tab, (pane) => pane is! PdfCommentatorsTab);
 
@@ -59,10 +59,9 @@ class Workspace extends Equatable {
       // הסינון לפני הפענוח, כי `OpenedTab.fromJson` אינו מכיר את הטיפוס.
       if (map['type'] == 'PdfCommentatorsTab') return null;
       try {
-        final decoded = map['type'] == 'CommentatorsTab'
+        return map['type'] == 'CommentatorsTab'
             ? CommentatorsTab.fromJson(map)
             : OpenedTab.fromJson(map);
-        return _withoutPdfCommentators(decoded);
       } catch (e) {
         // טאב בודד פגום (למשל טיפוס מגרסה חדשה יותר) לא יפיל את פענוח
         // שולחן העבודה כולו.
@@ -71,16 +70,31 @@ class Workspace extends Equatable {
       }
     }
 
+    final decoded =
+        (json['tabs'] as List?)
+            ?.map((raw) => decodeTab(castMap(raw)))
+            .whereType<OpenedTab>()
+            .toList() ??
+        <OpenedTab>[];
+
+    // הגיזום אחרי הנירמול: בפיצול מקונן ששוחזר מגרסה קודמת חלונית מפרשי
+    // PDF יכולה לשבת בעומק שאליו הגיזום אינו יורד.
+    final restored = flattenRestoredSplits(
+      decoded,
+      currentIndex: json['currentTab'] as int? ?? 0,
+    );
+    final tabs = restored.tabs
+        .map(_withoutPdfCommentators)
+        .whereType<OpenedTab>()
+        .toList();
+
     return Workspace(
       id: json['id'] as String?,
       name: json['name'] as String,
-      tabs:
-          (json['tabs'] as List?)
-              ?.map((raw) => decodeTab(castMap(raw)))
-              .whereType<OpenedTab>()
-              .toList() ??
-          [],
-      activeTabIndex: json['currentTab'] as int? ?? 0,
+      tabs: tabs,
+      activeTabIndex: tabs.isEmpty
+          ? 0
+          : restored.currentIndex.clamp(0, tabs.length - 1),
     );
   }
 

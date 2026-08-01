@@ -1,46 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 
-/// מטען הגרירה של טאב אל תוך אזור הקריאה.
-@immutable
-class PaneDragData {
-  /// הטאב הנגרר.
+/// עוטף את אזור הקריאה ומקבל כרטיסייה שנגררת אליו, עם חיווי חי של הצד
+/// שהספר ייכנס אליו.
+///
+/// טאב שכבר מפוצל אינו מקבל הפלות: הפיצול הוא לשתי חלוניות בלבד, וכרטיסייה
+/// שנגררת אליו נשארת במקומה בשורת הכרטיסיות.
+class PaneDropTarget extends StatefulWidget {
+  /// הטאב המוצג — היעד שהכרטיסייה הנגררת תפצל.
   final OpenedTab tab;
 
-  /// נתיב החלונית שממנה נגרר, כשהגרירה התחילה בתוך אותו טאב מפוצל.
-  /// `null` כשהמקור הוא טאב אחר בשורת הכרטיסיות.
-  final PanePath? sourcePath;
-
-  const PaneDragData({required this.tab, this.sourcePath});
-}
-
-/// עוטף חלונית קריאה ומקבל טאבים שנגררים אליה, עם חיווי חי של המקום
-/// שאליו החלונית תיכנס — מרכז להחלפה, או אחד מארבעת הקצוות לפיצול.
-class PaneDropTarget extends StatefulWidget {
-  /// נתיב החלונית בעץ הפיצולים של הטאב.
-  final PanePath path;
-
-  /// החלונית שהיעד עוטף — נדרש כדי לזהות גרירה של הטאב שמכיל אותה.
-  final OpenedTab pane;
-
-  /// תוכן החלונית.
+  /// תוכן הטאב.
   final Widget child;
 
-  /// נקרא כשהמשתמש משחרר טאב מעל החלונית.
-  final void Function(
-    PaneDragData data,
-    PanePath path,
-    PaneDropPosition position,
-  )
-  onDrop;
+  /// נקרא כשהמשתמש משחרר כרטיסייה מעל אזור הקריאה.
+  final void Function(OpenedTab dragged, PaneDropSide side) onDrop;
 
   const PaneDropTarget({
     super.key,
-    required this.path,
-    required this.pane,
+    required this.tab,
     required this.child,
     required this.onDrop,
   });
@@ -50,63 +31,62 @@ class PaneDropTarget extends StatefulWidget {
 }
 
 class _PaneDropTargetState extends State<PaneDropTarget> {
-  PaneDropPosition? _position;
+  PaneDropSide? _side;
 
-  /// גרירה שלא תשנה דבר אינה מציגה חיווי: חלונית אל עצמה, או טאב שהחלונית
-  /// הזו כבר בתוכו — חיווי כזה מבטיח פיצול שה-bloc דוחה בשקט.
-  bool _accepts(PaneDragData data) {
-    final source = data.sourcePath;
-    if (source != null) return !_samePath(source, widget.path);
-    return pathOfPane(data.tab, widget.pane) == null;
-  }
+  /// גרירה שלא תוכל לפצל אינה מציגה חיווי: טאב שכבר מפוצל, טאב מפוצל
+  /// שנגרר (פיצול אינו מקונן), או הטאב שכבר מוצג כאן.
+  bool _accepts(OpenedTab dragged) =>
+      widget.tab is! CombinedTab &&
+      dragged is! CombinedTab &&
+      !identical(dragged, widget.tab);
 
-  static bool _samePath(PanePath a, PanePath b) {
-    if (a.length != b.length) return false;
-    for (var i = 0; i < a.length; i++) {
-      if (a[i] != b[i]) return false;
-    }
-    return true;
-  }
-
-  void _updatePosition(Offset globalOffset) {
+  void _updateSide(Offset globalOffset) {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
-    final next = dropPositionFor(
-      localPosition: box.globalToLocal(globalOffset),
-      size: box.size,
-      textDirection: Directionality.of(context),
-    );
-    if (next != _position) setState(() => _position = next);
+    // מסך צר מדי לשתי חלוניות קריאות אינו מציע פיצול כלל.
+    final next = canSplitPane(box.size)
+        ? dropSideFor(
+            localPosition: box.globalToLocal(globalOffset),
+            size: box.size,
+            textDirection: Directionality.of(context),
+          )
+        : null;
+    if (next != _side) setState(() => _side = next);
+  }
+
+  void _clearSide() {
+    if (_side != null) setState(() => _side = null);
   }
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<PaneDragData>(
+    return DragTarget<OpenedTab>(
       onWillAcceptWithDetails: (details) {
         if (!_accepts(details.data)) return false;
-        _updatePosition(details.offset);
-        return true;
+        _updateSide(details.offset);
+        // אזור צר מכדי לפצל נדחה במפורש: קבלה שאינה מפצלת הייתה בולעת את
+        // השחרור בלי חיווי, והכרטיסייה הייתה חוזרת בלי סיבה נראית.
+        return _side != null;
       },
       onMove: (details) {
-        if (_accepts(details.data)) _updatePosition(details.offset);
+        if (_accepts(details.data)) _updateSide(details.offset);
       },
-      onLeave: (_) => setState(() => _position = null),
+      onLeave: (_) => _clearSide(),
       onAcceptWithDetails: (details) {
-        final position = _position;
-        setState(() => _position = null);
-        if (position != null) {
-          widget.onDrop(details.data, widget.path, position);
-        }
+        final side = _side;
+        _clearSide();
+        if (side != null) widget.onDrop(details.data, side);
       },
       builder: (context, candidate, rejected) {
+        final side = _side;
         return Stack(
           fit: StackFit.expand,
           children: [
             widget.child,
-            if (_position != null)
+            if (side != null)
               Positioned.fill(
-                child: IgnorePointer(child: _DropPreview(position: _position!)),
+                child: IgnorePointer(child: _DropPreview(side: side)),
               ),
           ],
         );
@@ -115,11 +95,11 @@ class _PaneDropTargetState extends State<PaneDropTarget> {
   }
 }
 
-/// המלבן המונפש שמסמן את החלק שהחלונית הנגררת תתפוס.
+/// המלבן המונפש שמסמן את החצי שהספר הנגרר יתפוס.
 class _DropPreview extends StatelessWidget {
-  final PaneDropPosition position;
+  final PaneDropSide side;
 
-  const _DropPreview({required this.position});
+  const _DropPreview({required this.side});
 
   @override
   Widget build(BuildContext context) {
@@ -128,7 +108,7 @@ class _DropPreview extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final rect = previewRectFor(
-          position: position,
+          side: side,
           size: constraints.biggest,
           textDirection: Directionality.of(context),
         );

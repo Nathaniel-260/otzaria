@@ -8,17 +8,17 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
+import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
 
 import '../helpers/memory_settings_cache.dart';
 
 /// בדיקת השרשרת המלאה של גרירת כרטיסיה לפיצול: הרצועה → מטען הגרירה →
-/// יעד ההפלה → הגיאומטריה → אירוע ה-bloc → עץ החלוניות → הרינדור.
+/// יעד ההפלה → הגיאומטריה → אירוע ה-bloc → הטאב המפוצל → הרינדור.
 ///
 /// כל חוליה נבדקת בנפרד בחבילות אחרות; כאן נבדק שהן מחוברות — באג שבו
 /// הגרירה סימנה אזור אך השחרור לא פיצל בפועל נפל דווקא בין החוליות.
@@ -72,23 +72,23 @@ void main() {
                     Expanded(
                       child: current == null
                           ? const SizedBox.shrink()
-                          : SplitPaneView(
-                              root: current,
-                              onRatioChanged: (path, ratio) =>
-                                  bloc.add(UpdateSplitRatio(ratio, path: path)),
-                              paneBuilder: (pane, path) => PaneDropTarget(
-                                path: path,
-                                pane: pane,
-                                onDrop: (data, targetPath, position) =>
-                                    bloc.add(
-                                      DropTabOnPane(
-                                        tab: data.tab,
-                                        targetPath: targetPath,
-                                        position: position,
-                                        sourcePath: data.sourcePath,
-                                      ),
-                                    ),
-                                child: _PaneBody(
+                          : PaneDropTarget(
+                              tab: current,
+                              onDrop: (dragged, side) {
+                                final incomingFirst =
+                                    side == PaneDropSide.start;
+                                bloc.add(
+                                  EnableSideBySideMode(
+                                    rightTab: incomingFirst ? dragged : current,
+                                    leftTab: incomingFirst ? current : dragged,
+                                  ),
+                                );
+                              },
+                              child: SplitPaneView(
+                                root: current,
+                                onRatioChanged: (ratio) =>
+                                    bloc.add(UpdateSplitRatio(ratio)),
+                                paneBuilder: (pane) => _PaneBody(
                                   pane: pane,
                                   initCounts: initCounts,
                                 ),
@@ -135,12 +135,11 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// מלבן החלונית עצמה ולא של הטקסט שבתוכה — אזורי ההפלה נמדדים ביחס
-  /// לגבולות החלונית, וטקסט ממורכז היה מחזיר תמיד את אזור המרכז.
+  /// מלבן החלונית עצמה ולא של הטקסט שבתוכה.
   Rect paneRect(WidgetTester tester, String title) => tester.getRect(
     find.ancestor(
       of: find.text('חלונית $title'),
-      matching: find.byType(PaneDropTarget),
+      matching: find.byType(ClipRect),
     ),
   );
 
@@ -148,64 +147,70 @@ void main() {
       tester.getRect(find.byType(SplitPaneView));
 
   group('גרירה משורת הכרטיסיות אל אזור הקריאה', () {
-    testWidgets('שחרור בתחתית מפצל אנכית ומציג את שתי החלוניות', (
-      tester,
-    ) async {
+    testWidgets('שחרור בחצי הימני ב-RTL מכניס את הנגררת מימין', (tester) async {
       final (bloc, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
 
       final area = readingArea(tester);
-      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      await dragTab(tester, 'ב', Offset(area.right - 20, area.center.dy));
 
       expect(bloc.state.tabs, hasLength(1));
       final root = bloc.state.currentTab!;
       expect(root, isA<CombinedTab>());
-      expect((root as CombinedTab).axis, SplitAxis.vertical);
-      expect(titles(root), ['א', 'ב']);
+      expect(titles(root), ['ב', 'א']);
 
-      // שתי החלוניות מוצגות בפועל, והנגררת מתחת לקיימת.
+      // שתי החלוניות מוצגות בפועל, והנגררת מימין.
       expect(find.text('חלונית א'), findsOneWidget);
       expect(find.text('חלונית ב'), findsOneWidget);
       expect(
-        paneRect(tester, 'ב').center.dy,
-        greaterThan(paneRect(tester, 'א').center.dy),
+        paneRect(tester, 'ב').center.dx,
+        greaterThan(paneRect(tester, 'א').center.dx),
       );
       // הכרטיסיה יצאה מהרצועה — היא כבר חלונית.
       expect(find.text('טאב ב'), findsNothing);
     });
 
-    testWidgets('שחרור בקצה הימני ב-RTL מפצל אופקית והנגררת נכנסת ראשונה', (
+    testWidgets('שחרור בחצי השמאלי ב-RTL מכניס את הנגררת משמאל', (
       tester,
     ) async {
       final (bloc, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
 
       final area = readingArea(tester);
-      await dragTab(tester, 'ב', Offset(area.right - 8, area.center.dy));
+      await dragTab(tester, 'ב', Offset(area.left + 20, area.center.dy));
 
       final root = bloc.state.currentTab! as CombinedTab;
-      expect(root.axis, SplitAxis.horizontal);
-      expect(titles(root), ['ב', 'א']);
-      // החלונית הראשונה בציר אופקי היא הימנית ב-RTL.
+      expect(titles(root), ['א', 'ב']);
       expect(
         paneRect(tester, 'ב').center.dx,
-        greaterThan(paneRect(tester, 'א').center.dx),
+        lessThan(paneRect(tester, 'א').center.dx),
       );
     });
 
-    testWidgets('שחרור במרכז מחליף את החלונית ומחזיר את הקודמת לרצועה', (
-      tester,
-    ) async {
+    testWidgets('הגובה שבו משחררים אינו משנה', (tester) async {
       final (bloc, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
 
-      await dragTab(tester, 'ב', readingArea(tester).center);
+      final area = readingArea(tester);
+      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
 
-      expect(bloc.state.tabs, hasLength(2));
-      expect(bloc.state.currentTab!.title, 'ב');
-      expect(bloc.state.tabs[1].title, 'א');
-      expect(find.text('חלונית ב'), findsOneWidget);
-      expect(find.text('חלונית א'), findsNothing);
+      final root = bloc.state.currentTab!;
+      expect(root, isA<CombinedTab>());
+      expect(titles(root), ['ב', 'א']);
     });
 
-    testWidgets('פיצול שני מקנן ומציג שלוש חלוניות', (tester) async {
+    testWidgets('קו האמצע מפריד בין הצדדים גם בשחרור סמוך לו', (tester) async {
+      // הצד נקבע לפי מיקום המצביע. הרצועה מסתמכת על
+      // `pointerDragAnchorStrategy` כדי שיעד ההפלה יקבל אותו ולא את פינת
+      // ה-feedback; בלעדיו שחרור סמוך לאמצע נופל לצד ההפוך.
+      final (rightDrop, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
+      final area = readingArea(tester);
+      await dragTab(tester, 'ב', Offset(area.center.dx + 8, area.center.dy));
+      expect(titles(rightDrop.state.currentTab!), ['ב', 'א']);
+
+      final (leftDrop, _) = await pumpScreen(tester, [leaf('א'), leaf('ב')]);
+      await dragTab(tester, 'ב', Offset(area.center.dx - 8, area.center.dy));
+      expect(titles(leftDrop.state.currentTab!), ['א', 'ב']);
+    });
+
+    testWidgets('טאב שכבר מפוצל אינו מקבל כרטיסייה שלישית', (tester) async {
       final (bloc, _) = await pumpScreen(tester, [
         leaf('א'),
         leaf('ב'),
@@ -213,18 +218,17 @@ void main() {
       ]);
 
       final area = readingArea(tester);
-      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      await dragTab(tester, 'ב', Offset(area.right - 20, area.center.dy));
+      // 'א' ו-'ב' התמזגו; 'ג' נשארה כרטיסייה בפני עצמה.
+      expect(bloc.state.tabs, hasLength(2));
 
-      // הפלה על החלונית העליונה בלבד — מקננת בתוכה ואינה נוגעת בתחתונה.
-      final upper = paneRect(tester, 'א');
-      await dragTab(tester, 'ג', Offset(upper.left + 8, upper.center.dy));
+      // הפיצול השני נדחה: 'ג' נשארת בשורת הכרטיסיות.
+      await dragTab(tester, 'ג', readingArea(tester).center);
 
-      final root = bloc.state.currentTab!;
-      expect(paneCount(root), 3);
-      expect(bloc.state.tabs, hasLength(1));
-      expect(find.text('חלונית א'), findsOneWidget);
-      expect(find.text('חלונית ב'), findsOneWidget);
-      expect(find.text('חלונית ג'), findsOneWidget);
+      expect(bloc.state.tabs, hasLength(2));
+      expect(leafPanes(bloc.state.currentTab!), hasLength(2));
+      expect(find.text('טאב ג'), findsOneWidget);
+      expect(find.text('חלונית ג'), findsNothing);
     });
 
     testWidgets('גרירת הכרטיסיה המוצגת על עצמה אינה משנה דבר', (tester) async {
@@ -243,22 +247,15 @@ void main() {
       final (_, initCounts) = await pumpScreen(tester, [
         leaf('א'),
         leaf('ב'),
-        leaf('ג'),
       ]);
       expect(initCounts['א'], 1);
 
       final area = readingArea(tester);
-      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      await dragTab(tester, 'ב', Offset(area.left + 20, area.center.dy));
 
       // המפתח היציב מעביר את ה-Element במקום להרוס אותו: בלי זה מיקום
       // הקריאה של הספר שהיה פתוח היה מתאפס בכל פיצול.
       expect(initCounts['א'], 1, reason: 'החלונית הקיימת לא נבנתה מחדש');
-      expect(initCounts['ב'], 1);
-
-      // גם פיצול נוסף אינו נוגע בשתי הקיימות.
-      final upper = paneRect(tester, 'א');
-      await dragTab(tester, 'ג', Offset(upper.left + 8, upper.center.dy));
-      expect(initCounts['א'], 1);
       expect(initCounts['ב'], 1);
     });
 
@@ -268,9 +265,10 @@ void main() {
         leaf('ב'),
       ]);
       final area = readingArea(tester);
-      await dragTab(tester, 'ב', Offset(area.center.dx, area.bottom - 8));
+      await dragTab(tester, 'ב', Offset(area.left + 20, area.center.dy));
 
-      bloc.add(const ClosePane([kSecondPane]));
+      final closing = (bloc.state.currentTab! as CombinedTab).leftTab;
+      bloc.add(ClosePane(closing));
       await tester.pumpAndSettle();
       // חלון השחרור הדחוי של החלונית שנסגרה — בלי המתנה נשאר טיימר תלוי.
       await tester.pump(const Duration(milliseconds: 400));
@@ -278,6 +276,22 @@ void main() {
       expect(bloc.state.currentTab!.title, 'א');
       expect(find.text('חלונית ב'), findsNothing);
       expect(initCounts['א'], 1, reason: 'האחות שנשארה לא נבנתה מחדש');
+    });
+
+    testWidgets('פירוק הפיצול אינו בונה מחדש את שתי החלוניות', (tester) async {
+      final (bloc, initCounts) = await pumpScreen(tester, [
+        leaf('א'),
+        leaf('ב'),
+      ]);
+      final area = readingArea(tester);
+      await dragTab(tester, 'ב', Offset(area.left + 20, area.center.dy));
+
+      bloc.add(const DisableSideBySideMode(0));
+      await tester.pumpAndSettle();
+
+      expect(bloc.state.tabs, hasLength(2));
+      expect(initCounts['א'], 1);
+      expect(initCounts['ב'], 1);
     });
   });
 

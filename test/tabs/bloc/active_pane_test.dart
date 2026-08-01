@@ -5,7 +5,6 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/tabs_repository.dart';
@@ -15,8 +14,8 @@ import '../../helpers/memory_settings_cache.dart';
 /// "החלונית הפעילה" — מי מקבל פוקוס, מי נחשב הספר הפתוח, ולאן מכוונים ניווט
 /// ואירועי תוספים.
 ///
-/// היא נשמרת כזהות אובייקט ולא כנתיב, ולכן היא נוסעת עם החלונית בכל שינוי
-/// מבנה: החלפת צדדים, סגירת אחות, ופיצול נוסף. נתיב היה מצביע על ספר אחר.
+/// היא נשמרת כזהות אובייקט ולא כמיקום, ולכן היא נוסעת עם החלונית בכל שינוי
+/// מבנה: החלפת צדדים, סגירת אחות ופירוק. מיקום היה מצביע על ספר אחר.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -42,7 +41,6 @@ void main() {
       final state = TabsState(tabs: [tab], currentTabIndex: 0);
 
       expect(state.activePane, same(tab));
-      expect(state.activePanePath, isEmpty);
     });
 
     test('בלי סימון מפורש נבחרת החלונית הראשונה', () {
@@ -51,10 +49,9 @@ void main() {
       final state = TabsState(tabs: [split], currentTabIndex: 0);
 
       expect(state.activePane, same(first));
-      expect(state.activePanePath, [kFirstPane]);
     });
 
-    test('חלונית מסומנת נשמרת עם הנתיב שלה', () {
+    test('חלונית מסומנת נשמרת', () {
       final second = pdf('ב');
       final split = CombinedTab(rightTab: pdf('א'), leftTab: second);
       final state = TabsState(
@@ -64,16 +61,14 @@ void main() {
       );
 
       expect(state.activePane, same(second));
-      expect(state.activePanePath, [kSecondPane]);
     });
 
-    test('צומת פיצול אינו חלונית פעילה', () {
-      final inner = CombinedTab(rightTab: pdf('ב'), leftTab: pdf('ג'));
-      final split = CombinedTab(rightTab: pdf('א'), leftTab: inner);
+    test('הטאב המפוצל עצמו אינו חלונית פעילה', () {
+      final split = CombinedTab(rightTab: pdf('א'), leftTab: pdf('ב'));
       final state = TabsState(
         tabs: [split],
         currentTabIndex: 0,
-        rawActivePane: inner,
+        rawActivePane: split,
       );
 
       expect(state.activePane!.title, 'א');
@@ -124,23 +119,6 @@ void main() {
       const state = TabsState(tabs: [], currentTabIndex: 0);
 
       expect(state.activePane, isNull);
-      expect(state.activePanePath, isEmpty);
-    });
-
-    test('חלונית בעומק נשמרת עם הנתיב המלא', () {
-      final deep = pdf('עמוק');
-      final split = CombinedTab(
-        rightTab: pdf('א'),
-        leftTab: CombinedTab(rightTab: deep, leftTab: pdf('ג')),
-      );
-      final state = TabsState(
-        tabs: [split],
-        currentTabIndex: 0,
-        rawActivePane: deep,
-      );
-
-      expect(state.activePane, same(deep));
-      expect(state.activePanePath, [kSecondPane, kFirstPane]);
     });
   });
 
@@ -172,12 +150,11 @@ void main() {
       await bloc.close();
     });
 
-    test('צומת פיצול נדחה', () async {
-      final inner = CombinedTab(rightTab: pdf('ב'), leftTab: pdf('ג'));
-      final nested = CombinedTab(rightTab: pdf('א'), leftTab: inner);
-      final bloc = await blocWith([nested]);
+    test('הטאב המפוצל עצמו נדחה', () async {
+      final split = CombinedTab(rightTab: pdf('א'), leftTab: pdf('ב'));
+      final bloc = await blocWith([split]);
 
-      bloc.add(SetActivePane(inner));
+      bloc.add(SetActivePane(split));
       await pumpEventQueue();
 
       expect(bloc.state.rawActivePane, isNull);
@@ -233,31 +210,28 @@ void main() {
       bloc.add(const SwapSideBySideTabs());
       await bloc.stream.first;
 
-      // הנתיב התהפך מ-[1] ל-[0], והחלונית היא אותה חלונית.
+      // הצדדים התחלפו, והחלונית הפעילה היא אותה חלונית.
       expect(bloc.state.activePane, same(worked));
-      expect(bloc.state.activePanePath, [kFirstPane]);
+      expect((bloc.state.currentTab as CombinedTab).rightTab, same(worked));
 
       await bloc.close();
     });
 
-    test('סגירת אחות בעץ מקונן משאירה את הסימון על החלונית שהתרחבה', () async {
+    test('סגירת האחות משאירה את הסימון על החלונית שהתרחבה', () async {
       final worked = pdf('עבדתי כאן');
-      final nested = CombinedTab(
-        rightTab: pdf('א'),
-        leftTab: CombinedTab(rightTab: worked, leftTab: pdf('ג')),
-      );
-      final bloc = await blocWith([nested]);
+      final sibling = pdf('אחות');
+      final bloc = await blocWith([
+        CombinedTab(rightTab: sibling, leftTab: worked),
+      ]);
 
       bloc.add(SetActivePane(worked));
       await bloc.stream.first;
-      expect(bloc.state.activePanePath, [kSecondPane, kFirstPane]);
 
-      // סגירת 'ג' מקריסה את הצומת; 'עבדתי כאן' עולה לנתיב [1].
-      bloc.add(const ClosePane([kSecondPane, kSecondPane]));
-      await bloc.stream.firstWhere((s) => paneCount(s.currentTab!) == 2);
+      bloc.add(ClosePane(sibling));
+      await bloc.stream.firstWhere((s) => s.currentTab is! CombinedTab);
 
       expect(bloc.state.activePane, same(worked));
-      expect(bloc.state.activePanePath, [kSecondPane]);
+      expect(bloc.state.currentTab, same(worked));
 
       await bloc.close();
     });
@@ -271,7 +245,7 @@ void main() {
       bloc.add(SetActivePane(closing));
       await bloc.stream.first;
 
-      bloc.add(const ClosePane([kSecondPane]));
+      bloc.add(ClosePane(closing));
       await bloc.stream.firstWhere((s) => s.currentTab is! CombinedTab);
 
       expect(bloc.state.activePane, same(survivor));
@@ -279,25 +253,15 @@ void main() {
       await bloc.close();
     });
 
-    test('פיצול נוסף אינו מזיז את הסימון', () async {
-      final worked = pdf('עבדתי כאן');
-      final split = CombinedTab(rightTab: pdf('א'), leftTab: worked);
+    test('יצירת פיצול מסמנת את החלונית הראשונה שבו', () async {
+      final target = pdf('יעד');
       final incoming = pdf('חדש');
-      final bloc = await blocWith([split, incoming]);
+      final bloc = await blocWith([target, incoming]);
 
-      bloc.add(SetActivePane(worked));
-      await bloc.stream.first;
-
-      bloc.add(
-        DropTabOnPane(
-          tab: incoming,
-          targetPath: const [kFirstPane],
-          position: PaneDropPosition.bottom,
-        ),
-      );
+      bloc.add(EnableSideBySideMode(rightTab: incoming, leftTab: target));
       await bloc.stream.firstWhere((s) => s.tabs.length == 1);
 
-      expect(bloc.state.activePane, same(worked));
+      expect(bloc.state.activePane, same(incoming));
 
       await bloc.close();
     });
@@ -321,7 +285,7 @@ void main() {
       bloc.add(const SetCurrentTab(1));
       await bloc.stream.firstWhere((s) => s.currentTabIndex == 1);
 
-      // הנתיב [1] תקין גם כאן, אבל החלונית שייכת לטאב האחר.
+      // החלונית המסומנת שייכת לטאב האחר, ולכן נבחרת הראשונה שבטאב המוצג.
       expect(bloc.state.activePane, same(secondTabFirstPane));
 
       bloc.add(const SetCurrentTab(0));

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 
 class _LeafTab extends OpenedTab {
@@ -14,38 +14,38 @@ class _LeafTab extends OpenedTab {
 
 /// תופס את הקריאות ל-onDrop של המטרה הנבדקת.
 class _DropLog {
-  PaneDragData? data;
-  PanePath? path;
-  PaneDropPosition? position;
+  OpenedTab? dropped;
+  PaneDropSide? side;
   int count = 0;
 
-  void record(PaneDragData d, PanePath p, PaneDropPosition pos) {
-    data = d;
-    path = p;
-    position = pos;
+  void record(OpenedTab tab, PaneDropSide droppedSide) {
+    dropped = tab;
+    side = droppedSide;
     count++;
   }
 }
 
+/// יעד ההפלה של אזור הקריאה: מתי הוא מקבל גרירה, לאיזה צד, ומה הוא מציג
+/// תוך כדי.
 void main() {
   const paneKey = Key('pane');
   const handleKey = Key('handle');
 
   Widget host({
     required _DropLog log,
-    required PaneDragData dragData,
-    PanePath targetPath = const [],
-    OpenedTab? pane,
+    required OpenedTab dragged,
+    OpenedTab? tab,
+    TextDirection textDirection = TextDirection.rtl,
+    double paneWidth = 800,
   }) {
-    final targetPane = pane ?? _LeafTab('יעד');
     return MaterialApp(
       home: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: textDirection,
         child: Scaffold(
           body: Column(
             children: [
-              Draggable<PaneDragData>(
-                data: dragData,
+              Draggable<OpenedTab>(
+                data: dragged,
                 feedback: const SizedBox(
                   width: 40,
                   height: 20,
@@ -59,14 +59,18 @@ void main() {
                 ),
               ),
               Expanded(
-                child: PaneDropTarget(
-                  key: paneKey,
-                  path: targetPath,
-                  pane: targetPane,
-                  onDrop: log.record,
-                  child: const ColoredBox(
-                    color: Color(0xFFEEEEEE),
-                    child: SizedBox.expand(),
+                child: Center(
+                  child: SizedBox(
+                    width: paneWidth,
+                    child: PaneDropTarget(
+                      key: paneKey,
+                      tab: tab ?? _LeafTab('יעד'),
+                      onDrop: log.record,
+                      child: const ColoredBox(
+                        color: Color(0xFFEEEEEE),
+                        child: SizedBox.expand(),
+                      ),
+                    ),
                   ),
                 ),
               ),
@@ -89,92 +93,162 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  group('מיפוי הפלה למיקום', () {
-    testWidgets('שחרור במרכז מדווח על החלפה', (tester) async {
-      final log = _DropLog();
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
-        ),
-      );
+  /// גוררת מעל היעד בלי לשחרר, כדי לבדוק את החיווי.
+  Future<TestGesture> hoverOver(WidgetTester tester, Offset target) async {
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byKey(handleKey)),
+    );
+    await tester.pump();
+    await gesture.moveTo(target);
+    await tester.pump();
+    return gesture;
+  }
 
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
+  Rect paneRect(WidgetTester tester) => tester.getRect(find.byKey(paneKey));
+
+  group('בחירת הצד', () {
+    testWidgets('שחרור בחצי הימני ב-RTL נותן את החלונית הראשונה', (
+      tester,
+    ) async {
+      final log = _DropLog();
+      final dragged = _LeafTab('נגרר');
+      await tester.pumpWidget(host(log: log, dragged: dragged));
+
+      final rect = paneRect(tester);
+      await dragTo(tester, Offset(rect.right - 20, rect.center.dy));
 
       expect(log.count, 1);
-      expect(log.position, PaneDropPosition.center);
-      expect(log.data!.tab.title, 'נגרר');
+      expect(log.dropped, same(dragged));
+      expect(log.side, PaneDropSide.start);
     });
 
-    testWidgets('שחרור בקצה הימני מדווח על פיצול start ב-RTL', (tester) async {
+    testWidgets('שחרור בחצי השמאלי ב-RTL נותן את החלונית השנייה', (
+      tester,
+    ) async {
+      final log = _DropLog();
+      await tester.pumpWidget(host(log: log, dragged: _LeafTab('נגרר')));
+
+      final rect = paneRect(tester);
+      await dragTo(tester, Offset(rect.left + 20, rect.center.dy));
+
+      expect(log.count, 1);
+      expect(log.side, PaneDropSide.end);
+    });
+
+    testWidgets('גובה השחרור אינו משנה — אין יותר פיצול אנכי', (tester) async {
+      final log = _DropLog();
+      await tester.pumpWidget(host(log: log, dragged: _LeafTab('נגרר')));
+
+      final rect = paneRect(tester);
+      await dragTo(tester, Offset(rect.right - 20, rect.top + 8));
+
+      expect(log.side, PaneDropSide.start);
+    });
+
+    testWidgets('ב-LTR הצדדים מתהפכים', (tester) async {
       final log = _DropLog();
       await tester.pumpWidget(
         host(
           log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
+          dragged: _LeafTab('נגרר'),
+          textDirection: TextDirection.ltr,
         ),
       );
 
-      final rect = tester.getRect(find.byKey(paneKey));
-      await dragTo(tester, Offset(rect.right - 8, rect.center.dy));
+      final rect = paneRect(tester);
+      await dragTo(tester, Offset(rect.left + 20, rect.center.dy));
 
-      expect(log.position, PaneDropPosition.start);
-    });
-
-    testWidgets('שחרור בתחתית מדווח על פיצול תחתון', (tester) async {
-      final log = _DropLog();
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
-        ),
-      );
-
-      final rect = tester.getRect(find.byKey(paneKey));
-      await dragTo(tester, Offset(rect.center.dx, rect.bottom - 8));
-
-      expect(log.position, PaneDropPosition.bottom);
-    });
-
-    testWidgets('הנתיב המדווח הוא נתיב חלונית היעד', (tester) async {
-      final log = _DropLog();
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
-          targetPath: const [kSecondPane, kFirstPane],
-        ),
-      );
-
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.path, [kSecondPane, kFirstPane]);
+      expect(log.side, PaneDropSide.start);
     });
   });
 
-  group('חיווי ויזואלי', () {
-    testWidgets('החיווי מופיע בזמן ריחוף ונעלם בשחרור', (tester) async {
+  group('מתי ההפלה נדחית', () {
+    testWidgets('טאב שכבר מפוצל אינו מקבל הפלות', (tester) async {
       final log = _DropLog();
       await tester.pumpWidget(
         host(
           log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
+          dragged: _LeafTab('נגרר'),
+          tab: CombinedTab(rightTab: _LeafTab('א'), leftTab: _LeafTab('ב')),
         ),
       );
 
-      Finder preview() => find.descendant(
-        of: find.byKey(paneKey),
-        matching: find.byType(AnimatedPositioned),
+      final rect = paneRect(tester);
+      await dragTo(tester, rect.center);
+
+      expect(log.count, 0);
+    });
+
+    testWidgets('גרירת טאב מפוצל אל טאב אחר נדחית', (tester) async {
+      final log = _DropLog();
+      await tester.pumpWidget(
+        host(
+          log: log,
+          dragged: CombinedTab(
+            rightTab: _LeafTab('א'),
+            leftTab: _LeafTab('ב'),
+          ),
+        ),
       );
+
+      final rect = paneRect(tester);
+      await dragTo(tester, rect.center);
+
+      expect(log.count, 0);
+    });
+
+    testWidgets('גרירת הטאב המוצג על עצמו נדחית', (tester) async {
+      final log = _DropLog();
+      final shown = _LeafTab('מוצג');
+      await tester.pumpWidget(host(log: log, dragged: shown, tab: shown));
+
+      final rect = paneRect(tester);
+      await dragTo(tester, rect.center);
+
+      expect(log.count, 0);
+    });
+
+    testWidgets('מסך צר מדי לשתי חלוניות קריאות אינו מתפצל', (tester) async {
+      final log = _DropLog();
+      await tester.pumpWidget(
+        host(
+          log: log,
+          dragged: _LeafTab('נגרר'),
+          paneWidth: kMinPaneExtent * 2 - 20,
+        ),
+      );
+
+      final rect = paneRect(tester);
+      await dragTo(tester, rect.center);
+
+      expect(log.count, 0);
+    });
+  });
+
+  group('חיווי', () {
+    Finder preview() => find.descendant(
+      of: find.byKey(paneKey),
+      matching: find.byType(AnimatedPositioned),
+    );
+
+    testWidgets('אין חיווי לפני שגוררים', (tester) async {
+      await tester.pumpWidget(
+        host(log: _DropLog(), dragged: _LeafTab('נגרר')),
+      );
+
       expect(preview(), findsNothing);
+    });
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.byKey(handleKey)),
+    testWidgets('החיווי מופיע בגרירה ונעלם בשחרור', (tester) async {
+      await tester.pumpWidget(
+        host(log: _DropLog(), dragged: _LeafTab('נגרר')),
       );
-      await tester.pump();
-      await gesture.moveTo(tester.getCenter(find.byKey(paneKey)));
-      await tester.pump();
 
+      final rect = paneRect(tester);
+      final gesture = await hoverOver(
+        tester,
+        Offset(rect.right - 20, rect.center.dy),
+      );
       expect(preview(), findsOneWidget);
 
       await gesture.up();
@@ -182,163 +256,96 @@ void main() {
       expect(preview(), findsNothing);
     });
 
-    testWidgets('יציאה מהחלונית מסירה את החיווי', (tester) async {
-      final log = _DropLog();
+    testWidgets('החיווי תופס את החצי שאליו הספר ייכנס', (tester) async {
       await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
-        ),
+        host(log: _DropLog(), dragged: _LeafTab('נגרר')),
       );
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(find.byKey(handleKey)),
+      final rect = paneRect(tester);
+      final gesture = await hoverOver(
+        tester,
+        Offset(rect.right - 20, rect.center.dy),
       );
-      await tester.pump();
-      await gesture.moveTo(tester.getCenter(find.byKey(paneKey)));
-      await tester.pump();
-      await gesture.moveTo(tester.getCenter(find.byKey(handleKey)));
-      await tester.pump();
+      await tester.pumpAndSettle();
 
-      expect(
-        find.descendant(
-          of: find.byKey(paneKey),
-          matching: find.byType(AnimatedPositioned),
-        ),
-        findsNothing,
-      );
+      final previewRect = tester.getRect(preview());
+      expect(previewRect.center.dx, greaterThan(rect.center.dx));
+      expect(previewRect.width, closeTo(rect.width / 2, 1));
 
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(log.count, 0);
+    });
+
+    testWidgets('החיווי עובר לצד השני בתנועת המצביע', (tester) async {
+      await tester.pumpWidget(
+        host(log: _DropLog(), dragged: _LeafTab('נגרר')),
+      );
+
+      final rect = paneRect(tester);
+      final gesture = await hoverOver(
+        tester,
+        Offset(rect.right - 20, rect.center.dy),
+      );
+      await tester.pumpAndSettle();
+      final rightSide = tester.getRect(preview()).center.dx;
+
+      await gesture.moveTo(Offset(rect.left + 20, rect.center.dy));
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(preview()).center.dx, lessThan(rightSide));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('טאב מפוצל אינו מציג חיווי כלל', (tester) async {
+      await tester.pumpWidget(
+        host(
+          log: _DropLog(),
+          dragged: _LeafTab('נגרר'),
+          tab: CombinedTab(rightTab: _LeafTab('א'), leftTab: _LeafTab('ב')),
+        ),
+      );
+
+      final rect = paneRect(tester);
+      final gesture = await hoverOver(tester, rect.center);
+      await tester.pumpAndSettle();
+
+      expect(preview(), findsNothing);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('יציאה מהיעד מנקה את החיווי', (tester) async {
+      await tester.pumpWidget(
+        host(log: _DropLog(), dragged: _LeafTab('נגרר')),
+      );
+
+      final rect = paneRect(tester);
+      final gesture = await hoverOver(tester, rect.center);
+      expect(preview(), findsOneWidget);
+
+      await gesture.moveTo(tester.getCenter(find.byKey(handleKey)));
+      await tester.pump();
+      expect(preview(), findsNothing);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
     });
   });
 
-  group('גרירה עצמית', () {
-    testWidgets('חלונית אינה מקבלת גרירה של עצמה', (tester) async {
-      final log = _DropLog();
-      final tab = _LeafTab('אני');
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: tab, sourcePath: const [kFirstPane]),
-          targetPath: const [kFirstPane],
-        ),
-      );
+  testWidgets('תוכן החלונית ממשיך להיות מוצג מתחת ליעד', (tester) async {
+    await tester.pumpWidget(
+      host(log: _DropLog(), dragged: _LeafTab('נגרר')),
+    );
 
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.count, 0);
-      expect(
-        find.descendant(
-          of: find.byKey(paneKey),
-          matching: find.byType(AnimatedPositioned),
-        ),
-        findsNothing,
-      );
-    });
-
-    testWidgets('חלונית אחות באותו טאב כן מקבלת', (tester) async {
-      final log = _DropLog();
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(
-            tab: _LeafTab('אחות'),
-            sourcePath: const [kFirstPane],
-          ),
-          targetPath: const [kSecondPane],
-        ),
-      );
-
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.count, 1);
-      expect(log.data!.sourcePath, [kFirstPane]);
-    });
-
-    testWidgets('גרירת הכרטיסיה שהחלונית מציגה אינה מתקבלת ואינה מסמנת', (
-      tester,
-    ) async {
-      final log = _DropLog();
-      final displayed = _LeafTab('המוצג');
-      await tester.pumpWidget(
-        host(
-          log: log,
-          // אותה כרטיסיה שמוצגת כאן, כפי שקורה בגרירת הכרטיסיה הפעילה.
-          dragData: PaneDragData(tab: displayed),
-          pane: displayed,
-        ),
-      );
-
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.count, 0, reason: 'ה-bloc היה דוחה הפלה כזו בכל מקרה');
-      expect(
-        find.descendant(
-          of: find.byKey(paneKey),
-          matching: find.byType(AnimatedPositioned),
-        ),
-        findsNothing,
-        reason: 'חיווי שמבטיח פיצול שלא יקרה',
-      );
-    });
-
-    testWidgets('גרירת טאב מפוצל על אחת מחלוניותיו אינה מתקבלת', (
-      tester,
-    ) async {
-      final log = _DropLog();
-      final inner = _LeafTab('פנימית');
-      final dragged = CombinedTab(rightTab: inner, leftTab: _LeafTab('אחות'));
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: dragged),
-          pane: inner,
-        ),
-      );
-
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.count, 0);
-    });
-
-    testWidgets('טאב אחר כן מתקבל על אותה חלונית', (tester) async {
-      final log = _DropLog();
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('אחר')),
-          pane: _LeafTab('המוצג'),
-        ),
-      );
-
-      await dragTo(tester, tester.getCenter(find.byKey(paneKey)));
-
-      expect(log.count, 1);
-    });
-  });
-
-  group('חלונית קטנה מדי לפיצול', () {
-    testWidgets('בחלונית צרה הקצוות האופקיים אינם מפצלים', (tester) async {
-      final log = _DropLog();
-      tester.view.physicalSize = const Size(240, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-
-      await tester.pumpWidget(
-        host(
-          log: log,
-          dragData: PaneDragData(tab: _LeafTab('נגרר')),
-        ),
-      );
-
-      final pane = tester.getRect(find.byKey(paneKey));
-      await dragTo(tester, Offset(pane.right - 6, pane.center.dy));
-
-      // רוחב 240 לא מאפשר שתי חלוניות שמישות, ולכן הקצה נופל למרכז.
-      expect(log.count, 1);
-      expect(log.position, PaneDropPosition.center);
-    });
+    expect(
+      find.descendant(
+        of: find.byKey(paneKey),
+        matching: find.byType(ColoredBox),
+      ),
+      findsOneWidget,
+    );
   });
 }

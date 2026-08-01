@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/layout/split_pane_content_inset.dart';
 
 /// עובי רצועת המפריד בעכבר.
@@ -14,13 +14,20 @@ const double kPaneDividerThickness = 12;
 /// עובי רצועת המפריד במגע — אצבע אינה מדייקת ל-12 פיקסלים.
 const double kPaneDividerThicknessTouch = 24;
 
-/// עובי הקו הנראה בתוך רצועת המפריד במצב מנוחה.
-const double _kDividerLineThickness = 1.5;
+/// עובי ידית המפריד כשהיא מוצגת. במנוחה אין ידית כלל — הרווח שבין כרטיסי
+/// החלוניות הוא ההפרדה.
+const double _kDividerHandleThickness = 4;
 
-/// עובי הקו הנראה בהצבעה או בגרירה.
-const double _kDividerLineThicknessActive = 4;
+/// אורך ידית המפריד לאורך הרצועה.
+const double _kDividerHandleLength = 40;
 
-/// סכום ה-flex בין שתי חלוניות — קובע את דיוק היחס (0.1%).
+/// עיגול פינות כרטיס החלונית.
+const double kPaneCardRadius = 10;
+
+/// שוליים סביב כרטיס החלונית, מעבר לרצועת המפריד.
+const double kPaneCardMargin = 3;
+
+/// סכום ה-flex בין שתי החלוניות — קובע את דיוק היחס (0.1%).
 const int _kFlexResolution = 1000;
 
 /// כמה זז המפריד בכל הקשה על חץ.
@@ -36,57 +43,21 @@ double paneDividerThicknessFor(TargetPlatform platform) {
       : kPaneDividerThickness;
 }
 
-/// באילו צדדים חלונית גובלת במפריד — הבסיס לחישוב שוליי התוכן שלה.
-@immutable
-class _PaneEdges {
-  final bool start;
-  final bool end;
-  final bool top;
-  final bool bottom;
-
-  const _PaneEdges({
-    this.start = false,
-    this.end = false,
-    this.top = false,
-    this.bottom = false,
-  });
-
-  _PaneEdges copyWith({bool? start, bool? end, bool? top, bool? bottom}) {
-    return _PaneEdges(
-      start: start ?? this.start,
-      end: end ?? this.end,
-      top: top ?? this.top,
-      bottom: bottom ?? this.bottom,
-    );
-  }
-
-  /// שוליים המפצים על עובי המפריד בצד הנגדי, כדי שתוכן הקריאה יישאר
-  /// מרוכז. חלונית הגובלת במפרידים משני צדי הציר כבר סימטרית ואינה מפוצה.
-  EdgeInsetsGeometry contentInset(double thickness) =>
-      EdgeInsetsDirectional.only(
-        start: end && !start ? thickness : 0,
-        end: start && !end ? thickness : 0,
-        top: bottom && !top ? thickness : 0,
-        bottom: top && !bottom ? thickness : 0,
-      );
-}
-
-/// מציג את עץ החלוניות של טאב: חלונית בודדת, או פיצולים מקוננים עם
-/// מפרידים ניתנים לגרירה.
+/// מציג טאב: חלונית אחת, או שתיים זו לצד זו עם מפריד ניתן לגרירה.
 ///
-/// [paneBuilder] נקרא לכל חלונית עלה עם הנתיב שלה בעץ. כל עלה נעטף
-/// ב-[GlobalObjectKey] לפי זהות האובייקט שלו, כך ששינוי מבנה העץ מעביר
-/// את ה-Element שלו (reparenting) במקום להרוס ולבנות אותו מחדש — בלי זה
-/// כל פיצול או גרירה היו טוענים מחדש את ה-PDF ומאבדים את מיקום הקריאה.
+/// [paneBuilder] נקרא לכל חלונית. כל חלונית נעטפת ב-[GlobalObjectKey] לפי
+/// זהות האובייקט שלה, כך שפיצול הטאב ופירוקו מעבירים את ה-Element שלה
+/// (reparenting) במקום להרוס ולבנות אותו מחדש — בלי זה כל פיצול היה טוען
+/// מחדש את הספר ומאבד את מיקום הקריאה.
 class SplitPaneView extends StatelessWidget {
-  /// שורש עץ החלוניות של הטאב.
+  /// הטאב המוצג — מפוצל או יחיד.
   final OpenedTab root;
 
-  /// בונה את תוכן חלונית העלה בנתיב הנתון.
-  final Widget Function(OpenedTab pane, PanePath path) paneBuilder;
+  /// בונה את תוכן החלונית.
+  final Widget Function(OpenedTab pane) paneBuilder;
 
-  /// נקרא בתום גרירת מפריד, עם נתיב צומת הפיצול והיחס החדש.
-  final void Function(PanePath path, double ratio) onRatioChanged;
+  /// נקרא בתום גרירת המפריד, עם היחס החדש.
+  final ValueChanged<double> onRatioChanged;
 
   const SplitPaneView({
     super.key,
@@ -97,64 +68,109 @@ class SplitPaneView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thickness = paneDividerThicknessFor(Theme.of(context).platform);
-    return _buildNode(root, const [], const _PaneEdges(), thickness);
-  }
-
-  Widget _buildNode(
-    OpenedTab node,
-    PanePath path,
-    _PaneEdges edges,
-    double thickness,
-  ) {
-    if (node is CombinedTab) {
-      return _SplitNode(
-        // מפתח לפי זהות הצומת: שינוי מבנה מחליף את הצומת ומאפס נכון את
-        // היחס המקומי, בעוד גרירת מפריד משנה אותו במקום ולא נוגעת במפתח.
-        key: ObjectKey(node),
-        node: node,
-        path: path,
-        edges: edges,
-        thickness: thickness,
-        buildChild: _buildNode,
-        onRatioChanged: onRatioChanged,
-      );
+    final node = root;
+    if (node is! CombinedTab) {
+      return buildPane(node, EdgeInsets.zero, paneBuilder);
     }
 
+    // הרווח שסביב הכרטיסים ובין שניהם הוא ההפרדה — אין קו מפריד במנוחה.
+    return ColoredBox(
+      color: AppSurfaces.paneGutter(context),
+      child: Padding(
+        padding: const EdgeInsets.all(kPaneCardMargin),
+        child: _SplitNode(
+          // מפתח לפי זהות הצומת: החלפת צדדים מחליפה את הטאב ומאפסת נכון את
+          // היחס המקומי, בעוד גרירת מפריד משנה אותו במקום ולא נוגעת במפתח.
+          key: ObjectKey(node),
+          node: node,
+          thickness: paneDividerThicknessFor(Theme.of(context).platform),
+          paneBuilder: paneBuilder,
+          onRatioChanged: onRatioChanged,
+        ),
+      ),
+    );
+  }
+
+  /// עוטפת חלונית במפתח היציב שלה ובשוליים המפצים על עובי המפריד.
+  @visibleForTesting
+  static Widget buildPane(
+    OpenedTab pane,
+    EdgeInsetsGeometry contentInset,
+    Widget Function(OpenedTab pane) paneBuilder,
+  ) {
     return ClipRect(
       child: SplitPaneContentInset(
-        contentInset: edges.contentInset(thickness),
+        contentInset: contentInset,
         child: KeyedSubtree(
-          key: GlobalObjectKey(node),
-          child: paneBuilder(node, path),
+          key: GlobalObjectKey(pane),
+          child: paneBuilder(pane),
         ),
       ),
     );
   }
 }
 
-/// צומת פיצול בודד: שתי חלוניות ומפריד ביניהן.
+/// המסגור של חלונית בטאב מפוצל: משטח מעוגל שצף מעל הרווח שבין החלוניות.
+/// החלונית הפעילה מסומנת בקו דק — זה החיווי היחיד ל"במה אני עובד".
+///
+/// בטאב שאינו מפוצל ([isSplit] כבוי) אין מסגרת והחלונית ממלאת את המסך כמו
+/// קודם. הווידג'ט עצמו נשאר בעץ בשני המצבים: החלפתו בילד עצמו הייתה משנה את
+/// סוג הווידג'ט בפיצול ובפירוק, ובונה מחדש את הספר.
+class PaneCard extends StatelessWidget {
+  final bool isActive;
+  final bool isSplit;
+  final Widget child;
+
+  const PaneCard({
+    super.key,
+    required this.isActive,
+    required this.isSplit,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final radius = BorderRadius.circular(isSplit ? kPaneCardRadius : 0);
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOut,
+      decoration: BoxDecoration(
+        color: isSplit ? AppSurfaces.paneCard(context) : Colors.transparent,
+        borderRadius: radius,
+        border: isSplit
+            ? Border.all(
+                color: AppSurfaces.paneCardBorder(cs, isActive: isActive),
+              )
+            : null,
+        boxShadow: isSplit
+            ? [
+                BoxShadow(
+                  color: AppSurfaces.paneCardShadow(cs, isActive: isActive),
+                  blurRadius: isActive ? 10 : 6,
+                  offset: const Offset(0, 1),
+                ),
+              ]
+            : null,
+      ),
+      // חיתוך לפי אותו רדיוס: בלעדיו תוכן הספר יוצא מעבר לפינות המעוגלות.
+      child: ClipRRect(borderRadius: radius, child: child),
+    );
+  }
+}
+
+/// שתי חלוניות ומפריד ביניהן.
 class _SplitNode extends StatefulWidget {
   final CombinedTab node;
-  final PanePath path;
-  final _PaneEdges edges;
   final double thickness;
-  final Widget Function(
-    OpenedTab node,
-    PanePath path,
-    _PaneEdges edges,
-    double thickness,
-  )
-  buildChild;
-  final void Function(PanePath path, double ratio) onRatioChanged;
+  final Widget Function(OpenedTab pane) paneBuilder;
+  final ValueChanged<double> onRatioChanged;
 
   const _SplitNode({
     super.key,
     required this.node,
-    required this.path,
-    required this.edges,
     required this.thickness,
-    required this.buildChild,
+    required this.paneBuilder,
     required this.onRatioChanged,
   });
 
@@ -170,8 +186,6 @@ class _SplitNodeState extends State<_SplitNode> {
   Timer? _commitDebounce;
 
   double get _ratio => _ratioNotifier.value;
-
-  bool get _isVertical => widget.node.axis == SplitAxis.vertical;
 
   @override
   void initState() {
@@ -190,29 +204,37 @@ class _SplitNodeState extends State<_SplitNode> {
   void didUpdateWidget(_SplitNode oldWidget) {
     super.didUpdateWidget(oldWidget);
     // מסתנכרן עם יחס שהגיע מבחוץ (איפוס מתפריט, טעינה מדיסק). ההשוואה לערך
-    // ולא לזהות: המפתח מבטיח שאותו State מקבל תמיד את אותו צומת.
-    if (!_dragging && widget.node.splitRatio != _ratio) {
+    // ולא לזהות: המפתח מבטיח שאותו State מקבל תמיד את אותו טאב.
+    //
+    // הזזה שטרם נשמרה מוגנת: בגרירה דרך `_dragging`, ובהקשת חצים דרך שעון
+    // ה-debounce. בלי השני, בנייה מחדש של ההורה בתוך רבע שנייה הייתה מוחקת
+    // את ההקשה — וגם משמרת את המחיקה, כי השמירה המושהית משדרת את הישן.
+    if (!_dragging &&
+        _commitDebounce == null &&
+        widget.node.splitRatio != _ratio) {
       _ratioNotifier.value = widget.node.splitRatio;
     }
   }
 
-  /// המקום שנותר לשתי החלוניות אחרי ניכוי המפריד, לפי הגודל בפועל.
+  /// המקום שנותר לשתי החלוניות אחרי ניכוי המפריד, לפי הרוחב בפועל.
   double? get _availableExtent {
     final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return null;
-    final total = _isVertical ? box.size.height : box.size.width;
-    final available = total - widget.thickness;
+    final available = box.size.width - widget.thickness;
     return available > 0 ? available : null;
   }
 
-  /// מזיז את המפריד ב-[delta] פיקסלים לאורך הציר; חיובי מגדיל את הראשונה.
+  /// מזיז את המפריד ב-[delta] פיקסלים; חיובי מגדיל את החלונית הראשונה.
   void _applyAxisDelta(double delta) {
     final availableExtent = _availableExtent;
     if (availableExtent == null) return;
 
-    // ההגבלה בפיקסלים ולא באחוזים — בחלונית מקוננת צרה יחס קבוע היה
-    // מאפשר לכווץ חלונית עד לרוחב בלתי שמיש.
+    // ההגבלה בפיקסלים ולא באחוזים — במסך צר יחס קבוע היה מאפשר לכווץ
+    // חלונית עד לרוחב בלתי שמיש.
     final minRatio = (kMinPaneExtent / availableExtent).clamp(0.0, 0.5);
+    // אין מקום לשתי חלוניות קריאות: כל הזזה הייתה נצמדת ל-50% ודורסת בשקט
+    // את היחס השמור, שלא היה חוזר גם אחרי הרחבת החלון.
+    if (minRatio >= 0.5) return;
     _ratioNotifier.value = (_ratio + delta / availableExtent).clamp(
       minRatio,
       1 - minRatio,
@@ -220,13 +242,11 @@ class _SplitNodeState extends State<_SplitNode> {
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    // ב-RTL הציר האופקי הפוך: גרירה שמאלה מגדילה את החלונית הראשונה.
+    // ב-RTL הציר הפוך: גרירה שמאלה מגדילה את החלונית הראשונה (הימנית).
     _applyAxisDelta(
-      _isVertical
-          ? details.delta.dy
-          : (Directionality.of(context) == TextDirection.rtl
-                ? -details.delta.dx
-                : details.delta.dx),
+      Directionality.of(context) == TextDirection.rtl
+          ? -details.delta.dx
+          : details.delta.dx,
     );
   }
 
@@ -249,6 +269,7 @@ class _SplitNodeState extends State<_SplitNode> {
     final extent = _availableExtent;
     if (extent == null) return _ratio;
     final minRatio = (kMinPaneExtent / extent).clamp(0.0, 0.5);
+    if (minRatio >= 0.5) return _ratio;
     final delta = (towardFirst ? -_kKeyboardNudge : _kKeyboardNudge) / extent;
     return (_ratio + delta).clamp(minRatio, 1 - minRatio);
   }
@@ -258,7 +279,7 @@ class _SplitNodeState extends State<_SplitNode> {
     _commitDebounce = null;
     _dragging = false;
     widget.node.splitRatio = _ratio;
-    widget.onRatioChanged(widget.path, _ratio);
+    widget.onRatioChanged(_ratio);
   }
 
   void _resetRatio() {
@@ -268,29 +289,18 @@ class _SplitNodeState extends State<_SplitNode> {
 
   @override
   Widget build(BuildContext context) {
-    // כל חלונית יורשת את גבולות ההורה, ומקבלת גבול נוסף בצד שבו
-    // המפריד החדש נוגע בה.
-    final firstEdges = _isVertical
-        ? widget.edges.copyWith(bottom: true)
-        : widget.edges.copyWith(end: true);
-    final secondEdges = _isVertical
-        ? widget.edges.copyWith(top: true)
-        : widget.edges.copyWith(start: true);
-
     // שתי החלוניות נבנות פעם אחת לכל בנייה של הצומת, ונלכדות ב-closure שלהלן.
     // עדכון היחס מפעיל רק את ה-builder, ו-Flutter מדלג על תת-עץ שהווידג'ט שלו
     // זהה — כך גרירת מפריד אינה בונה מחדש את תצוגות הספרים.
-    final firstChild = widget.buildChild(
+    final firstChild = SplitPaneView.buildPane(
       widget.node.rightTab,
-      [...widget.path, kFirstPane],
-      firstEdges,
-      widget.thickness,
+      EdgeInsetsDirectional.only(start: widget.thickness),
+      widget.paneBuilder,
     );
-    final secondChild = widget.buildChild(
+    final secondChild = SplitPaneView.buildPane(
       widget.node.leftTab,
-      [...widget.path, kSecondPane],
-      secondEdges,
-      widget.thickness,
+      EdgeInsetsDirectional.only(end: widget.thickness),
+      widget.paneBuilder,
     );
 
     return ValueListenableBuilder<double>(
@@ -303,33 +313,25 @@ class _SplitNodeState extends State<_SplitNode> {
           _kFlexResolution - 1,
         );
 
-        final children = <Widget>[
-          Expanded(flex: firstFlex, child: firstChild),
-          _PaneDivider(
-            isVertical: _isVertical,
-            thickness: widget.thickness,
-            isTouch: widget.thickness == kPaneDividerThicknessTouch,
-            ratio: ratio,
-            increasedRatio: _ratioAfterNudge(towardFirst: false),
-            decreasedRatio: _ratioAfterNudge(towardFirst: true),
-            onDragStart: () => _dragging = true,
-            onDragUpdate: _onDragUpdate,
-            onDragEnd: _commit,
-            onReset: _resetRatio,
-            onNudge: (towardFirst) => _nudge(towardFirst: towardFirst),
-          ),
-          Expanded(flex: _kFlexResolution - firstFlex, child: secondChild),
-        ];
-
-        return _isVertical
-            ? Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: children,
-              );
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(flex: firstFlex, child: firstChild),
+            _PaneDivider(
+              thickness: widget.thickness,
+              isTouch: widget.thickness == kPaneDividerThicknessTouch,
+              ratio: ratio,
+              increasedRatio: _ratioAfterNudge(towardFirst: false),
+              decreasedRatio: _ratioAfterNudge(towardFirst: true),
+              onDragStart: () => _dragging = true,
+              onDragUpdate: _onDragUpdate,
+              onDragEnd: _commit,
+              onReset: _resetRatio,
+              onNudge: (towardFirst) => _nudge(towardFirst: towardFirst),
+            ),
+            Expanded(flex: _kFlexResolution - firstFlex, child: secondChild),
+          ],
+        );
       },
     );
   }
@@ -341,8 +343,6 @@ class _SplitNodeState extends State<_SplitNode> {
 /// מצב ההדגשה נשמר כאן ולא בצומת: `setState` בצומת בונה מחדש את שתי חלוניות
 /// הקריאה, וריחוף עכבר על המפריד היה מרנדר מחדש שני ספרים.
 class _PaneDivider extends StatefulWidget {
-  final bool isVertical;
-
   /// עובי רצועת התפיסה — רחבה יותר במגע.
   final double thickness;
 
@@ -366,7 +366,6 @@ class _PaneDivider extends StatefulWidget {
   final ValueChanged<bool> onNudge;
 
   const _PaneDivider({
-    required this.isVertical,
     required this.thickness,
     required this.isTouch,
     required this.ratio,
@@ -391,8 +390,6 @@ class _PaneDividerState extends State<_PaneDivider> {
   /// node מפורש כדי שההדגשה תשקף פוקוס מקלדת, ושהמפריד יהיה יעד ל-Tab.
   final FocusNode _focusNode = FocusNode(debugLabel: 'מפריד חלוניות');
 
-  bool get isVertical => widget.isVertical;
-
   @override
   void dispose() {
     _focusNode.dispose();
@@ -410,9 +407,6 @@ class _PaneDividerState extends State<_PaneDivider> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final active = _hovering || _dragging || _focused;
-    final lineThickness = active
-        ? _kDividerLineThicknessActive
-        : _kDividerLineThickness;
 
     void handleDragStart(DragStartDetails _) {
       _setDragging(true);
@@ -431,9 +425,7 @@ class _PaneDividerState extends State<_PaneDivider> {
     // (הימנית) — בדיוק כמו גרירה.
     final isRtl = Directionality.of(context) == TextDirection.rtl;
     return MouseRegion(
-      cursor: isVertical
-          ? SystemMouseCursors.resizeRow
-          : SystemMouseCursors.resizeColumn,
+      cursor: SystemMouseCursors.resizeColumn,
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
       child: Focus(
@@ -454,24 +446,13 @@ class _PaneDividerState extends State<_PaneDivider> {
             return KeyEventResult.ignored;
           }
           final key = event.logicalKey;
-          if (!isVertical) {
-            if (key == LogicalKeyboardKey.arrowLeft) {
-              widget.onNudge(!isRtl);
-              return KeyEventResult.handled;
-            }
-            if (key == LogicalKeyboardKey.arrowRight) {
-              widget.onNudge(isRtl);
-              return KeyEventResult.handled;
-            }
-          } else {
-            if (key == LogicalKeyboardKey.arrowUp) {
-              widget.onNudge(true);
-              return KeyEventResult.handled;
-            }
-            if (key == LogicalKeyboardKey.arrowDown) {
-              widget.onNudge(false);
-              return KeyEventResult.handled;
-            }
+          if (key == LogicalKeyboardKey.arrowLeft) {
+            widget.onNudge(!isRtl);
+            return KeyEventResult.handled;
+          }
+          if (key == LogicalKeyboardKey.arrowRight) {
+            widget.onNudge(isRtl);
+            return KeyEventResult.handled;
           }
           if (key == LogicalKeyboardKey.home) {
             widget.onReset();
@@ -485,12 +466,9 @@ class _PaneDividerState extends State<_PaneDivider> {
           // רק במגע: בעכבר מזהה הלחיצה הארוכה זוכה בזירה ודוחה את הגרירה, כך
           // שהיסוס של חצי שנייה על הרצועה היה מאפס את היחס והורג את הגרירה.
           onLongPress: widget.isTouch ? widget.onReset : null,
-          onHorizontalDragStart: isVertical ? null : handleDragStart,
-          onHorizontalDragUpdate: isVertical ? null : widget.onDragUpdate,
-          onHorizontalDragEnd: isVertical ? null : handleDragEnd,
-          onVerticalDragStart: isVertical ? handleDragStart : null,
-          onVerticalDragUpdate: isVertical ? widget.onDragUpdate : null,
-          onVerticalDragEnd: isVertical ? handleDragEnd : null,
+          onHorizontalDragStart: handleDragStart,
+          onHorizontalDragUpdate: widget.onDragUpdate,
+          onHorizontalDragEnd: handleDragEnd,
           child: Semantics(
             container: true,
             slider: true,
@@ -499,25 +477,32 @@ class _PaneDividerState extends State<_PaneDivider> {
             value: _percent(widget.ratio),
             increasedValue: _percent(widget.increasedRatio),
             decreasedValue: _percent(widget.decreasedRatio),
-            label: isVertical
-                ? 'מפריד בין חלוניות — גרירה או חצים למעלה ולמטה, Home לאיפוס'
-                : 'מפריד בין חלוניות — גרירה או חצים לצדדים, Home לאיפוס',
+            label: 'מפריד בין חלוניות — גרירה או חצים לצדדים, Home לאיפוס',
             onIncrease: () => widget.onNudge(false),
             onDecrease: () => widget.onNudge(true),
             child: SizedBox(
-              width: isVertical ? null : widget.thickness,
-              height: isVertical ? widget.thickness : null,
+              width: widget.thickness,
               child: Center(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 120),
+                // ידית קצרה במרכז ולא קו לכל האורך: במנוחה הרווח שבין
+                // הכרטיסים הוא ההפרדה, והידית מופיעה רק כשמכוונים אליה.
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 140),
                   curve: Curves.easeOut,
-                  width: isVertical ? double.infinity : lineThickness,
-                  height: isVertical ? lineThickness : double.infinity,
-                  decoration: BoxDecoration(
-                    color: active
-                        ? colorScheme.primary
-                        : colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(lineThickness / 2),
+                  opacity: active ? 1 : 0,
+                  child: SizedBox(
+                    width: _kDividerHandleThickness,
+                    height: _kDividerHandleLength,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppSurfaces.paneDividerHandle(
+                          colorScheme,
+                          isActive: active,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          _kDividerHandleThickness / 2,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),

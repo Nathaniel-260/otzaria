@@ -348,28 +348,24 @@ void main() {
         tracker.dispose();
       });
 
-      test('חלונית מקוננת בעומק נעקבת כרגיל', () async {
-        final deep = TextBookTab(book: TextBook(title: 'עמוק'), index: 5)
+      test('החלונית השנייה בפיצול נעקבת כרגיל', () async {
+        final second = TextBookTab(book: TextBook(title: 'שנייה'), index: 5)
           ..currentTitle.value = 'פרק ה';
-        final nested = CombinedTab(
-          rightTab: TextBookTab(book: TextBook(title: 'חיצוני'), index: 1),
-          leftTab: CombinedTab(
-            rightTab: deep,
-            leftTab: TextBookTab(book: TextBook(title: 'שכן'), index: 9),
-            axis: SplitAxis.vertical,
-          ),
+        final split = CombinedTab(
+          rightTab: TextBookTab(book: TextBook(title: 'ראשונה'), index: 1),
+          leftTab: second,
         );
 
         final tracker = buildTracker(
           initialState: TabsState(
-            tabs: [nested],
+            tabs: [split],
             currentTabIndex: 0,
-            rawActivePane: deep,
+            rawActivePane: second,
           ),
         );
         await settle();
 
-        expect(dispatchedEvents.single.payload['currentBook'], 'עמוק');
+        expect(dispatchedEvents.single.payload['currentBook'], 'שנייה');
         expect(dispatchedEvents.single.payload['currentRef'], 'פרק ה');
 
         tracker.dispose();

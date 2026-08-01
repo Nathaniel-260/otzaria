@@ -64,24 +64,13 @@ void main() {
     ]);
   });
 
-  test('פיצול מקונן רושם את כל שלוש החלוניות', () async {
+  test('טאב רגיל רושם רשומה אחת', () async {
     final bloc = await loadedBloc(_MemoryHistoryRepository());
 
-    final nested = CombinedTab(
-      rightTab: search('א'),
-      leftTab: CombinedTab(
-        rightTab: search('ב'),
-        leftTab: search('ג'),
-        axis: SplitAxis.vertical,
-      ),
-    );
-    bloc.add(AddHistory(nested));
-    await bloc.stream.firstWhere((s) => s.history.length == 3);
+    bloc.add(AddHistory(search('יחיד')));
+    await bloc.stream.firstWhere((s) => s.history.isNotEmpty);
 
-    expect(
-      bloc.state.history.map((b) => b.book.title).toSet(),
-      {'א', 'ב', 'ג'},
-    );
+    expect(bloc.state.history.map((b) => b.book.title), ['יחיד']);
   });
 
   test('AddHistoryForTabs מפרק כל טאב מפוצל שברשימה', () async {

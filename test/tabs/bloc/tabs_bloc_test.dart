@@ -89,34 +89,23 @@ void main() {
       await _closeBlocAndAllowDeferredDispose(bloc);
     });
 
-    test(
-      'פירוק טאב מקונן מחזיר את כל החלוניות ולא רק את הרמה העליונה',
-      () async {
-        final bloc = TabsBloc(repository: _FakeTabsRepository());
-        final outer = _createTextTab('חיצוני', categoryId: 1);
-        final innerA = _createTextTab('פנימי א', categoryId: 2);
-        final innerB = _createTextTab('פנימי ב', categoryId: 3);
+    test('פירוק מחזיר את החלוניות במקום הטאב המפוצל ולא בסופו', () async {
+      final bloc = TabsBloc(repository: _FakeTabsRepository());
+      final before = _createTextTab('לפני', categoryId: 1);
+      final right = _createTextTab('ימין', categoryId: 2);
+      final left = _createTextTab('שמאל', categoryId: 3);
 
-        final nested = CombinedTab(
-          rightTab: outer,
-          leftTab: CombinedTab(
-            rightTab: innerA,
-            leftTab: innerB,
-            axis: SplitAxis.vertical,
-          ),
-        );
+      bloc.add(AddTab(before));
+      bloc.add(AddTab(CombinedTab(rightTab: right, leftTab: left)));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 2);
 
-        bloc.add(AddTab(nested));
-        await bloc.stream.firstWhere((s) => s.tabs.length == 1);
+      bloc.add(const DisableSideBySideMode(1));
+      await bloc.stream.firstWhere((s) => s.tabs.length == 3);
 
-        bloc.add(const DisableSideBySideMode(0));
-        await bloc.stream.firstWhere((s) => s.tabs.length == 3);
+      expect(bloc.state.tabs, [same(before), same(right), same(left)]);
 
-        expect(bloc.state.tabs, [same(outer), same(innerA), same(innerB)]);
-
-        await _closeBlocAndAllowDeferredDispose(bloc);
-      },
-    );
+      await _closeBlocAndAllowDeferredDispose(bloc);
+    });
   });
 
   group('TabsBloc open or focus', () {

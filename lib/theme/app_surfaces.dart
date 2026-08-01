@@ -88,6 +88,34 @@ class AppSurfaces {
   static Color paneDropPreviewBorder(ColorScheme cs) =>
       cs.primary.withValues(alpha: 0.7);
 
+  /// רקע כרטיס החלונית בטאב מפוצל — אותו רקע קריאה, בתוך מסגרת מעוגלת.
+  static Color paneCard(BuildContext context) => readerBackground(context);
+
+  /// הרווח שבין כרטיסי החלוניות. גוון אחד כהה/בהיר מרקע הקריאה, כדי
+  /// שההפרדה תיראה בלי קו מפריד — ובלי להתנגש בצבע הקריאה שהמשתמש בחר.
+  static Color paneGutter(BuildContext context) {
+    final cs = _cs(context);
+    return Color.alphaBlend(
+      (cs.isDark ? cs.onSurface : cs.shadow).withValues(alpha: 0.07),
+      readerBackground(context),
+    );
+  }
+
+  /// מסגרת כרטיס החלונית. החלונית הפעילה מסומנת בקו דק בצבע הראשי, והשאר
+  /// נשענות על הרווח שביניהן בלבד.
+  static Color paneCardBorder(ColorScheme cs, {required bool isActive}) =>
+      isActive
+      ? cs.primary.withValues(alpha: 0.55)
+      : cs.outlineVariant.withValues(alpha: 0.35);
+
+  /// צל כרטיס החלונית — מרים אותה מעל הרקע בלי קו מפריד.
+  static Color paneCardShadow(ColorScheme cs, {required bool isActive}) =>
+      cs.shadow.withValues(alpha: isActive ? 0.16 : 0.08);
+
+  /// ידית המפריד בין חלוניות — נראית רק בהצבעה, בגרירה או בפוקוס.
+  static Color paneDividerHandle(ColorScheme cs, {required bool isActive}) =>
+      isActive ? cs.primary : Colors.transparent;
+
   /// רקע רצועת [PanelOpenHandle] — מתפוגג מעט במצב רגיל, אטום יותר ב-hover.
   static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
       cs.surfaceContainerHighest.withValues(alpha: isHovering ? 0.95 : 0.8);

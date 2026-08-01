@@ -74,7 +74,6 @@ abstract class OpenedTab {
       return CombinedTab(
         rightTab: OpenedTab.from(tab.rightTab),
         leftTab: OpenedTab.from(tab.leftTab),
-        axis: tab.axis,
         splitRatio: tab.splitRatio,
         isPinned: tab.isPinned,
       );
@@ -157,7 +156,7 @@ abstract class OpenedTab {
     } else if (type == 'PdfBookTab') {
       return PdfBookTab.fromJson(json);
     } else if (type == 'CombinedTab') {
-      return CombinedTab.fromJson(json);
+      return decodeCombinedTab(json);
     } else if (type == 'ToolTab') {
       return ToolTab.fromJson(json);
     } else if (type == 'SearchingTabWindow' || type == 'SearchingTab') {

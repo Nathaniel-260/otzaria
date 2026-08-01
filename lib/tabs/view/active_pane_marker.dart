@@ -8,6 +8,9 @@ import 'package:otzaria/tabs/models/tab.dart';
 ///
 /// [HitTestBehavior.translucent] כדי שהתוכן עצמו יקבל את הלחיצה כרגיל — הסימון
 /// הוא תופעת לוואי של הלחיצה ולא במקומה.
+///
+/// ה-[Listener] נשאר בעץ גם כשאין מה לסמן, ורק המאזין מתנטרל: החלפתו בילד
+/// עצמו הייתה משנה את סוג הווידג'ט בפיצול ובפירוק, ובונה מחדש את הספר.
 class ActivePaneMarker extends StatelessWidget {
   /// החלונית שהמסמן עוטף.
   final OpenedTab pane;
@@ -26,10 +29,11 @@ class ActivePaneMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!enabled) return child;
     return Listener(
       behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) => context.read<TabsBloc>().add(SetActivePane(pane)),
+      onPointerDown: enabled
+          ? (_) => context.read<TabsBloc>().add(SetActivePane(pane))
+          : null,
       child: child,
     );
   }

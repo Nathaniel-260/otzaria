@@ -1,4 +1,4 @@
-import 'package:otzaria/tabs/models/pane_tree.dart';
+import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 

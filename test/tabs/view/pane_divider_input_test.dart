@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/split_pane_view.dart';
 
@@ -17,9 +16,6 @@ Finder _dividerWithLabel(String label) => find.byWidgetPredicate(
   (widget) => widget is Semantics && widget.properties.label == label,
 );
 
-final Finder _verticalDivider = _dividerWithLabel(
-  'מפריד בין חלוניות — גרירה או חצים למעלה ולמטה, Home לאיפוס',
-);
 final Finder _horizontalDivider = _dividerWithLabel(
   'מפריד בין חלוניות — גרירה או חצים לצדדים, Home לאיפוס',
 );
@@ -28,7 +24,7 @@ final Finder _horizontalDivider = _dividerWithLabel(
 void main() {
   Widget host(
     OpenedTab root, {
-    void Function(PanePath, double)? onRatioChanged,
+    ValueChanged<double>? onRatioChanged,
     TargetPlatform platform = TargetPlatform.windows,
     TextDirection textDirection = TextDirection.rtl,
   }) {
@@ -39,8 +35,8 @@ void main() {
         child: Scaffold(
           body: SplitPaneView(
             root: root,
-            paneBuilder: (pane, path) => Text(pane.title),
-            onRatioChanged: onRatioChanged ?? (_, _) {},
+            paneBuilder: (pane) => Text(pane.title),
+            onRatioChanged: onRatioChanged ?? (_) {},
           ),
         ),
       ),
@@ -50,13 +46,6 @@ void main() {
   CombinedTab horizontal({double ratio = 0.5}) => CombinedTab(
     rightTab: _LeafTab('ימין'),
     leftTab: _LeafTab('שמאל'),
-    splitRatio: ratio,
-  );
-
-  CombinedTab vertical({double ratio = 0.5}) => CombinedTab(
-    rightTab: _LeafTab('עליון'),
-    leftTab: _LeafTab('תחתון'),
-    axis: SplitAxis.vertical,
     splitRatio: ratio,
   );
 
@@ -82,7 +71,7 @@ void main() {
       final root = horizontal();
       double? reported;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported = ratio),
+        host(root, onRatioChanged: (ratio) => reported = ratio),
       );
       final widthBefore = tester.getSize(find.text('ימין')).width;
 
@@ -97,7 +86,7 @@ void main() {
       final root = horizontal();
       double? reported;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported = ratio),
+        host(root, onRatioChanged: (ratio) => reported = ratio),
       );
 
       await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.arrowRight);
@@ -111,7 +100,7 @@ void main() {
       await tester.pumpWidget(
         host(
           root,
-          onRatioChanged: (_, ratio) => reported = ratio,
+          onRatioChanged: (ratio) => reported = ratio,
           textDirection: TextDirection.ltr,
         ),
       );
@@ -121,28 +110,13 @@ void main() {
       expect(reported, lessThan(0.5));
     });
 
-    testWidgets('חצים אנכיים מזיזים מפריד אנכי', (tester) async {
-      final root = vertical();
-      final reported = <double>[];
-      await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported.add(ratio)),
-      );
-
-      await pressKey(tester, _verticalDivider, LogicalKeyboardKey.arrowDown);
-      expect(reported.last, greaterThan(0.5));
-
-      await pressKey(tester, _verticalDivider, LogicalKeyboardKey.arrowUp);
-      expect(reported.last, closeTo(0.5, 0.001));
-    });
-
-    testWidgets('חץ אופקי אינו מזיז מפריד אנכי', (tester) async {
-      final root = vertical();
+    testWidgets('חצים אנכיים אינם מזיזים את המפריד', (tester) async {
+      final root = horizontal();
       var reports = 0;
-      await tester.pumpWidget(
-        host(root, onRatioChanged: (_, _) => reports++),
-      );
+      await tester.pumpWidget(host(root, onRatioChanged: (_) => reports++));
 
-      await pressKey(tester, _verticalDivider, LogicalKeyboardKey.arrowLeft);
+      await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.arrowUp);
+      await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.arrowDown);
 
       expect(reports, 0);
       expect(root.splitRatio, 0.5);
@@ -152,7 +126,7 @@ void main() {
       final root = horizontal(ratio: 0.8);
       double? reported;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported = ratio),
+        host(root, onRatioChanged: (ratio) => reported = ratio),
       );
 
       await pressKey(tester, _horizontalDivider, LogicalKeyboardKey.home);
@@ -164,7 +138,7 @@ void main() {
       final root = horizontal();
       final reported = <double>[];
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported.add(ratio)),
+        host(root, onRatioChanged: (ratio) => reported.add(ratio)),
       );
 
       for (var i = 0; i < 60; i++) {
@@ -237,21 +211,19 @@ void main() {
 
   group('מקשי צירוף וקיצורים', () {
     testWidgets('Alt+חץ אינו נלקח בידי המפריד', (tester) async {
-      final root = vertical();
+      final root = horizontal();
       var reports = 0;
-      await tester.pumpWidget(
-        host(root, onRatioChanged: (_, _) => reports++),
-      );
+      await tester.pumpWidget(host(root, onRatioChanged: (_) => reports++));
 
       final focus = find
-          .ancestor(of: _verticalDivider, matching: find.byType(Focus))
+          .ancestor(of: _horizontalDivider, matching: find.byType(Focus))
           .first;
       tester.widget<Focus>(focus).focusNode!.requestFocus();
       await tester.pump();
 
       // Alt+חץ הוא קיצור מסך ("הקטע הבא"); המפריד חייב להעביר אותו הלאה.
       await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
       await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
       await tester.pump(const Duration(milliseconds: 300));
 
@@ -263,7 +235,7 @@ void main() {
       final root = horizontal(ratio: 0.8);
       var reports = 0;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, _) => reports++),
+        host(root, onRatioChanged: (_) => reports++),
       );
 
       final focus = find
@@ -285,7 +257,7 @@ void main() {
       final root = horizontal();
       var saves = 0;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, _) => saves++),
+        host(root, onRatioChanged: (_) => saves++),
       );
 
       final focus = find
@@ -310,7 +282,7 @@ void main() {
       final root = horizontal();
       var saves = 0;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, _) => saves++),
+        host(root, onRatioChanged: (_) => saves++),
       );
 
       // הגעה לקצה, ואז הקשות נוספות שאינן מזיזות דבר.
@@ -337,7 +309,7 @@ void main() {
       await tester.pumpWidget(
         host(
           root,
-          onRatioChanged: (_, ratio) => reported = ratio,
+          onRatioChanged: (ratio) => reported = ratio,
           platform: TargetPlatform.android,
         ),
       );
@@ -354,7 +326,7 @@ void main() {
       final root = horizontal(ratio: 0.75);
       double? reported;
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported = ratio),
+        host(root, onRatioChanged: (ratio) => reported = ratio),
       );
 
       // היסוס על הרצועה לפני גרירה: מזהה לחיצה ארוכה היה זוכה בזירה, מאפס
@@ -392,7 +364,7 @@ void main() {
       final root = horizontal();
       final reported = <double>[];
       await tester.pumpWidget(
-        host(root, onRatioChanged: (_, ratio) => reported.add(ratio)),
+        host(root, onRatioChanged: (ratio) => reported.add(ratio)),
       );
 
       tester.widget<Semantics>(_horizontalDivider).properties.onIncrease!();

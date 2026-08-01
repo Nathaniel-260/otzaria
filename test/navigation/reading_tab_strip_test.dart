@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/tabs/view/pane_drop_geometry.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
 
 class _StubTab extends OpenedTab {
@@ -18,6 +18,7 @@ class _StripLog {
   int? newIndex;
   int moves = 0;
   int dragStarts = 0;
+  final List<OpenedTab> springOpened = [];
 
   void reorder(OpenedTab tab, int index) {
     movedTab = tab;
@@ -35,7 +36,7 @@ void main() {
   Widget host({
     required _StripLog log,
     required List<OpenedTab> tabs,
-    void Function(PaneDragData, PanePath, PaneDropPosition)? onPaneDrop,
+    void Function(OpenedTab, PaneDropSide)? onPaneDrop,
     TextDirection textDirection = TextDirection.rtl,
     bool requireLongPress = false,
     // רוחב הרצועה. ברירת המחדל צמודה לכרטיסיות, אך במסך אמיתי היא רחבה
@@ -58,6 +59,7 @@ void main() {
                   requireLongPressToDrag: requireLongPress,
                   onReorder: log.reorder,
                   onDragStarted: () => log.dragStarts++,
+                  onSpringOpen: log.springOpened.add,
                   tabBuilder: (tab, index, width) => SizedBox(
                     width: width,
                     child: ColoredBox(
@@ -70,9 +72,8 @@ void main() {
               Expanded(
                 child: PaneDropTarget(
                   key: paneKey,
-                  path: const [],
-                  pane: _StubTab('מוצג'),
-                  onDrop: onPaneDrop ?? (_, _, _) {},
+                  tab: _StubTab('מוצג'),
+                  onDrop: onPaneDrop ?? (_, _) {},
                   child: const ColoredBox(
                     color: Color(0xFFEEEEEE),
                     child: SizedBox.expand(),
@@ -101,6 +102,127 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
   }
+
+  /// השהיית גרירה מעל [over], בלי לשחרר. מחזירה את המחווה כדי להמשיך אותה.
+  ///
+  /// היעדים נמדדים לפני תחילת הגרירה: משעה שהיא רצה, טקסט הכרטיסיה מופיע
+  /// פעמיים — במקומה המקורי ובמשוב הנגרר.
+  Future<TestGesture> hoverDrag(
+    WidgetTester tester,
+    String from,
+    String over, {
+    required Duration dwell,
+  }) async {
+    final start = tester.getCenter(find.text(from));
+    final target = tester.getCenter(find.text(over));
+    final gesture = await tester.startGesture(start);
+    await tester.pump(const Duration(milliseconds: 20));
+    await gesture.moveTo(target);
+    await tester.pump(dwell);
+    return gesture;
+  }
+
+  group('פתיחת כרטיסיה בהשהיית גרירה', () {
+    testWidgets('השהייה מעל כרטיסיה אחרת פותחת אותה', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(host(log: log, tabs: tabs));
+
+      final gesture = await hoverDrag(
+        tester,
+        'א',
+        'ג',
+        dwell: kTabSpringOpenDelay + const Duration(milliseconds: 20),
+      );
+
+      expect(log.springOpened, [same(tabs[2])]);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('מעבר חטוף מעל כרטיסיה אינו פותח אותה', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(host(log: log, tabs: tabs));
+
+      // חוצים את 'ב' בדרך אל 'ג' — פחות מזמן ההשהיה בכל אחת מהן.
+      final thirdTabCenter = tester.getCenter(find.text('ג'));
+      final gesture = await hoverDrag(
+        tester,
+        'א',
+        'ב',
+        dwell: const Duration(milliseconds: 80),
+      );
+      await gesture.moveTo(thirdTabCenter);
+      await tester.pump(const Duration(milliseconds: 80));
+
+      expect(log.springOpened, isEmpty);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('השהייה מעל הכרטיסיה הנגררת עצמה אינה פותחת דבר', (
+      tester,
+    ) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(host(log: log, tabs: tabs));
+
+      final gesture = await hoverDrag(
+        tester,
+        'ב',
+        'ב',
+        dwell: kTabSpringOpenDelay + const Duration(milliseconds: 20),
+      );
+
+      expect(log.springOpened, isEmpty);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('יציאה מהרצועה לפני תום ההשהיה מבטלת את הפתיחה', (
+      tester,
+    ) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(host(log: log, tabs: tabs));
+
+      final gesture = await hoverDrag(
+        tester,
+        'א',
+        'ג',
+        dwell: const Duration(milliseconds: 80),
+      );
+      await gesture.moveTo(tester.getCenter(find.byKey(paneKey)));
+      await tester.pump(kTabSpringOpenDelay + const Duration(milliseconds: 20));
+
+      expect(log.springOpened, isEmpty);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('השהייה ארוכה פותחת פעם אחת בלבד', (tester) async {
+      final log = _StripLog();
+      final tabs = [_StubTab('א'), _StubTab('ב'), _StubTab('ג')];
+      await tester.pumpWidget(host(log: log, tabs: tabs));
+
+      final gesture = await hoverDrag(
+        tester,
+        'א',
+        'ג',
+        dwell: kTabSpringOpenDelay * 4,
+      );
+
+      expect(log.springOpened, hasLength(1));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+    });
+  });
 
   group('סידור מחדש', () {
     testWidgets('גרירה שמאלה ב-RTL מזיזה את הכרטיסיה קדימה ברשימה', (
@@ -237,31 +359,26 @@ void main() {
     testWidgets('שחרור מעל אזור הקריאה מפצל ואינו מסדר מחדש', (tester) async {
       final log = _StripLog();
       final tabs = [_StubTab('א'), _StubTab('ב')];
-      PaneDragData? dropped;
-      PaneDropPosition? position;
+      OpenedTab? dropped;
+      PaneDropSide? side;
 
       await tester.pumpWidget(
         host(
           log: log,
           tabs: tabs,
-          onPaneDrop: (data, path, pos) {
-            dropped = data;
-            position = pos;
+          onPaneDrop: (tab, droppedSide) {
+            dropped = tab;
+            side = droppedSide;
           },
         ),
       );
 
+      // ב-RTL החצי השמאלי הוא החלונית השנייה.
       final pane = tester.getRect(find.byKey(paneKey));
-      await dragFrom(tester, 'א', Offset(pane.center.dx, pane.bottom - 8));
+      await dragFrom(tester, 'א', Offset(pane.left + 8, pane.center.dy));
 
-      expect(dropped, isNotNull, reason: 'ההפלה הגיעה אל חלונית הקריאה');
-      expect(dropped!.tab, same(tabs[0]));
-      expect(
-        dropped!.sourcePath,
-        isNull,
-        reason: 'כרטיסיה מהרצועה מגיעה בלי נתיב מקור',
-      );
-      expect(position, PaneDropPosition.bottom);
+      expect(dropped, same(tabs[0]), reason: 'ההפלה הגיעה אל אזור הקריאה');
+      expect(side, PaneDropSide.end);
       expect(log.moves, 0, reason: 'שחרור מחוץ לרצועה אינו מסדר מחדש');
     });
 
@@ -285,10 +402,10 @@ void main() {
       );
 
       expect(
-        find.byWidgetPredicate((w) => w.runtimeType == Draggable<PaneDragData>),
+        find.byWidgetPredicate((w) => w.runtimeType == Draggable<OpenedTab>),
         findsOneWidget,
       );
-      expect(find.byType(LongPressDraggable<PaneDragData>), findsNothing);
+      expect(find.byType(LongPressDraggable<OpenedTab>), findsNothing);
     });
 
     testWidgets('במגע נדרשת לחיצה ארוכה', (tester) async {
@@ -297,7 +414,7 @@ void main() {
         host(log: log, tabs: [_StubTab('א')], requireLongPress: true),
       );
 
-      expect(find.byType(LongPressDraggable<PaneDragData>), findsOneWidget);
+      expect(find.byType(LongPressDraggable<OpenedTab>), findsOneWidget);
     });
   });
 

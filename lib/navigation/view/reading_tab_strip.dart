@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/view/pane_drop_target.dart';
@@ -5,14 +7,20 @@ import 'package:otzaria/tabs/view/pane_drop_target.dart';
 /// עובי קו החיווי שמסמן היכן הכרטיסיה הנגררת תיכנס.
 const double _kInsertLineWidth = 3;
 
+/// כמה זמן להתעכב מעל כרטיסיה בזמן גרירה עד שהיא נפתחת.
+///
+/// קצר מדי — כל מעבר מעל כרטיסיה בדרך לאזור הקריאה היה מחליף ספר; ארוך מדי
+/// והמחווה מרגישה תקועה.
+const Duration kTabSpringOpenDelay = Duration(milliseconds: 400);
+
 /// שקיפות הכרטיסיה במקומה המקורי בזמן שגוררים אותה.
 const double _kDraggingTabOpacity = 0.35;
 
 /// רצועת כרטיסיות העיון.
 ///
-/// כל כרטיסיה היא [Draggable] של [PaneDragData], ולכן אותה מחווה משרתת שני
-/// יעדים: שחרור בתוך הרצועה מסדר מחדש, ושחרור מעל אזור הקריאה מפצל שם
-/// חלונית — כי אותו מטען מתקבל גם ב-[PaneDropTarget] שבמסך הקריאה.
+/// כל כרטיסיה היא [Draggable] של הטאב עצמו, ולכן אותה מחווה משרתת שני
+/// יעדים: שחרור בתוך הרצועה מסדר מחדש, ושחרור מעל אזור הקריאה מפצל אותו
+/// לשתיים — כי אותו מטען מתקבל גם ב-[PaneDropTarget] שבמסך הקריאה.
 ///
 /// זו הסיבה שהרצועה אינה [ReorderableListView]: הוא בולע את המחווה ואין לו
 /// דרך לדעת שהמצביע יצא מגבולותיו.
@@ -36,6 +44,10 @@ class ReadingTabStrip extends StatefulWidget {
   /// נקרא כשמתחילה גרירת כרטיסיה.
   final VoidCallback? onDragStarted;
 
+  /// נקרא כשגרירה משתהה מעל כרטיסיה — היא נפתחת, וכך אפשר להמשיך ולשחרר
+  /// את הנגררת לצדה באזור הקריאה בלי לוותר על הגרירה.
+  final void Function(OpenedTab tab)? onSpringOpen;
+
   const ReadingTabStrip({
     super.key,
     required this.tabs,
@@ -43,6 +55,7 @@ class ReadingTabStrip extends StatefulWidget {
     required this.tabBuilder,
     required this.onReorder,
     this.onDragStarted,
+    this.onSpringOpen,
     this.requireLongPressToDrag = false,
   });
 
@@ -53,6 +66,16 @@ class ReadingTabStrip extends StatefulWidget {
 class _ReadingTabStripState extends State<ReadingTabStrip> {
   /// מיקום ההכנסה הנוכחי בטווח `0..tabs.length`, או `null` כשאין גרירה מעל.
   int? _insertIndex;
+
+  /// הכרטיסיה שהגרירה משתהה מעליה, והשעון שיפתח אותה.
+  OpenedTab? _springTarget;
+  Timer? _springTimer;
+
+  @override
+  void dispose() {
+    _springTimer?.cancel();
+    super.dispose();
+  }
 
   /// שורת הכרטיסיות עצמה. הרצועה נמתחת על כל הרוחב הפנוי, ולכן מדידה מול
   /// גבולותיה הייתה מוסיפה את השטח הריק — וב-RTL, שבו הכרטיסיות צמודות
@@ -95,25 +118,67 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
     return (edge - _kInsertLineWidth / 2).clamp(0.0, maxLeft);
   }
 
-  void _updateInsertIndex(Offset globalOffset) {
+  /// הכרטיסיה שמתחת ל-[localDx], או `null` מחוץ לשורה.
+  ///
+  /// שונה מ-[_insertIndexFor], שמחזיר גבול בין כרטיסיות ולא כרטיסיה.
+  OpenedTab? _tabAt(double localDx) {
+    final total = _stripWidth;
+    final flowX = _isRtl ? total - localDx : localDx;
+    if (flowX < 0 || flowX >= total) return null;
+
+    var accumulated = 0.0;
+    for (var i = 0; i < widget.widths.length; i++) {
+      accumulated += widget.widths[i];
+      if (flowX < accumulated) return widget.tabs[i];
+    }
+    return null;
+  }
+
+  /// מזניק את שעון הפתיחה כשהגרירה עברה לכרטיסיה אחרת, ומאפס אותו כשהיא
+  /// יצאה מהשורה. השהייה על אותה כרטיסיה ממשיכה את השעון הקיים.
+  void _updateSpringTarget(OpenedTab dragged, OpenedTab? hovered) {
+    if (hovered == null || identical(hovered, dragged)) {
+      _cancelSpring();
+      return;
+    }
+    if (identical(hovered, _springTarget)) return;
+
+    _cancelSpring();
+    _springTarget = hovered;
+    _springTimer = Timer(kTabSpringOpenDelay, () {
+      _springTimer = null;
+      widget.onSpringOpen?.call(hovered);
+    });
+  }
+
+  void _cancelSpring() {
+    _springTimer?.cancel();
+    _springTimer = null;
+    _springTarget = null;
+  }
+
+  void _updateDragPosition(OpenedTab dragged, Offset globalOffset) {
     final box = _contentKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return;
 
-    final next = _insertIndexFor(box.globalToLocal(globalOffset).dx);
+    final localDx = box.globalToLocal(globalOffset).dx;
+    _updateSpringTarget(dragged, _tabAt(localDx));
+
+    // setState רק כשהיעד באמת זז: onMove יורה בכל תזוזת מצביע.
+    final next = _insertIndexFor(localDx);
     if (next != _insertIndex) setState(() => _insertIndex = next);
   }
 
-  /// רק כרטיסיות מרצועה זו מסדרות אותה מחדש; חלונית שנגררת מתוך טאב מפוצל
-  /// (בעלת `sourcePath`) אינה יעד לסידור.
-  bool _accepts(PaneDragData data) =>
-      data.sourcePath == null && widget.tabs.contains(data.tab);
+  /// רק כרטיסיה שנמצאת ברצועה הזו מסדרת אותה מחדש.
+  bool _accepts(OpenedTab tab) => widget.tabs.contains(tab);
 
-  void _completeReorder(PaneDragData data) {
+  void _completeReorder(OpenedTab tab) {
     final insertIndex = _insertIndex;
+    _cancelSpring();
     setState(() => _insertIndex = null);
     if (insertIndex == null) return;
 
-    final oldIndex = widget.tabs.indexOf(data.tab);
+    final oldIndex = widget.tabs.indexOf(tab);
     if (oldIndex == -1) return;
 
     // תיאום לקונבנציית הסרה-ואז-הכנסה: אחרי הסרת הכרטיסיה כל מיקום שאחריה
@@ -121,21 +186,24 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
     final target = insertIndex > oldIndex ? insertIndex - 1 : insertIndex;
     if (target == oldIndex) return;
 
-    widget.onReorder(data.tab, target);
+    widget.onReorder(tab, target);
   }
 
   @override
   Widget build(BuildContext context) {
-    return DragTarget<PaneDragData>(
+    return DragTarget<OpenedTab>(
       onWillAcceptWithDetails: (details) {
         if (!_accepts(details.data)) return false;
-        _updateInsertIndex(details.offset);
+        _updateDragPosition(details.data, details.offset);
         return true;
       },
       onMove: (details) {
-        if (_accepts(details.data)) _updateInsertIndex(details.offset);
+        if (_accepts(details.data)) {
+          _updateDragPosition(details.data, details.offset);
+        }
       },
       onLeave: (_) {
+        _cancelSpring();
         if (_insertIndex != null) setState(() => _insertIndex = null);
       },
       onAcceptWithDetails: (details) => _completeReorder(details.data),
@@ -169,6 +237,7 @@ class _ReadingTabStripState extends State<ReadingTabStrip> {
                         // גרירה שהסתיימה מחוץ לרצועה אינה מפעילה onLeave,
                         // ולכן קו החיווי מנוקה גם כאן.
                         onDragFinished: () {
+                          _cancelSpring();
                           if (_insertIndex != null) {
                             setState(() => _insertIndex = null);
                           }
@@ -213,15 +282,14 @@ class _DraggableTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final data = PaneDragData(tab: tab);
     // הכרטיסיה נשארת במקומה מעומעמת ולא נעלמת: היעלמותה הייתה משנה את חלוקת
     // הרוחבים באמצע הגרירה ומזיזה את שאר הכרטיסיות תחת הסמן.
     final placeholder = Opacity(opacity: _kDraggingTabOpacity, child: child);
     final feedback = _TabDragFeedback(width: width, child: child);
 
     if (requireLongPress) {
-      return LongPressDraggable<PaneDragData>(
-        data: data,
+      return LongPressDraggable<OpenedTab>(
+        data: tab,
         dragAnchorStrategy: pointerDragAnchorStrategy,
         feedback: feedback,
         childWhenDragging: placeholder,
@@ -232,8 +300,8 @@ class _DraggableTab extends StatelessWidget {
       );
     }
 
-    return Draggable<PaneDragData>(
-      data: data,
+    return Draggable<OpenedTab>(
+      data: tab,
       // חובה: ה-offset שמקבלים יעדי ההפלה הוא פינת ה-feedback, ולכן עוגן
       // ברירת המחדל מסיט את אזור ההפלה בכחצי רוחב כרטיסיה.
       dragAnchorStrategy: pointerDragAnchorStrategy,

@@ -24,7 +24,7 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
-import 'package:otzaria/tabs/view/pane_drop_target.dart';
+import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
@@ -502,61 +502,7 @@ void main() {
       expect(moves.last.newIndex, 0, reason: 'היעד הוא אינדקס 0');
     });
 
-    testWidgets('תחילת גרירה מחזירה את התצוגה לכרטיסיה שהייתה פעילה', (
-      tester,
-    ) async {
-      final first = _makeTextTab('ספר א');
-      final second = _makeTextTab('ספר ב');
-      // bloc שמעדכן state ב-SetCurrentTab: השחזור מותנה בכך שהבחירה אכן
-      // החליפה את הכרטיסיה המוצגת.
-      final tabsBloc = _SelectingTabsBloc(
-        TabsState(tabs: [first, second], currentTabIndex: 0),
-      );
-      final navigationBloc = _TestNavigationBloc(
-        const NavigationState(currentScreen: Screen.reading),
-      );
-      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
-
-      addTearDown(() async {
-        first.dispose();
-        second.dispose();
-        await tabsBloc.close();
-        await navigationBloc.close();
-        await settingsBloc.close();
-      });
-
-      await _setSurfaceSize(tester, const Size(1200, 800));
-      await _pumpTitleBar(
-        tester,
-        tabsBloc: tabsBloc,
-        navigationBloc: navigationBloc,
-        settingsBloc: settingsBloc,
-      );
-      await tester.pumpAndSettle();
-
-      // לחיצה על 'ספר ב' בוחרת אותו מיד (כמו כרום), כך שהמסך מציג אותו.
-      await tester.tap(find.text('ספר ב'), warnIfMissed: false);
-      await tester.pumpAndSettle();
-      expect(tabsBloc.state.currentTabIndex, 1);
-
-      final strip = tester.widget<ReadingTabStrip>(
-        find.byType(ReadingTabStrip),
-      );
-      strip.onDragStarted!();
-      await tester.pump();
-
-      // בלי השחזור, הכרטיסיה הנגררת הייתה גם הכרטיסיה המוצגת — וגרירתה אל
-      // אזור הקריאה הייתה מפילה אותה על עצמה, פעולה ריקה.
-      expect(
-        tabsBloc.addedEvents.whereType<SetCurrentTab>().last.index,
-        0,
-        reason: 'תחילת גרירה מחזירה את התצוגה לכרטיסיה הקודמת',
-      );
-    });
-
-    testWidgets('גרירה שמתחילה לפני ה-rebuild עדיין מחזירה את התצוגה', (
-      tester,
-    ) async {
+    testWidgets('גרירת כרטיסיה אינה מעבירה את התצוגה אליה', (tester) async {
       final first = _makeTextTab('ספר א');
       final second = _makeTextTab('ספר ב');
       final tabsBloc = _SelectingTabsBloc(
@@ -584,25 +530,107 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final strip = tester.widget<ReadingTabStrip>(
-        find.byType(ReadingTabStrip),
+      // לחיצה ממושכת שהופכת לגרירה: הבחירה נשמרת לשחרור, והגרירה מבטלת
+      // אותה — אחרת התצוגה הייתה קופצת לכרטיסיה שרק מתחילים לגרור.
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('ספר ב')),
       );
-
-      // בעכבר הגרירה מתחילה אחרי פיקסל אחד — לרוב לפני הפריים שמרנדר את
-      // הבחירה. בלי קריאה טרייה מה-bloc השחזור נדלג והפיצול נכשל בשקט.
-      await tester.tap(find.text('ספר ב'), warnIfMissed: false);
-      expect(tabsBloc.state.currentTabIndex, 1);
-      strip.onDragStarted!();
       await tester.pump();
+      tester
+          .widget<ReadingTabStrip>(find.byType(ReadingTabStrip))
+          .onDragStarted!();
+      await gesture.up();
+      await tester.pumpAndSettle();
 
       expect(
-        tabsBloc.addedEvents.whereType<SetCurrentTab>().last.index,
-        0,
-        reason: 'הרצועה קראה את המצב מה-bloc ולא מ-state שנתפס ב-build',
+        tabsBloc.addedEvents.whereType<SetCurrentTab>(),
+        isEmpty,
+        reason: 'גרירה אינה בוחרת כרטיסיה',
       );
+      expect(tabsBloc.state.currentTabIndex, 0);
     });
 
-    testWidgets('סידור מחדש משאיר את הכרטיסיה שנגררה פעילה', (tester) async {
+    testWidgets('לחיצה בוחרת כרטיסיה בשחרור', (tester) async {
+      final first = _makeTextTab('ספר א');
+      final second = _makeTextTab('ספר ב');
+      final tabsBloc = _SelectingTabsBloc(
+        TabsState(tabs: [first, second], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        first.dispose();
+        second.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('ספר ב')),
+      );
+      await tester.pump();
+      expect(
+        tabsBloc.addedEvents.whereType<SetCurrentTab>(),
+        isEmpty,
+        reason: 'הלחיצה עצמה עדיין לא בוחרת',
+      );
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      expect(tabsBloc.state.currentTabIndex, 1);
+    });
+
+    testWidgets('השהייה מעל כרטיסיה בגרירה פותחת אותה', (tester) async {
+      final first = _makeTextTab('ספר א');
+      final second = _makeTextTab('ספר ב');
+      final tabsBloc = _SelectingTabsBloc(
+        TabsState(tabs: [first, second], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        first.dispose();
+        second.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+
+      tester
+          .widget<ReadingTabStrip>(find.byType(ReadingTabStrip))
+          .onSpringOpen!(second);
+      await tester.pumpAndSettle();
+
+      expect(tabsBloc.state.currentTabIndex, 1);
+    });
+
+    testWidgets('סידור מחדש אינו מחליף את הכרטיסיה הפעילה', (tester) async {
       final first = _makeTextTab('ספר א');
       final second = _makeTextTab('ספר ב');
       final tabsBloc = _SelectingTabsBloc(
@@ -637,14 +665,9 @@ void main() {
       await tester.pump();
 
       final events = tabsBloc.addedEvents;
-      final moveIndex = events.indexWhere((e) => e is MoveTab);
-      expect(moveIndex, isNot(-1));
-      // בלי זה השחזור שבתחילת הגרירה היה משאיר את התצוגה על הספר הקודם.
-      expect(
-        events.skip(moveIndex).whereType<SetCurrentTab>().first.index,
-        0,
-        reason: 'אחרי הסידור הכרטיסיה שנגררה חוזרת להיות הפעילה',
-      );
+      expect(events.whereType<MoveTab>(), isNotEmpty);
+      // סידור מחדש הוא גרירה, וגרירה אינה מחליפה את הספר שקוראים בו.
+      expect(events.whereType<SetCurrentTab>(), isEmpty);
     });
 
     testWidgets(
@@ -678,12 +701,12 @@ void main() {
         // בדיוק: בדסקטופ הגרירה מיידית, ללא השהיית לחיצה ארוכה.
         expect(
           find.byWidgetPredicate(
-            (w) => w.runtimeType == Draggable<PaneDragData>,
+            (w) => w.runtimeType == Draggable<OpenedTab>,
           ),
           findsOneWidget,
         );
         expect(
-          find.byType(LongPressDraggable<PaneDragData>),
+          find.byType(LongPressDraggable<OpenedTab>),
           findsNothing,
         );
       },
@@ -718,7 +741,7 @@ void main() {
         );
 
         expect(
-          find.byType(LongPressDraggable<PaneDragData>),
+          find.byType(LongPressDraggable<OpenedTab>),
           findsOneWidget,
         );
       },

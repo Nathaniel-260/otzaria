@@ -1,6 +1,5 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
-import 'package:otzaria/tabs/models/pane_tree.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 
@@ -133,12 +132,12 @@ class TabsState extends Equatable {
     if (tabs.isEmpty) return null;
     if (currentTabIndex < 0 || currentTabIndex >= tabs.length) return null;
     final tab = tabs[currentTabIndex];
+    final panes = leafPanes(tab);
     if (rawActivePane != null &&
-        rawActivePane is! CombinedTab &&
-        pathOfPane(tab, rawActivePane) != null) {
+        panes.any((pane) => identical(pane, rawActivePane))) {
       return rawActivePane;
     }
-    return leafPanes(tab).first;
+    return panes.first;
   }
 
   static OpenedTab? _resolveLastReadingPane({
@@ -183,14 +182,6 @@ class TabsState extends Equatable {
     final pane = activePane;
     if (_isReadingPane(pane)) return pane;
     return lastReadingPane;
-  }
-
-  /// נתיב החלונית הפעילה בטאב הנוכחי.
-  PanePath get activePanePath {
-    final tab = currentTab;
-    final pane = activePane;
-    if (tab == null || pane == null) return const [];
-    return pathOfPane(tab, pane) ?? const [];
   }
 
   /// הקבוצה שסגירת הכרטיסיה הנוכחית סוגרת: הבחירה המרובה כשהכרטיסיה

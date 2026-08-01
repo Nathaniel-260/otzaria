@@ -120,15 +120,20 @@ void main() {
       expect(ToolTab.visiblePluginIdsOf(_book('בראשית')), isEmpty);
     });
 
-    test('טאב מפוצל מחזיר את כל התוספים שבחלוניותיו', () {
+    test('טאב מפוצל מחזיר את התוספים שבשתי החלוניות', () {
       final split = CombinedTab(
         rightTab: _tool('com.a'),
-        leftTab: CombinedTab(
-          rightTab: _tool('com.b'),
-          leftTab: _book('בראשית'),
-        ),
+        leftTab: _tool('com.b'),
       );
       expect(ToolTab.visiblePluginIdsOf(split), {'com.a', 'com.b'});
+    });
+
+    test('חלונית ספר בטאב מפוצל אינה מוסיפה תוסף', () {
+      final split = CombinedTab(
+        rightTab: _tool('com.a'),
+        leftTab: _book('בראשית'),
+      );
+      expect(ToolTab.visiblePluginIdsOf(split), {'com.a'});
     });
 
     test('null — קבוצה ריקה', () {
