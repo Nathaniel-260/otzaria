@@ -3,12 +3,18 @@ name: "Build Windows EXE Only (no release)"
 # בנייה ידנית בלבד של Windows — בלי release ובלי announce.
 # מבצע את אותם השלבים בדיוק כמו ה-job build_windows ב-build-and-announce.yml
 # (מתקין רגיל + מתקין FULL + ZIP נייד), רק לווינדוס.
+# build_full=false מדלג על הורדת מסד הספרייה ועל מתקין ה-FULL — לבדיקה מהירה.
 
 permissions:
   contents: read
 
 on:
   workflow_dispatch:
+    inputs:
+      build_full:
+        description: 'לבנות גם מתקין FULL (מוריד את מסד הספרייה — איטי)'
+        type: boolean
+        default: true
 
 jobs:
   build_windows:
@@ -223,7 +229,7 @@ jobs:
           }
 
       - name: Download library assets for full installer
-        if: true
+        if: inputs.build_full
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -361,7 +367,7 @@ jobs:
           }
 
       - name: Download dependencies for full installer
-        if: true
+        if: inputs.build_full
         shell: pwsh
         run: |
           # הערה: vc_redist.x64.exe כבר לא נדרש למתקין FULL — ה-DLLs נארזים
@@ -375,11 +381,17 @@ jobs:
 
       - name: Build Inno Setup installer
         shell: pwsh
+        env:
+          BUILD_FULL: ${{ inputs.build_full }}
         run: |
-          Write-Host "Building FULL installer with library and VC++ Redistributable..."
-          & "$env:ISCC" installer\otzaria_full.iss
-          if ($LASTEXITCODE -ne 0) {
-            throw "FULL installer build failed"
+          if ($env:BUILD_FULL -eq 'true') {
+            Write-Host "Building FULL installer with library and VC++ Redistributable..."
+            & "$env:ISCC" installer\otzaria_full.iss
+            if ($LASTEXITCODE -ne 0) {
+              throw "FULL installer build failed"
+            }
+          } else {
+            Write-Host "Skipping FULL installer (build_full=false)"
           }
 
           # ניקוי קבצי הספרייה והחולץ לאחר בניית ה-FULL installer
@@ -423,6 +435,7 @@ jobs:
           path: installer/otzaria-*-windows.exe
 
       - name: Upload Windows installer (full)
+        if: inputs.build_full
         uses: actions/upload-artifact@v4.6.2
         with:
           name: otzaria-windows-installer-full
