@@ -40,8 +40,11 @@ jobs:
         run: |
           $clientId = '${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}'
           $clientSecret = '${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}'
+          # בנייה לבדיקה בלבד: בפורק אין secrets, וקובץ ה-placeholder שבריפו מספיק לקומפילציה.
+          # אין להחזיר כאן throw - זה שובר כל בנייה ידנית בפורק.
           if ([string]::IsNullOrWhiteSpace($clientId) -or [string]::IsNullOrWhiteSpace($clientSecret)) {
-            throw "Google Calendar secrets are missing. Please set GOOGLE_CALENDAR_CLIENT_ID and GOOGLE_CALENDAR_CLIENT_SECRET."
+            Write-Host "Google Calendar secrets missing - keeping the repo placeholder file."
+            exit 0
           }
           $credentialsContent = @"
           class GoogleCalendarCredentials {
