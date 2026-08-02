@@ -400,7 +400,7 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isTrue);
+        expect(result.didFinish, isTrue);
         // המחיקה לפי מפתח ה-filePath המדויק — הספר האישי 'שבת' (uid:9) נשאר.
         expect(engine.removedFilePaths, ['id:5']);
         expect(provider.indexedFilePaths, {
@@ -435,7 +435,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isFalse);
+      expect(result.didFinish, isFalse);
       expect(repository.indexedBooks, isNull);
       // המעקב המקומי לא השתנה — הספר עדיין מסומן וימתין לניסיון הבא.
       expect(provider.indexedFilePaths, {'id:5'});
@@ -453,7 +453,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       expect(engine.removedFilePaths, isEmpty);
       expect(repository.indexedBooks, isNull);
     });
@@ -522,7 +522,7 @@ void main() {
           fingerprintOf: (_, text) async => hashes[text]!,
         );
 
-        expect(result, isTrue);
+        expect(result.didFinish, isTrue);
         expect(
           repository.indexedBooks!.map((b) => b.title).toSet(),
           {'עירובין', 'יומא'},
@@ -553,7 +553,7 @@ void main() {
         fingerprintOf: (_, _) async => BigInt.from(7),
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       expect(repository.indexedBooks, isNull);
       expect(engine.removedFilePaths, isEmpty);
     });
@@ -580,7 +580,7 @@ void main() {
         fingerprintOf: (_, _) async => BigInt.one,
       );
 
-      expect(result, isFalse);
+      expect(result.didFinish, isFalse);
       expect(repository.indexedBooks, isNull);
     });
   });
@@ -623,7 +623,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       expect(engine.addedDocuments, isEmpty);
       expect(provider.indexedFilePaths, isEmpty);
     });
@@ -654,7 +654,7 @@ void main() {
         },
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
     });
@@ -685,9 +685,12 @@ void main() {
         onProgress: (_, _) => progressCalls++,
       );
 
-      expect(fullRun, isFalse);
-      expect(specificRun, isFalse);
-      expect(reconcileRun, isFalse);
+      // רגרסיה: שלושת המסלולים החזירו false גם כאן וגם בביטול יזום, כך
+      // שהמשתמש ראה "האינדקס לא מעודכן" בלי לדעת שהאינדקס כלל לא נפתח.
+      for (final run in [fullRun, specificRun, reconcileRun]) {
+        expect(run.reason, IndexingStopReason.blockedTempFallback);
+        expect(run.stopMessage, isNotNull);
+      }
       expect(progressCalls, 0);
       expect(engine.addedDocuments, isEmpty);
       expect(provider.isIndexing.value, isFalse);
@@ -719,7 +722,7 @@ void main() {
         },
       );
 
-      expect(result, isFalse);
+      expect(result.didFinish, isFalse);
       expect(actualIndexingStarted, isFalse);
       expect(progressCalls, 0);
     });
@@ -741,7 +744,7 @@ void main() {
         onProgress: (p, t) => calls.add((p, t, engine.addedDocuments.length)),
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       // הדיווח הראשון הוא תחילת הספר הראשון — עוד לפני שנכתב מסמך כלשהו.
       expect(calls.first, (1, 2, 0));
       expect(calls.last.$1, 2);
@@ -764,7 +767,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       // הכתיבה החלקית אכן נרשמה במנוע לפני הכשל — ורק אז נמחקה.
       expect(engine.addedDocuments.map((d) => d.title), contains('ב'));
       // רק הספר שכשל נוקה; שכנו שהצליח לא נמחק.
@@ -802,7 +805,7 @@ void main() {
           onProgress: (p, _) => events.add('progress:$p'),
         );
 
-        expect(result, isTrue);
+        expect(result.didFinish, isTrue);
         // שני ה-PDF (מיקומים 3 ו-4) נכתבו בסבב אחד, בזמן שהלולאה עוד עמדה
         // על ט2 (מיקום 2). במימוש החד-סלוטי כל כתיבה חיכתה לסבב נוסף.
         expect(events, [
@@ -848,7 +851,7 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isTrue);
+        expect(result.didFinish, isTrue);
         // המספר קשיח בכוונה: ציפייה שמתייחסת ל-defaultMaxInFlight עצמו הייתה
         // מעגלית ועוברת גם במימוש חד-סלוטי.
         expect(repository.peakConcurrentExtractions, 25);
@@ -880,7 +883,7 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
       // הכשל בחילוץ אינו כתיבה חלקית — אין מה לנקות, והשאר אונדקסו.
       expect(engine.addedPdfTitles, ['p0', 'p2', 'p3']);
       expect(provider.indexedFilePaths, isNot(contains(pdfs[1].path)));
@@ -913,7 +916,7 @@ void main() {
           onProgress: (_, _) {},
         );
 
-        expect(result, isFalse);
+        expect(result.didFinish, isFalse);
         // הריצה נעצרה מיד; שאר החילוצים נזרקו בלי להפיל את הריצה.
         expect(engine.addedPdfTitles.length, 1);
         await Future<void>.delayed(Duration.zero);
@@ -940,7 +943,14 @@ void main() {
         onProgress: (_, _) {},
       );
 
-      expect(result, isTrue);
+      expect(result.didFinish, isTrue);
+      // רגרסיה: ריצה עם כשלים נפלטה כ-IndexingComplete נקי, כך שההגדרות
+      // הציגו "האינדקס מעודכן" בעוד ספרים חסרים — והבדיקה בהפעלה הבאה
+      // הכריזה שוב "לא מעודכן". הכשל חייב לשרוד עד למשתמש.
+      expect(result.reason, IndexingStopReason.completedWithFailures);
+      expect(result.failures.single.bookTitle, 'א');
+      expect(result.failures.single.bookPath, pdf1.path);
+      expect(result.failures.single.stackTrace, isNotNull);
       // 'א' נוסה פעם אחת (בניקוז המוקדם) ולא שוב כשהלולאה הגיעה אליו.
       expect(repository.extractedTitles, ['א', 'ב']);
       expect(engine.addedPdfTitles, ['א', 'ב']);
@@ -974,7 +984,11 @@ void main() {
           onProgress: (_, _) => progressCalls++,
         );
 
-        expect(result, isFalse);
+        expect(result.didFinish, isFalse);
+        // עצירה בכשל כתיבה — ולא ביטול משתמש. שני המצבים הוצגו קודם
+        // באותה הודעה בדיוק ("האינדקס לא מעודכן").
+        expect(result.reason, IndexingStopReason.abortedOnWriteFailure);
+        expect(result.stopMessage, isNotNull);
         expect(engine.commitCount, 0);
         expect(engine.rollbackCount, 1);
         // שני הספרים שאחרי הכושל לא עובדו — הריצה נעצרה מיד אחרי הכשל.
@@ -1315,14 +1329,14 @@ class _ReindexProbeRepository extends IndexingRepository {
   List<Book>? indexedBooks;
 
   @override
-  Future<bool> indexBooks(
+  Future<IndexingResult> indexBooks(
     List<Book> books,
     Library library, {
     void Function()? onActualIndexingStarted,
     required void Function(int processed, int total) onProgress,
   }) async {
     indexedBooks = books;
-    return true;
+    return const IndexingResult(reason: IndexingStopReason.completed);
   }
 }
 
@@ -1341,7 +1355,10 @@ class _FakeExtractionRepository extends IndexingRepository {
   final failingTitles = <String>{};
 
   @override
-  Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {
+  Future<PdfExtraction> extractPdfPagesGuarded(
+    PdfBook book, {
+    void Function(IndexingFailure failure)? onPartial,
+  }) async {
     extractedTitles.add(book.title);
     _activeExtractions++;
     peakConcurrentExtractions = max(
@@ -1362,6 +1379,7 @@ class _FakeExtractionRepository extends IndexingRepository {
       error: null,
       stackTrace: null,
       extractMs: 0,
+      droppedPages: 0,
     );
     return extraction;
   }

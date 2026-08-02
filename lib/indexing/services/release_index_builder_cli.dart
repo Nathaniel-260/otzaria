@@ -178,7 +178,7 @@ class ReleaseIndexBuilderCli {
     log('נמצאו ${books.length} ספרים; מתחיל אינדוקס...');
     var lastReported = 0;
     final repository = IndexingRepository(TantivyDataProvider.instance);
-    final completed = await repository.indexAllBooks(
+    final result = await repository.indexAllBooks(
       library,
       onProgress: (processed, total) {
         if (processed == total || processed - lastReported >= 100) {
@@ -188,8 +188,13 @@ class ReleaseIndexBuilderCli {
       },
       includePdfBooks: false,
     );
-    if (!completed) {
-      throw StateError('האינדוקס בוטל או לא הושלם');
+    for (final failure in result.failures) {
+      log('❌ ${failure.bookTitle}: ${failure.reason} (${failure.rawError})');
+    }
+    if (!result.didFinish) {
+      throw StateError(
+        'האינדוקס לא הושלם: ${result.stopMessage ?? 'בוטל על ידי המשתמש'}',
+      );
     }
     if (books.any(
       (book) =>

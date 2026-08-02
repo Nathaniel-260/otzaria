@@ -21,6 +21,8 @@ import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/indexing/services/indexing_preflight.dart';
+import 'package:otzaria/indexing/view/indexing_failures_dialog.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/core/app_paths.dart';
@@ -531,6 +533,31 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     );
   }
 
+  /// מריץ בדיקה מקדימה ומאשר עם המשתמש לפני שהוא מבזבז ריצה שלמה על
+  /// אינדוקס שייכשל מסיבה סביבתית ידועה.
+  Future<void> _startIndexingWithPreflight(BuildContext context) async {
+    final library = context.read<LibraryBloc>().state.library;
+    if (library == null) return;
+    final indexingBloc = context.read<IndexingBloc>();
+
+    final findings = await IndexingPreflight.run(
+      isTempFallback: TantivyDataProvider.instance.isTempFallback,
+    );
+    if (!context.mounted) return;
+
+    if (findings.isNotEmpty) {
+      final proceed = await showIndexingPreflightDialog(
+        context: context,
+        titles: [for (final f in findings) f.title],
+        suggestions: [for (final f in findings) f.suggestion],
+        hasBlocking: findings.any((f) => f.isBlocking),
+      );
+      if (proceed != true) return;
+    }
+
+    indexingBloc.add(StartIndexing(library));
+  }
+
   List<Widget> _buildSearchChildren(
     BuildContext context,
     SettingsState state,
@@ -571,15 +598,42 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           } else if (isActive) {
             subtitleText = 'התקדמות האינדקס: $processed/$total';
           } else if (indexingState is IndexingComplete) {
-            subtitleText = 'האינדקס מעודכן';
+            subtitleText = indexingState.isClean
+                ? 'האינדקס מעודכן'
+                : 'האינדקס עודכן — '
+                      '${summarizeFailures(indexingState.failures, indexingState.failureCount)}';
+          } else if (indexingState is IndexingStopped) {
+            subtitleText = indexingState.message;
+          } else if (indexingState is IndexingError) {
+            subtitleText = 'עדכון האינדקס נכשל: ${indexingState.error}';
           } else {
             subtitleText = 'האינדקס לא מעודכן';
           }
+          final (failures, failureCount) = switch (indexingState) {
+            IndexingComplete(:final failures, :final failureCount) => (
+              failures,
+              failureCount,
+            ),
+            IndexingStopped(:final failures, :final failureCount) => (
+              failures,
+              failureCount,
+            ),
+            _ => (const <IndexingFailure>[], 0),
+          };
           return SettingsActionTile.text(
             icon: FluentIcons.table_24_regular,
             title: 'אינדקס חיפוש',
             subtitle: subtitleText,
             actions: [
+              if (failures.isNotEmpty)
+                ActionButton.ghost(
+                  text: 'פירוט',
+                  onPressed: () => showIndexingFailuresDialog(
+                    context: context,
+                    failures: failures,
+                    totalCount: failureCount,
+                  ),
+                ),
               if (isActive)
                 ActionButton.neutral(
                   text: 'עצור',
@@ -614,7 +668,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                     indexingBloc.add(StartIndexing(library));
                   },
                 )
-              else if (indexingState is IndexingComplete)
+              else if (indexingState is IndexingComplete &&
+                  indexingState.isClean)
                 ActionButton.ghost(
                   text: 'איפוס',
                   onPressed: () async {
@@ -633,13 +688,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                 )
               else
                 ActionButton.recommended(
-                  text: 'עדכן',
-                  onPressed: () {
-                    final library = context.read<LibraryBloc>().state.library;
-                    if (library != null) {
-                      context.read<IndexingBloc>().add(StartIndexing(library));
-                    }
-                  },
+                  text: failures.isEmpty ? 'עדכן' : 'נסה שוב',
+                  onPressed: () => _startIndexingWithPreflight(context),
                 ),
             ],
           );

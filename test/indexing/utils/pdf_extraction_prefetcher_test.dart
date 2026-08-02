@@ -38,6 +38,7 @@ PdfExtraction _extractionOf(String title, int chars) => (
   error: null,
   stackTrace: null,
   extractMs: 0,
+  droppedPages: 0,
 );
 
 PdfBook _pdf(String title) => PdfBook(title: title, path: 'C:\\$title.pdf');

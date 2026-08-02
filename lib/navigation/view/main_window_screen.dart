@@ -2350,6 +2350,27 @@ class MainWindowScreenState extends State<MainWindowScreen>
               _tryStartDeferredStartupWork();
             },
           ),
+          // הערוץ היחיד שמדווח למשתמש שהאינדוקס נעצר או שספרים לא נכנסו —
+          // בלעדיו הוא רואה רק "האינדקס לא מעודכן" בהגדרות, בלי סיבה.
+          BlocListener<IndexingBloc, IndexingState>(
+            listener: (context, state) {
+              switch (state) {
+                case IndexingStopped():
+                  UiSnack.showError(state.message);
+                case IndexingError():
+                  UiSnack.showError(
+                    LibraryMessages.indexingFailed(state.error),
+                  );
+                case IndexingComplete(:final failureCount)
+                    when failureCount > 0:
+                  UiSnack.showError(
+                    LibraryMessages.indexingFinishedWithFailures(failureCount),
+                  );
+                default:
+                  break;
+              }
+            },
+          ),
           BlocListener<IndexingBloc, IndexingState>(
             listener: (context, state) {
               final cubit = context.read<WorkStatusCubit>();

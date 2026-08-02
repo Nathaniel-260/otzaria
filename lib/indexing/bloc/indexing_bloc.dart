@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
+import 'package:otzaria/indexing/services/indexing_failure_reporter.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
@@ -26,6 +27,40 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
   factory IndexingBloc.create() {
     return IndexingBloc(
       IndexingRepository(TantivyDataProvider.instance),
+    );
+  }
+
+  /// ממיר תוצאת ריצה למצב UI, ורושם את הכשלים ללוג. זהו הערוץ היחיד שבו
+  /// כשלי אינדוקס מגיעים למשתמש — לפניו הם נבלעו ב-debugPrint.
+  void _emitResult(IndexingResult result, Emitter<IndexingState> emit) {
+    IndexingFailureReporter.report(result);
+
+    if (result.didFinish) {
+      emit(
+        IndexingComplete(
+          failures: result.failures,
+          failureCount: result.failureCount,
+        ),
+      );
+      return;
+    }
+
+    final stopMessage = result.stopMessage;
+    if (stopMessage == null) {
+      // ביטול יזום של המשתמש — אין מה להסביר.
+      emit(IndexingInitial());
+      return;
+    }
+
+    emit(
+      IndexingStopped(
+        reason: result.reason,
+        message: stopMessage,
+        failures: result.failures,
+        failureCount: result.failureCount,
+        booksProcessed: state.booksProcessed,
+        totalBooks: state.totalBooks,
+      ),
     );
   }
 
@@ -90,7 +125,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     );
 
     try {
-      final completed = await _repository.reconcileIndexWithLibrary(
+      final result = await _repository.reconcileIndexWithLibrary(
         event.library,
         // שלב הסריקה מדווח דרך emit ישיר (ולא UpdateIndexingProgress) כדי
         // ש-processed==total בסוף הסריקה לא ייתפס כ"אינדוקס הושלם" לפני
@@ -122,11 +157,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed) {
-        emit(const IndexingComplete());
-      } else {
-        emit(IndexingInitial());
-      }
+      _emitResult(result, emit);
     } catch (e) {
       if (_activeWorkId != workId) {
         return;
@@ -167,7 +198,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     );
 
     try {
-      final completed = await _repository.indexAllBooks(
+      final result = await _repository.indexAllBooks(
         event.library,
         onActualIndexingStarted: () {
           add(ActualIndexingStarted(workId));
@@ -187,11 +218,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed && totalBooks > 0) {
-        emit(const IndexingComplete());
-      } else {
-        emit(IndexingInitial());
-      }
+      _emitResult(result, emit);
     } catch (e) {
       if (_activeWorkId != workId) {
         return;
@@ -263,7 +290,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
           total: total,
         ),
       );
-      final completed = reindex
+      final result = reindex
           ? await _repository.reindexChangedBooks(
               books,
               library,
@@ -280,11 +307,7 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
         return;
       }
       _activeWorkId = null;
-      if (completed) {
-        emit(const IndexingComplete());
-      } else {
-        emit(IndexingInitial());
-      }
+      _emitResult(result, emit);
     } catch (e) {
       if (_activeWorkId != workId) {
         return;
@@ -311,7 +334,12 @@ class IndexingBloc extends Bloc<IndexingEvent, IndexingState> {
     if (state is IndexingInProgress) return;
 
     if (await _repository.requiresManualReindex(event.library)) {
-      emit(IndexingInitial());
+      emit(
+        IndexingStopped(
+          reason: IndexingStopReason.blockedManualReindexRequired,
+          message: IndexingStopReason.blockedManualReindexRequired.message!,
+        ),
+      );
       return;
     }
 

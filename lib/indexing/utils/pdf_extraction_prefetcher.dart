@@ -6,12 +6,16 @@ import 'package:pdfrx/pdfrx.dart';
 
 /// תוצאת חילוץ עמודי PDF. שגיאת פתיחה נשמרת בתוצאה ולא נזרקת — הקורא
 /// מכריע בין נפילה ל-sidecar לבין הפצת השגיאה.
+///
+/// [droppedPages] — עמודים שנשמטו ב-timeout. הספר נרשם כמאונדקס למרות
+/// שהוא חלקי, ולכן זהו הערוץ היחיד שמאפשר לדווח עליו למשתמש.
 typedef PdfExtraction = ({
   List<({String reference, String text, int pageIndex})> pages,
   List<PdfOutlineNode> outline,
   Object? error,
   StackTrace? stackTrace,
   int extractMs,
+  int droppedPages,
 });
 
 class _PrefetchSlot {

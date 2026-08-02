@@ -24,6 +24,12 @@ abstract class LibraryMessages {
   static const String searchIndexOpenFailed =
       'פתיחת אינדקס החיפוש נכשלה — האינדוקס הושהה. נסה להפעיל מחדש את התוכנה';
 
+  static String indexingFinishedWithFailures(int count) =>
+      'עדכון האינדקס הסתיים, אך $count ספרים לא נכנסו אליו. '
+      'לפירוט: הגדרות ← ספרייה ← אינדקס חיפוש';
+
+  static String indexingFailed(Object error) => 'עדכון האינדקס נכשל: $error';
+
   static const String emptySearchQuery = 'נא להזין טקסט לחיפוש';
 
   static String categoryOrBookNotFound(List<String> names) =>
