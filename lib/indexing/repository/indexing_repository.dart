@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:otzaria/data/cache/generation_cache.dart';
@@ -243,6 +244,7 @@ class IndexingRepository {
               readyBook,
               catalogueOrderByBookKey: catalogueOrderByBookKey,
               preExtracted: ready.extraction,
+              onPermanentFailure: failures.add,
               onActualIndexingStarted: () {
                 if (didStartActualIndexing) return;
                 didStartActualIndexing = true;
@@ -327,6 +329,7 @@ class IndexingRepository {
                 book,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
                 preExtracted: preExtracted,
+                onPermanentFailure: failures.add,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) {
                     return;
@@ -590,6 +593,7 @@ class IndexingRepository {
     required Map<String, int> catalogueOrderByBookKey,
     void Function()? onActualIndexingStarted,
     Future<PdfExtraction>? preExtracted,
+    void Function(IndexingFailure failure)? onPermanentFailure,
   }) async {
     // preExtracted — חילוץ שהוזנק מראש (prefetch) בזמן שהספרים הקודמים
     // אונדקסו; בהיעדרו מחלצים כאן. שני המסלולים עוברים דרך העטיפה
@@ -636,9 +640,19 @@ class IndexingRepository {
           onActualIndexingStarted: onActualIndexingStarted,
         );
       } else if (openError != null) {
-        // כשל בטעינת ה-PDF עצמו (להבדיל מטקסט סרוק): בלי sidecar מפיצים את
-        // השגיאה, אחרת הספר היה נרשם כ"ריק" לצמיתות ולא מנוסה שוב.
-        Error.throwWithStackTrace(openError, openStackTrace!);
+        final failure = IndexingFailure.fromError(
+          bookTitle: book.title,
+          bookPath: book.path,
+          error: openError,
+          stackTrace: openStackTrace,
+        );
+        // כשל זמני (timeout, עומס) מופץ כדי שהספר ינוסה שוב בריצה הבאה.
+        // כשל קבוע (מוצפן/פגום) נרשם כמעובד ורק מדווח — אחרת כל הפעלה
+        // מנסה אותו מחדש ומכריזה לנצח "האינדקס לא מעודכן".
+        if (!failure.isPermanent) {
+          Error.throwWithStackTrace(openError, openStackTrace!);
+        }
+        onPermanentFailure?.call(failure);
       }
     }
 
@@ -826,9 +840,7 @@ class IndexingRepository {
     final file = File(book.path);
     if (!await file.exists()) return empty;
 
-    final document = await PdfDocument.openFile(
-      book.path,
-    ).timeout(const Duration(seconds: 60));
+    final document = await _openPdfSerialized(book.path);
     try {
       final outline = await document.loadOutline().timeout(
         const Duration(seconds: 15),
@@ -873,6 +885,36 @@ class IndexingRepository {
       // בלי סגירה מפורשת המסמך נשאר פתוח ב-pdfium עד סוף התהליך: אין
       // Finalizer על העטיפה, ו-FPDF_CloseDocument נקרא רק מ-dispose.
       await document.dispose();
+    }
+  }
+
+  /// pdfium מעבד את הפתיחות דרך worker יחיד ממילא, אבל טיימר ה-timeout
+  /// התחיל בהזנקה — כך שתור prefetch עמוק פוצץ קבצים תקינים שרק המתינו
+  /// בו. הנעילה מזיזה את תחילת הטיימר לרגע הפתיחה בפועל; היא אינה מאטה,
+  /// כי הפתיחה הבאה נכנסת מיד עם שחרור הקודמת.
+  static Future<void> _pdfOpenGate = Future.value();
+
+  static const Duration _pdfOpenTimeout = Duration(seconds: 60);
+
+  Future<PdfDocument> _openPdfSerialized(String path) => serializePdfOpen(
+    () => PdfDocument.openFile(path).timeout(_pdfOpenTimeout),
+  );
+
+  /// מריץ [open] בתור: הפתיחה הבאה מתחילה רק כשהקודמת הסתיימה. השחרור
+  /// ב-finally — כשל בפתיחה אחת חייב לא לתקוע את התור לנצח.
+  @visibleForTesting
+  static Future<T> serializePdfOpen<T>(Future<T> Function() open) async {
+    final previous = _pdfOpenGate;
+    final release = Completer<void>();
+    _pdfOpenGate = release.future;
+    // כשל של הפתיחה הקודמת אינו ענייננו — רק סיומה משחררת את התור.
+    try {
+      await previous;
+    } catch (_) {}
+    try {
+      return await open();
+    } finally {
+      release.complete();
     }
   }
 
@@ -1156,6 +1198,7 @@ class IndexingRepository {
               await _indexPdfBook(
                 book,
                 catalogueOrderByBookKey: catalogueOrderByBookKey,
+                onPermanentFailure: failures.add,
                 onActualIndexingStarted: () {
                   if (didStartActualIndexing) return;
                   didStartActualIndexing = true;

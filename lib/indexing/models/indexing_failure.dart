@@ -9,7 +9,12 @@ enum IndexingFailureKind {
   /// ה-PDF לא נפתח כלל — קובץ פגום או מוגן בסיסמה.
   pdfOpenFailed,
 
-  /// חלק מעמודי ה-PDF נשמטו בגלל timeout בחילוץ הטקסט.
+  /// פתיחת ה-PDF לא הסתיימה בזמן. הספר אינו באינדקס כלל — להבדיל מ-
+  /// [pdfTextTimeout], שבו הספר כן נכנס אך חסרים בו עמודים.
+  pdfOpenTimeout,
+
+  /// חלק מעמודי ה-PDF נשמטו בגלל timeout בחילוץ הטקסט. הספר נרשם
+  /// כמאונדקס — התוכן שלו חלקי.
   pdfTextTimeout,
 
   /// אין מקום פנוי בדיסק לכתיבת האינדקס.
@@ -26,6 +31,23 @@ enum IndexingFailureKind {
 
   /// כשל שלא סווג.
   unknown,
+}
+
+extension IndexingFailureKindTraits on IndexingFailureKind {
+  /// האם ריצה חוזרת יכולה להצליח. כשל קבוע נובע מהקובץ עצמו (מוצפן,
+  /// פגום, נמחק) — ריצה חוזרת רק תיכשל שוב ותשאיר את האינדקס "לא מעודכן"
+  /// לנצח. כשל זמני (עומס, זיכרון, דיסק, timeout) שווה ניסיון נוסף.
+  bool get isPermanent => switch (this) {
+    IndexingFailureKind.pdfOpenFailed => true,
+    IndexingFailureKind.fileMissing => true,
+    IndexingFailureKind.pdfOpenTimeout => false,
+    IndexingFailureKind.pdfTextTimeout => false,
+    IndexingFailureKind.diskFull => false,
+    IndexingFailureKind.permissionDenied => false,
+    IndexingFailureKind.outOfMemory => false,
+    IndexingFailureKind.engineWriteFailed => false,
+    IndexingFailureKind.unknown => false,
+  };
 }
 
 /// כשל אינדוקס יחיד — ספר, סיווג, ומספיק הקשר טכני כדי לאתר באג בתוכנה
@@ -61,7 +83,7 @@ class IndexingFailure extends Equatable {
     return IndexingFailure(
       bookTitle: bookTitle,
       bookPath: bookPath,
-      kind: classify(raw),
+      kind: classify(raw, stackTrace),
       rawError: raw,
       stackTrace: stackTrace,
       context: context,
@@ -76,8 +98,15 @@ class IndexingFailure extends Equatable {
 
   /// מסווג טקסט שגיאה לסוג כשל. הבדיקות מסודרות מהספציפי לכללי — הודעת
   /// שגיאה יכולה להכיל כמה סימנים, והראשון שמתאים הוא המדויק יותר.
-  static IndexingFailureKind classify(String rawError) {
+  ///
+  /// [stackTrace] נדרש כדי לזהות כשל שנגרם ע"י ה-timeout עצמו: pdfrx
+  /// שנקטע באמצע טעינה זורק RangeError שהודעתו אינה מרמזת על timeout.
+  static IndexingFailureKind classify(String rawError, [StackTrace? stack]) {
     final text = rawError.toLowerCase();
+
+    if (_isTimeoutCasualty(text, stack)) {
+      return IndexingFailureKind.pdfOpenTimeout;
+    }
 
     if (text.contains('no space left') ||
         text.contains('disk full') ||
@@ -116,10 +145,25 @@ class IndexingFailure extends Equatable {
     return IndexingFailureKind.unknown;
   }
 
+  /// כשל שנגרם ע"י ה-timeout עצמו. ‏`TimeoutException` מזוהה מההודעה;
+  /// שגיאה אחרת מזוהה מה-stack — ‏pdfrx שנקטע באמצע טעינה זורק שגיאת
+  /// טווח שהודעתה אינה מרמזת על כך.
+  static bool _isTimeoutCasualty(String lowerText, StackTrace? stack) {
+    if (lowerText.contains('timeoutexception')) return true;
+    if (stack == null) return false;
+    final frames = stack.toString();
+    return frames.contains('Future.timeout') && frames.contains('pdfrx');
+  }
+
+  /// כשל שלא ישתנה בריצה חוזרת — הקובץ עצמו אינו ניתן לאינדוקס. ספר כזה
+  /// נרשם כמעובד, אחרת כל הפעלה מנסה אותו שוב ומכריזה "האינדקס לא מעודכן".
+  bool get isPermanent => kind.isPermanent;
+
   /// תיאור קצר של הסיבה, בעברית.
   String get reason => switch (kind) {
     IndexingFailureKind.fileMissing => 'הקובץ לא נמצא',
     IndexingFailureKind.pdfOpenFailed => 'קובץ PDF פגום או מוגן בסיסמה',
+    IndexingFailureKind.pdfOpenTimeout => 'פתיחת ה-PDF ארכה זמן רב מדי',
     IndexingFailureKind.pdfTextTimeout => 'חילוץ הטקסט מה-PDF ארך זמן רב מדי',
     IndexingFailureKind.diskFull => 'אין מקום פנוי בדיסק',
     IndexingFailureKind.permissionDenied => 'אין הרשאת גישה לקובץ',
@@ -134,8 +178,10 @@ class IndexingFailure extends Equatable {
       'רענן את הספרייה — ייתכן שהקובץ נמחק או הועבר',
     IndexingFailureKind.pdfOpenFailed =>
       'החלף את הקובץ בעותק תקין, או הסר אותו מהספרייה',
+    IndexingFailureKind.pdfOpenTimeout =>
+      'הספר לא נכנס לאינדקס. הרץ עדכון חוזר במחשב פנוי; אם זה חוזר, הקובץ כבד מדי לעיבוד',
     IndexingFailureKind.pdfTextTimeout =>
-      'הספר אונדקס חלקית; אינדוקס חוזר במחשב פנוי עשוי להשלים אותו',
+      'הספר אונדקס חלקית — חלק מעמודיו לא ייכנסו לחיפוש. עדכון חוזר עשוי להשלים אותו',
     IndexingFailureKind.diskFull => 'פנה מקום בכונן והרץ את העדכון שוב',
     IndexingFailureKind.permissionDenied =>
       'ודא שלתוכנה יש הרשאת גישה לקובץ ולתיקיית האינדקס',

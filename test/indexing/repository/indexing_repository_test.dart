@@ -9,6 +9,7 @@ import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
+import 'package:pdfrx/pdfrx.dart' show PdfOutlineNode;
 
 void main() {
   group('IndexingRepository.shouldSkipManualReindexCheck', () {
@@ -960,6 +961,55 @@ void main() {
       expect(provider.indexedFilePaths, isNot(contains(pdf1.path)));
     });
 
+    test('PDF מוגן בסיסמה נרשם כמעובד — ולא מנוסה שוב בכל הפעלה', () async {
+      // רגרסיה מלוג אמיתי: 18 קבצים מוצפנים הפילו את האינדוקס בכל הרצה,
+      // וכל הפעלה הכריזה מחדש "האינדקס לא מעודכן" בלי שום סיכוי להצליח.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final locked = PdfBook(title: 'מוצפן', path: r'C:\pdfs\מוצפן.pdf');
+      library.books.add(locked);
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['מוצפן'] = StateError(
+          'PdfException: No password supplied by PasswordProvider.',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      // הכשל מדווח למשתמש...
+      expect(result.failures.single.kind, IndexingFailureKind.pdfOpenFailed);
+      expect(result.failures.single.isPermanent, isTrue);
+      // ...אך הספר נרשם כמעובד, כך שהריצה הבאה לא תיגע בו שוב.
+      expect(provider.indexedFilePaths, contains(locked.path));
+      expect(repository.isBookIndexed(locked), isTrue);
+    });
+
+    test('כשל פתיחה זמני אינו נרשם כמעובד — ינוסה שוב בריצה הבאה', () async {
+      // ההפך מהמקרה הקבוע: timeout עשוי לחלוף, ולכן אסור לסמן את הספר
+      // כמעובד — אחרת הוא נעלם מהחיפוש לתמיד.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final slow = PdfBook(title: 'איטי', path: r'C:\pdfs\איטי.pdf');
+      library.books.add(slow);
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['איטי'] = StateError(
+          'TimeoutException after 0:01:00.000000: Future not completed',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failures.single.kind, IndexingFailureKind.pdfOpenTimeout);
+      expect(result.failures.single.isPermanent, isFalse);
+      expect(provider.indexedFilePaths, isNot(contains(slow.path)));
+    });
+
     test(
       'כשל גם בניקוי המסמכים החלקיים — עוצר בלי commit ומבצע rollback',
       () async {
@@ -998,6 +1048,45 @@ void main() {
         expect(progressCalls, greaterThan(0));
       },
     );
+  });
+
+  group('IndexingRepository.serializePdfOpen', () {
+    test('פתיחות רצות בזו אחר זו ולא חופפות', () async {
+      // רגרסיה: הטיימר של openFile התחיל בהזנקה, כך שתור prefetch של 25
+      // הפיל קבצים תקינים אחרי 60 שניות רק משום שהמתינו בתור.
+      var active = 0;
+      var peak = 0;
+      final order = <int>[];
+
+      Future<void> open(int id) =>
+          IndexingRepository.serializePdfOpen(() async {
+            active++;
+            peak = max(peak, active);
+            await Future<void>.delayed(Duration.zero);
+            order.add(id);
+            active--;
+          });
+
+      await Future.wait([open(1), open(2), open(3)]);
+
+      expect(peak, 1, reason: 'רק פתיחה אחת בכל רגע');
+      expect(order, [1, 2, 3], reason: 'סדר ההזנקה נשמר');
+    });
+
+    test('כשל בפתיחה אחת אינו תוקע את התור', () async {
+      // בלי שחרור ב-finally, קובץ פגום אחד היה עוצר את האינדוקס לנצח.
+      await expectLater(
+        IndexingRepository.serializePdfOpen(
+          () async => throw StateError('פתיחה נכשלה'),
+        ),
+        throwsStateError,
+      );
+
+      final next = await IndexingRepository.serializePdfOpen(
+        () async => 'הבא בתור רץ',
+      ).timeout(const Duration(seconds: 5));
+      expect(next, 'הבא בתור רץ');
+    });
   });
 
   group('IndexingRepository.orderBooksForIndexing', () {
@@ -1354,6 +1443,10 @@ class _FakeExtractionRepository extends IndexingRepository {
   /// כותרות שחילוצן ייכשל — לבדיקת שחרור הסלוט והפצת השגיאה.
   final failingTitles = <String>{};
 
+  /// כותרות שפתיחתן מחזירה שגיאה בתוצאה (לא זריקה) — כמו כשל פתיחת PDF
+  /// אמיתי, שבו הקורא מכריע בין sidecar להפצת השגיאה.
+  final openErrors = <String, Object>{};
+
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(
     PdfBook book, {
@@ -1370,6 +1463,17 @@ class _FakeExtractionRepository extends IndexingRepository {
     _activeExtractions--;
     if (failingTitles.contains(book.title)) {
       throw StateError('חילוץ נכשל: ${book.title}');
+    }
+    final openError = openErrors[book.title];
+    if (openError != null) {
+      return (
+        pages: const <({String reference, String text, int pageIndex})>[],
+        outline: const <PdfOutlineNode>[],
+        error: openError,
+        stackTrace: StackTrace.current,
+        extractMs: 0,
+        droppedPages: 0,
+      );
     }
     final PdfExtraction extraction = (
       pages: [

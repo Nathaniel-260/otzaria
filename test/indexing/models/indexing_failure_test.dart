@@ -34,11 +34,59 @@ void main() {
       );
     });
 
-    test('timeout מסווג כ-PDF חלקי ולא ככשל פתיחה', () {
+    test('timeout מסווג ככשל פתיחה — הספר לא נכנס לאינדקס כלל', () {
+      // רגרסיה מלוג אמיתי: timeout בפתיחת המסמך סווג כ"אונדקס חלקית",
+      // והמשתמש קיבל הנחיה על ספר שכלל לא נכנס לאינדקס.
       expect(
-        IndexingFailure.classify('TimeoutException after 0:00:05.000000'),
-        IndexingFailureKind.pdfTextTimeout,
+        IndexingFailure.classify('TimeoutException after 0:01:00.000000'),
+        IndexingFailureKind.pdfOpenTimeout,
       );
+    });
+
+    test('שגיאת pdfrx שנקטעה ע"י ה-timeout מזוהה כ-timeout ולא כבאג', () {
+      // pdfrx שנקטע באמצע טעינה זורק RangeError שהודעתו אינה מרמזת על
+      // timeout — רק ה-stack מסגיר זאת.
+      final stack = StackTrace.fromString(
+        '#0 _PdfDocumentPdfium._loadPagesInLimitedTime '
+        '(package:pdfrx_engine/src/native/pdfrx_pdfium.dart)\n'
+        '#1 Future.timeout.<anonymous closure> '
+        '(dart:async/future_impl.dart:1061)',
+      );
+      expect(
+        IndexingFailure.classify(
+          'RangeError (length): Invalid value: Not in inclusive range 0..3: -1',
+          stack,
+        ),
+        IndexingFailureKind.pdfOpenTimeout,
+      );
+      // בלי ה-stack אין דרך לדעת — נשאר unknown.
+      expect(
+        IndexingFailure.classify(
+          'RangeError (length): Invalid value: Not in inclusive range 0..3: -1',
+        ),
+        IndexingFailureKind.unknown,
+      );
+    });
+
+    test('כשל קבוע מובחן מכשל שווה-ניסיון-חוזר', () {
+      // קובץ מוצפן/חסר לא ישתנה בריצה חוזרת; עומס וזיכרון כן.
+      for (final kind in [
+        IndexingFailureKind.pdfOpenFailed,
+        IndexingFailureKind.fileMissing,
+      ]) {
+        expect(kind.isPermanent, isTrue, reason: '$kind קבוע');
+      }
+      for (final kind in [
+        IndexingFailureKind.pdfOpenTimeout,
+        IndexingFailureKind.pdfTextTimeout,
+        IndexingFailureKind.diskFull,
+        IndexingFailureKind.outOfMemory,
+        IndexingFailureKind.permissionDenied,
+        IndexingFailureKind.engineWriteFailed,
+        IndexingFailureKind.unknown,
+      ]) {
+        expect(kind.isPermanent, isFalse, reason: '$kind שווה ניסיון חוזר');
+      }
     });
 
     test('כשל פתיחת PDF מזוהה, כולל קובץ מוגן בסיסמה', () {

@@ -124,6 +124,7 @@ class IndexingFailureReporter {
   static String _kindLabel(IndexingFailureKind kind) => switch (kind) {
     IndexingFailureKind.fileMissing => 'קובץ חסר',
     IndexingFailureKind.pdfOpenFailed => 'PDF שלא נפתח',
+    IndexingFailureKind.pdfOpenTimeout => 'PDF שפתיחתו לא הסתיימה בזמן',
     IndexingFailureKind.pdfTextTimeout => 'PDF שאונדקס חלקית',
     IndexingFailureKind.diskFull => 'דיסק מלא',
     IndexingFailureKind.permissionDenied => 'הרשאות',
