@@ -43,6 +43,9 @@ class PageGeometry {
   /// הגובה השמור בתחתית העמוד למספר העמוד.
   final double footerHeight;
 
+  /// המרווח האנכי בין סעיף לסעיף.
+  final double sectionGap;
+
   const PageGeometry({
     required this.width,
     required this.height,
@@ -50,6 +53,7 @@ class PageGeometry {
     required this.columns,
     required this.columnGap,
     required this.footerHeight,
+    required this.sectionGap,
   }) : assert(columns == 1 || columns == 2, 'נתמכים טור אחד או שניים');
 
   /// עמוד לפי גודל נייר מוכן, עם שוליים ומרווחים במילימטרים.
@@ -59,6 +63,7 @@ class PageGeometry {
     double marginMm = 18,
     double columnGapMm = 7,
     double footerMm = 8,
+    double sectionGapMm = 1.5,
   }) {
     final margin = marginMm * kMmToLogicalPx;
     return PageGeometry(
@@ -68,6 +73,7 @@ class PageGeometry {
       columns: columns,
       columnGap: columnGapMm * kMmToLogicalPx,
       footerHeight: footerMm * kMmToLogicalPx,
+      sectionGap: sectionGapMm * kMmToLogicalPx,
     );
   }
 
@@ -95,6 +101,7 @@ class PageGeometry {
     int? columns,
     double? columnGap,
     double? footerHeight,
+    double? sectionGap,
   }) {
     return PageGeometry(
       width: width ?? this.width,
@@ -103,6 +110,7 @@ class PageGeometry {
       columns: columns ?? this.columns,
       columnGap: columnGap ?? this.columnGap,
       footerHeight: footerHeight ?? this.footerHeight,
+      sectionGap: sectionGap ?? this.sectionGap,
     );
   }
 
@@ -113,7 +121,7 @@ class PageGeometry {
     return 'w${n(width)},h${n(height)},'
         'm${n(margins.left)}/${n(margins.top)}/'
         '${n(margins.right)}/${n(margins.bottom)},'
-        'c$columns,g${n(columnGap)},f${n(footerHeight)}';
+        'c$columns,g${n(columnGap)},f${n(footerHeight)},s${n(sectionGap)}';
   }
 
   @override
@@ -124,11 +132,19 @@ class PageGeometry {
       other.margins == margins &&
       other.columns == columns &&
       other.columnGap == columnGap &&
-      other.footerHeight == footerHeight;
+      other.footerHeight == footerHeight &&
+      other.sectionGap == sectionGap;
 
   @override
-  int get hashCode =>
-      Object.hash(width, height, margins, columns, columnGap, footerHeight);
+  int get hashCode => Object.hash(
+    width,
+    height,
+    margins,
+    columns,
+    columnGap,
+    footerHeight,
+    sectionGap,
+  );
 
   @override
   String toString() => 'PageGeometry($cacheKey)';
