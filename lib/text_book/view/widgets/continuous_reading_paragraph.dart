@@ -74,6 +74,30 @@ dom.DocumentFragment _parseFragmentCached(String htmlText) {
   return fragment;
 }
 
+/// אוסף ה-callbacks והעיצוב שנגררים דרך כל הרקורסיה של בניית הספאנים.
+class _SpanContext {
+  final ContinuousReadingUrlTap? onTapUrl;
+  final ContinuousReadingAnchorHover? onAnchorHover;
+  final ContinuousReadingAnchorExit? onAnchorExit;
+  final TextStyle? linkStyle;
+  final Color? anchorActiveBackground;
+  final List<TapGestureRecognizer>? recognizerSink;
+
+  /// כשאמת — כותרות `h1`–`h6` מקבלות גודל ומשקל, ותגי בלוק שוברים שורה.
+  /// כבוי במצב הקריאה הרציף, שבו כותרת היא סגמנט נפרד שלא עובר כאן.
+  final bool applyBlockStyles;
+
+  const _SpanContext({
+    this.onTapUrl,
+    this.onAnchorHover,
+    this.onAnchorExit,
+    this.linkStyle,
+    this.anchorActiveBackground,
+    this.recognizerSink,
+    this.applyBlockStyles = false,
+  });
+}
+
 List<InlineSpan> buildInlineHtmlSpans(
   String htmlText,
   TextStyle baseStyle, {
@@ -83,17 +107,21 @@ List<InlineSpan> buildInlineHtmlSpans(
   TextStyle? linkStyle,
   Color? anchorActiveBackground,
   List<TapGestureRecognizer>? recognizerSink,
+  bool applyBlockStyles = false,
 }) {
   final fragment = _parseFragmentCached(htmlText);
   return _nodesToSpans(
     fragment.nodes,
     baseStyle,
-    onTapUrl: onTapUrl,
-    onAnchorHover: onAnchorHover,
-    onAnchorExit: onAnchorExit,
-    linkStyle: linkStyle,
-    anchorActiveBackground: anchorActiveBackground,
-    recognizerSink: recognizerSink,
+    _SpanContext(
+      onTapUrl: onTapUrl,
+      onAnchorHover: onAnchorHover,
+      onAnchorExit: onAnchorExit,
+      linkStyle: linkStyle,
+      anchorActiveBackground: anchorActiveBackground,
+      recognizerSink: recognizerSink,
+      applyBlockStyles: applyBlockStyles,
+    ),
   );
 }
 
@@ -262,44 +290,60 @@ class _ContinuousReadingParagraphState
   }
 }
 
+/// תגי בלוק שנחשבים לשוברי-שורה כשמופעל [_SpanContext.applyBlockStyles].
+const Set<String> _blockTags = {
+  'p',
+  'div',
+  'ul',
+  'ol',
+  'li',
+  'blockquote',
+  'center',
+  'h1',
+  'h2',
+  'h3',
+  'h4',
+  'h5',
+  'h6',
+};
+
+/// מכפילי גודל הגופן של כותרות — זהים לברירות המחדל של `flutter_widget_from_html`
+/// כדי שאותה כותרת תיראה באותו גודל בכל התצוגות.
+const Map<String, double> _headingFontScale = {
+  'h1': 2.0,
+  'h2': 1.5,
+  'h3': 1.17,
+  'h4': 1.0,
+  'h5': 0.83,
+  'h6': 0.67,
+};
+
 List<InlineSpan> _nodesToSpans(
   List<dom.Node> nodes,
-  TextStyle style, {
-  ContinuousReadingUrlTap? onTapUrl,
-  ContinuousReadingAnchorHover? onAnchorHover,
-  ContinuousReadingAnchorExit? onAnchorExit,
-  TextStyle? linkStyle,
-  Color? anchorActiveBackground,
-  List<TapGestureRecognizer>? recognizerSink,
-}) {
+  TextStyle style,
+  _SpanContext ctx,
+) {
   final spans = <InlineSpan>[];
   for (final node in nodes) {
-    spans.addAll(
-      _nodeToSpans(
-        node,
-        style,
-        onTapUrl: onTapUrl,
-        onAnchorHover: onAnchorHover,
-        onAnchorExit: onAnchorExit,
-        linkStyle: linkStyle,
-        anchorActiveBackground: anchorActiveBackground,
-        recognizerSink: recognizerSink,
-      ),
-    );
+    final nodeSpans = _nodeToSpans(node, style, ctx);
+    if (nodeSpans.isEmpty) continue;
+    // בלוק פותח שורה חדשה, אבל לא מוסיף שורה ריקה בראש הפסקה.
+    if (ctx.applyBlockStyles &&
+        node is dom.Element &&
+        _blockTags.contains(node.localName) &&
+        spans.isNotEmpty) {
+      spans.add(TextSpan(text: '\n', style: style));
+    }
+    spans.addAll(nodeSpans);
   }
   return spans;
 }
 
 List<InlineSpan> _nodeToSpans(
   dom.Node node,
-  TextStyle style, {
-  ContinuousReadingUrlTap? onTapUrl,
-  ContinuousReadingAnchorHover? onAnchorHover,
-  ContinuousReadingAnchorExit? onAnchorExit,
-  TextStyle? linkStyle,
-  Color? anchorActiveBackground,
-  List<TapGestureRecognizer>? recognizerSink,
-}) {
+  TextStyle style,
+  _SpanContext ctx,
+) {
   if (node is dom.Text) {
     if (node.text.isEmpty) return const [];
     return [TextSpan(text: node.text, style: style)];
@@ -312,6 +356,12 @@ List<InlineSpan> _nodeToSpans(
   if (node.localName == 'br') {
     return [TextSpan(text: '\n', style: style)];
   }
+
+  final onTapUrl = ctx.onTapUrl;
+  final linkStyle = ctx.linkStyle;
+  final anchorActiveBackground = ctx.anchorActiveBackground;
+  final onAnchorHover = ctx.onAnchorHover;
+  final onAnchorExit = ctx.onAnchorExit;
 
   // טיפול בקישורים inline: <a href="...">…</a>
   if (node.localName == 'a' && onTapUrl != null) {
@@ -343,21 +393,12 @@ List<InlineSpan> _nodeToSpans(
           : linkStyle == null
           ? childStyle.copyWith(decoration: TextDecoration.underline)
           : childStyle.merge(linkStyle);
-      final children = _nodesToSpans(
-        node.nodes,
-        effectiveLinkStyle,
-        onTapUrl: onTapUrl,
-        onAnchorHover: onAnchorHover,
-        onAnchorExit: onAnchorExit,
-        linkStyle: linkStyle,
-        anchorActiveBackground: anchorActiveBackground,
-        recognizerSink: recognizerSink,
-      );
+      final children = _nodesToSpans(node.nodes, effectiveLinkStyle, ctx);
       final recognizer = TapGestureRecognizer()
         ..onTap = () {
           onTapUrl(href);
         };
-      recognizerSink?.add(recognizer);
+      ctx.recognizerSink?.add(recognizer);
       // קישורי עוגן והערה מקבלים תצוגה מקדימה בריחוף.
       final isHoverableAnchor =
           isPreviewHoverableUrl(href) &&
@@ -379,22 +420,38 @@ List<InlineSpan> _nodeToSpans(
     }
   }
 
-  final childStyle = _styleForElement(node, style);
-  return _nodesToSpans(
-    node.nodes,
-    childStyle,
-    onTapUrl: onTapUrl,
-    onAnchorHover: onAnchorHover,
-    onAnchorExit: onAnchorExit,
-    linkStyle: linkStyle,
-    anchorActiveBackground: anchorActiveBackground,
-    recognizerSink: recognizerSink,
+  final childStyle = _styleForElement(
+    node,
+    style,
+    applyBlockStyles: ctx.applyBlockStyles,
   );
+  return _nodesToSpans(node.nodes, childStyle, ctx);
 }
 
-TextStyle _styleForElement(dom.Element element, TextStyle parentStyle) {
+TextStyle _styleForElement(
+  dom.Element element,
+  TextStyle parentStyle, {
+  bool applyBlockStyles = false,
+}) {
   var style = parentStyle;
   final localName = element.localName;
+
+  final headingScale = applyBlockStyles ? _headingFontScale[localName] : null;
+  if (headingScale != null) {
+    // גופן עם פנים-בולד נפרדים מקבל 400: בולד סינתטי עליו מעבה את האות
+    // ומרחיב אותה, וזה שינוי מטרי שהעימוד לא מדד.
+    final bold = AppFonts.headingFontWeightOverride(
+      localName,
+      style.fontFamily,
+    );
+    style = style.copyWith(
+      fontSize: (style.fontSize ?? 18) * headingScale,
+      fontWeight: bold == null ? FontWeight.bold : FontWeight.w400,
+      fontVariations: bold == null
+          ? AppFonts.boldFontVariations(style.fontFamily)
+          : null,
+    );
+  }
 
   if (localName == 'small') {
     style = style.copyWith(
