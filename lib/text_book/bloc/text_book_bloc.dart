@@ -1111,8 +1111,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     final isPageShape = event.mode == TextBookViewMode.pageShape;
 
     // ההעדפה הגלובלית "מפרשים בצד" נשמרת רק כשהיא הבחירה בפועל — מעבר לצורת
-    // הדף אינו אמור לדרוס את מה שהמשתמש בחר לשאר הספרים.
-    if (!isPageShape) {
+    // הדף או לתצוגת עמודים אינו אמור לדרוס את מה שהמשתמש בחר לשאר הספרים.
+    if (event.mode == TextBookViewMode.split ||
+        event.mode == TextBookViewMode.combined) {
       Settings.setValue<bool>(
         'key-splited-view',
         event.mode == TextBookViewMode.split,
@@ -1647,6 +1648,12 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     // ב-5% העליונים של ה-viewport. בלי סינון, visibleIndices.first נופל על
     // השורה האחרונה של הקטע הקודם, וזיהוי הכותרת (currentTitle ו-
     // closestTocEntryIndex) מצביע על הסעיף הקודם במקום על זה שאליו ניווטו.
+    // בתצוגת העמודים ה-positions הם אינדקסי עמוד, לא שורות ולא קטעים, ואין
+    // ל-bloc את העימוד כדי לתרגם אותם. התצוגה עצמה שולחת UpdateVisibleIndecies
+    // עם שורות המקור. פירוש אינדקס עמוד כאינדקס שורה היה משבש קישורים, כותרת
+    // נוכחית וסימון בתוכן העניינים — בשקט.
+    if (state.viewMode == TextBookViewMode.paged) return const [];
+
     final itemPositions = _filterBarelyVisiblePositions(allItemPositions);
 
     if (!state.continuousReadingMode) {

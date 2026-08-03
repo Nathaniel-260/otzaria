@@ -324,17 +324,20 @@ List<InlineSpan> _nodesToSpans(
   _SpanContext ctx,
 ) {
   final spans = <InlineSpan>[];
+  var previousWasBlock = false;
   for (final node in nodes) {
     final nodeSpans = _nodeToSpans(node, style, ctx);
     if (nodeSpans.isEmpty) continue;
-    // בלוק פותח שורה חדשה, אבל לא מוסיף שורה ריקה בראש הפסקה.
+    final isBlock = node is dom.Element && _blockTags.contains(node.localName);
+    // בלוק פותח שורה חדשה **וגם** סוגר אותה: טקסט שבא אחרי `</h2>` הוא פסקה
+    // חדשה, לא המשך הכותרת. שורה ריקה בראש הפסקה נמנעת.
     if (ctx.applyBlockStyles &&
-        node is dom.Element &&
-        _blockTags.contains(node.localName) &&
-        spans.isNotEmpty) {
+        spans.isNotEmpty &&
+        (isBlock || previousWasBlock)) {
       spans.add(TextSpan(text: '\n', style: style));
     }
     spans.addAll(nodeSpans);
+    previousWasBlock = isBlock;
   }
   return spans;
 }

@@ -87,6 +87,7 @@ import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 const String _viewModeSplit = 'split';
 const String _viewModeBelow = 'below';
 const String _viewModePage = 'page';
+const String _viewModePaged = 'paged';
 // פעולה (לא מצב תצוגה): פתיחת כרטיסיית מפרשים נפרדת
 const String _actionOpenCommentatorsTab = 'open_commentators_tab';
 
@@ -1630,6 +1631,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           ),
           ActionButtonData(
             widget: const SizedBox.shrink(),
+            icon: FluentIcons.document_one_page_columns_24_regular,
+            tooltip: 'עמודים',
+            onPressed: () =>
+                _onViewModeSelected(context, state, _viewModePaged),
+          ),
+          ActionButtonData(
+            widget: const SizedBox.shrink(),
             icon: FluentIcons.open_24_regular,
             tooltip: 'פתח כרטיסיית מפרשים',
             onPressed: () =>
@@ -1922,6 +1930,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     TextBookViewMode.pageShape => OtzariaIcons.book_open_tzurat_hadaf_24_filled,
     TextBookViewMode.split => FluentIcons.panel_left_24_regular,
     TextBookViewMode.combined => FluentIcons.panel_bottom_20_regular,
+    TextBookViewMode.paged => FluentIcons.document_one_page_columns_24_regular,
   };
 
   /// קבלת ה-tooltip למצב התצוגה הנוכחי
@@ -1952,6 +1961,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       _viewModePage => TextBookViewMode.pageShape,
       _viewModeSplit => TextBookViewMode.split,
       _viewModeBelow => TextBookViewMode.combined,
+      _viewModePaged => TextBookViewMode.paged,
       _ => null,
     };
     if (mode == null || mode == state.viewMode) return;
@@ -1983,6 +1993,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isSplit = state.viewMode == TextBookViewMode.split;
     final isBelow = state.viewMode == TextBookViewMode.combined;
     final isPage = state.viewMode == TextBookViewMode.pageShape;
+    final isPaged = state.viewMode == TextBookViewMode.paged;
 
     return AppPopupMenuButton<String>(
       tooltip: 'בחר סוג תצוגת מפרשים',
@@ -1992,6 +2003,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         TextBookViewMode.pageShape => _viewModePage,
         TextBookViewMode.split => _viewModeSplit,
         TextBookViewMode.combined => _viewModeBelow,
+        TextBookViewMode.paged => _viewModePaged,
       },
       onSelected: (value) => _onViewModeSelected(context, state, value),
       entries: [
@@ -2015,6 +2027,13 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           icon: isPage
               ? OtzariaIcons.book_open_tzurat_hadaf_24_filled
               : OtzariaIcons.book_open_tzurat_hadaf_24_regular,
+        ),
+        AppMenuEntry(
+          value: _viewModePaged,
+          label: 'עמודים',
+          icon: isPaged
+              ? FluentIcons.document_one_page_columns_24_filled
+              : FluentIcons.document_one_page_columns_24_regular,
         ),
         const AppMenuEntry(
           value: _actionOpenCommentatorsTab,

@@ -12,6 +12,9 @@ enum TextBookViewMode {
 
   /// צורת הדף — פריסת מפרשים סביב הטקסט.
   pageShape,
+
+  /// עמודים בגודל קבוע (A4) בשני טורים, כמו ספר מודפס.
+  paged,
 }
 
 extension TextBookViewModeX on TextBookViewMode {
@@ -20,6 +23,7 @@ extension TextBookViewModeX on TextBookViewMode {
     TextBookViewMode.split => 'מפרשים בצד',
     TextBookViewMode.combined => 'מפרשים מתחת',
     TextBookViewMode.pageShape => 'צורת הדף',
+    TextBookViewMode.paged => 'עמודים',
   };
 
   /// המזהה שנשמר בהעדפות וב-JSON של הטאב. שינוי ערך כאן פוסל העדפות שמורות.

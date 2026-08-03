@@ -86,6 +86,7 @@ class TextBookScaffold extends StatelessWidget {
       TextBookViewMode.pageShape => PageShapeStrategyImpl(),
       TextBookViewMode.split => SplitViewStrategyImpl(),
       TextBookViewMode.combined => CombinedViewStrategyImpl(),
+      TextBookViewMode.paged => PagedViewStrategyImpl(),
     };
   }
 }
