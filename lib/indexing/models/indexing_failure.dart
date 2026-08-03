@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
 
 /// סוג הכשל באינדוקס ספר — הסיווג נגזר מהחריגה שנתפסה, כדי שהמשתמש
 /// יקבל סיבה והנחיה במקום "נכשל" סתמי.
@@ -155,9 +156,8 @@ class IndexingFailure extends Equatable {
     return IndexingFailureKind.unknown;
   }
 
-  /// האם השגיאה נזרקה מתוך pdfrx. ‏`Future.timeout` אינו סימן מבדיל —
-  /// הוא נמצא בשרשרת של כל פתיחה, וחיפוש שלו סיווג בטעות גם קבצים
-  /// מוצפנים כ-timeout, כך שהם לא נרשמו כמעובדים וחזרו בכל ריצה.
+  /// האם השגיאה נזרקה מתוך pdfrx. ‏`Future.timeout` אינו סימן מבדיל — הוא
+  /// נמצא בשרשרת של כל פתיחה, וסיווג לפיו גורף כל כשל ל-timeout.
   static bool _isFromPdfrx(StackTrace? stack) =>
       stack != null && stack.toString().contains('pdfrx');
 
@@ -236,11 +236,11 @@ extension IndexingStopReasonMessage on IndexingStopReason {
     IndexingStopReason.completedWithFailures => null,
     IndexingStopReason.cancelledByUser => null,
     IndexingStopReason.blockedTempFallback =>
-      'פתיחת אינדקס החיפוש נכשלה — האינדוקס הושהה. נסה להפעיל מחדש את התוכנה',
+      LibraryMessages.searchIndexOpenFailed,
     IndexingStopReason.blockedManualReindexRequired =>
-      'האינדקס אינו תואם לגרסת החיפוש הנוכחית. יש לאפס ולבנות אותו מחדש',
+      LibraryMessages.indexRequiresManualRebuild,
     IndexingStopReason.abortedOnWriteFailure =>
-      'האינדוקס נעצר בגלל כשל בכתיבה לאינדקס. הפעל מחדש את התוכנה ונסה שוב',
+      LibraryMessages.indexingAbortedOnWriteFailure,
   };
 }
 
@@ -294,19 +294,25 @@ class IndexingResult extends Equatable {
     int? totalFailures,
   }) : totalFailures = totalFailures ?? -1;
 
-  /// ריצה שהסתיימה — עם או בלי כשלים, לפי מה שנאסף.
+  /// ריצה שהסתיימה — עם או בלי כשלים.
+  ///
+  /// הסיבה נקבעת לפי המונה ולא לפי אורך הרשימה: כשהאיסוף נחתך בתקרה,
+  /// רשימה ריקה עם מונה חי הייתה מדווחת "הושלם במלואו" בעוד ספרים חסרים.
   factory IndexingResult.finished({
     required List<IndexingFailure> failures,
     required int indexedCount,
     int? totalFailures,
-  }) => IndexingResult(
-    reason: failures.isEmpty
-        ? IndexingStopReason.completed
-        : IndexingStopReason.completedWithFailures,
-    failures: failures,
-    totalFailures: totalFailures ?? failures.length,
-    indexedCount: indexedCount,
-  );
+  }) {
+    final count = totalFailures ?? failures.length;
+    return IndexingResult(
+      reason: count == 0
+          ? IndexingStopReason.completed
+          : IndexingStopReason.completedWithFailures,
+      failures: failures,
+      totalFailures: count,
+      indexedCount: indexedCount,
+    );
+  }
 
   /// ריצה שנעצרה לפני סיומה.
   factory IndexingResult.stopped(

@@ -30,6 +30,12 @@ abstract class LibraryMessages {
 
   static String indexingFailed(Object error) => 'עדכון האינדקס נכשל: $error';
 
+  static const String indexRequiresManualRebuild =
+      'האינדקס אינו תואם לגרסת החיפוש הנוכחית. יש לאפס ולבנות אותו מחדש';
+
+  static const String indexingAbortedOnWriteFailure =
+      'האינדוקס נעצר בגלל כשל בכתיבה לאינדקס. הפעל מחדש את התוכנה ונסה שוב';
+
   static const String emptySearchQuery = 'נא להזין טקסט לחיפוש';
 
   static String categoryOrBookNotFound(List<String> names) =>

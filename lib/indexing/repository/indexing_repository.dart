@@ -417,14 +417,33 @@ class IndexingRepository {
       // פאס איטי: הכבדים שנפלו על מגבלת הזמן מנוסים שוב אחד-אחד, עם
       // מגבלה נדיבה. רץ לפני ה-commit הסופי כדי שמה שיצליח ייחתם איתו.
       if (!cancelled && slowRetry.isNotEmpty) {
-        final recovered = await _runSlowPass(
+        final slow = await _runSlowPass(
           slowRetry,
           catalogueOrderByBookKey: catalogueOrderByBookKey,
-          onProgress: onProgress,
-          onPermanentFailure: failures.add,
+          // ה-total נשאר של הריצה כולה — אחרת פס ההתקדמות קופץ אחורה
+          // מ-100% ל-"1/20" אחרי שכל הספרייה כבר עובדה.
+          onProgress: (_, _) => onProgress(totalBooks, totalBooks),
         );
-        failures.dropFor(recovered);
-        actuallyIndexed += recovered.length;
+        // כשל ה-timeout מהפאס הראשון מוחלף בהכרעה של הפאס האיטי — הצלחה,
+        // או כשל מדויק יותר (למשל מסמך שאינו נטען כלל).
+        failures.dropFor({
+          ...slow.recovered,
+          for (final f in slow.failures)
+            if (f.bookPath != null) f.bookPath!,
+        });
+        for (final failure in slow.failures) {
+          failures.add(failure);
+        }
+        actuallyIndexed += slow.recovered.length;
+        if (slow.abortedOnWriteFailure) {
+          cancelled = true;
+          abortedOnWriteFailure = true;
+        }
+      }
+      // ביטול בתוך הפאס האיטי — בלי זה commit ו-optimize היו רצים על ריצה
+      // שהמשתמש עצר, והתוצאה הייתה מדווחת כהושלמה.
+      if (!_tantivyDataProvider.isIndexing.value) {
+        cancelled = true;
       }
 
       if (!cancelled) {
@@ -472,44 +491,69 @@ class IndexingRepository {
   ///
   /// בלי הפאס הזה קובץ כבד נשאר מחוץ לחיפוש לצמיתות: הוא נכשל בכל ריצה
   /// באותה מגבלה, כי הזמן שהוא צריך פשוט גדול ממנה.
-  Future<Set<String>> _runSlowPass(
+  Future<
+    ({
+      Set<String> recovered,
+      List<IndexingFailure> failures,
+      bool abortedOnWriteFailure,
+    })
+  >
+  _runSlowPass(
     List<PdfBook> books, {
     required Map<String, int> catalogueOrderByBookKey,
     required void Function(int processed, int total) onProgress,
-    required void Function(IndexingFailure failure) onPermanentFailure,
   }) async {
     final recovered = <String>{};
+    final failures = <IndexingFailure>[];
+    var abortedOnWriteFailure = false;
     debugPrint('🐢 פאס איטי: ${books.length} ספרים כבדים, מגבלה נדיבה');
 
     for (var i = 0; i < books.length; i++) {
       if (!_tantivyDataProvider.isIndexing.value) break;
       final book = books[i];
       onProgress(i + 1, books.length);
+      // כשל קבוע אינו נזרק מ-_indexPdfBook, ולכן נלכד כאן: בלעדיו החזרה
+      // הרגילה נראתה כהצלחה, הכשל נמחק, והספר נספר כמאונדקס.
+      IndexingFailure? permanent;
       try {
         await _indexPdfBook(
           book,
           catalogueOrderByBookKey: catalogueOrderByBookKey,
           openTimeout: slowPassOpenTimeout,
-          onPermanentFailure: onPermanentFailure,
+          onPermanentFailure: (failure) => permanent = failure,
         );
         if (!_tantivyDataProvider.isIndexing.value) break;
+        // גם כשל קבוע נרשם כמעובד (סמן ריק) — אחרת ינוסה שוב לנצח.
         _tantivyDataProvider.indexedFilePaths.add(
           buildIndexedBookFilePath(book),
         );
-        recovered.add(book.path);
-        debugPrint('🐢 ✅ "${book.title}" אונדקס בפאס האיטי');
-      } catch (e) {
-        // נשאר ככשל מהפאס הראשון — הספר באמת אינו ניתן לפתיחה.
+        final permanentFailure = permanent;
+        if (permanentFailure != null) {
+          failures.add(permanentFailure);
+          debugPrint('🐢 ⛔ "${book.title}": ${permanentFailure.reason}');
+        } else {
+          recovered.add(book.path);
+          debugPrint('🐢 ✅ "${book.title}" אונדקס בפאס האיטי');
+        }
+      } catch (e, st) {
         debugPrint('🐢 ❌ "${book.title}" נכשל גם בפאס האיטי: $e');
-        if (!isBookIndexed(book)) {
-          await _discardPartialBookWrites(book);
+        failures.add(_failureFor(book, e, st));
+        if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
+          // ניקוי כושל ⇒ ה-commit הסופי היה חותם ספר חלקי כ"מאונדקס".
+          await _recoverEngineAfterWriteFailure();
+          abortedOnWriteFailure = true;
+          break;
         }
       }
       await Future.delayed(Duration.zero);
     }
 
     debugPrint('🐢 פאס איטי הסתיים: ${recovered.length}/${books.length} נחלצו');
-    return recovered;
+    return (
+      recovered: recovered,
+      failures: failures,
+      abortedOnWriteFailure: abortedOnWriteFailure,
+    );
   }
 
   /// בונה את תוצאת הריצה מהדגלים שנצברו — משותף לכל מסלולי האינדוקס,
@@ -933,10 +977,19 @@ class IndexingRepository {
       for (int i = 0; i < pageCount; i++) {
         if (!_tantivyDataProvider.isIndexing.value) return empty;
 
-        final pageText = await document.pages[i].loadText().timeout(
-          const Duration(seconds: 5),
-          onTimeout: () => null,
-        );
+        PdfPageRawText? pageText;
+        try {
+          pageText = await document.pages[i].loadText().timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => null,
+          );
+        } catch (e) {
+          // עמוד פגום בודד אינו מפיל ספר שלם: בלי התפיסה השגיאה הופצה
+          // ככשל פתיחה, והספר נרשם כלא-ניתן-לטעינה לצמיתות.
+          debugPrint('⚠️ "${book.title}" עמוד ${i + 1} נכשל בחילוץ: $e');
+          droppedPages++;
+          continue;
+        }
         if (pageText == null) {
           droppedPages++;
           continue;
@@ -964,10 +1017,8 @@ class IndexingRepository {
     }
   }
 
-  /// pdfium מעבד את הפתיחות דרך worker יחיד ממילא, אבל טיימר ה-timeout
-  /// התחיל בהזנקה — כך שתור prefetch עמוק פוצץ קבצים תקינים שרק המתינו
-  /// בו. הנעילה מזיזה את תחילת הטיימר לרגע הפתיחה בפועל; היא אינה מאטה,
-  /// כי הפתיחה הבאה נכנסת מיד עם שחרור הקודמת.
+  /// הטיימר של הפתיחה חייב למדוד עבודה ולא המתנה בתור prefetch, אחרת קובץ
+  /// כבד בראש התור מפוצץ קבצים תקינים שממתינים אחריו.
   static Future<void> _pdfOpenGate = Future.value();
 
   static const Duration _pdfOpenTimeout = Duration(seconds: 60);

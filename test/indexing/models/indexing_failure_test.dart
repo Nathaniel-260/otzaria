@@ -218,6 +218,56 @@ void main() {
       expect(collector.collected.first.bookTitle, 'ספר 0');
     });
 
+    test('dropFor מפחית רק את מה שהוסר בפועל', () {
+      final collector = IndexingFailureCollector();
+      for (final path in ['a', 'b', 'c']) {
+        collector.add(
+          IndexingFailure(
+            bookTitle: path,
+            bookPath: path,
+            kind: IndexingFailureKind.pdfOpenTimeout,
+            rawError: 'x',
+          ),
+        );
+      }
+
+      collector.dropFor({'a', 'לא-קיים'});
+
+      expect(collector.total, 2);
+      expect(collector.collected.map((f) => f.bookPath), ['b', 'c']);
+    });
+
+    test('אוסף שנחתך: dropFor משאיר מונה חי עם רשימה ריקה', () {
+      // רגרסיה: הרשימה התרוקנה אך המונה נשאר > 0, ו-finished קבע את
+      // הסיבה לפי הרשימה — כך ריצה עם ספרים חסרים דווחה "הושלם במלואו".
+      final collector = IndexingFailureCollector();
+      final overflow = IndexingFailureCollector.maxCollected + 20;
+      for (var i = 0; i < overflow; i++) {
+        collector.add(
+          IndexingFailure(
+            bookTitle: 'ספר $i',
+            bookPath: 'p$i',
+            kind: IndexingFailureKind.pdfOpenTimeout,
+            rawError: 'x',
+          ),
+        );
+      }
+      collector.dropFor({
+        for (var i = 0; i < overflow; i++) 'p$i',
+      });
+
+      expect(collector.collected, isEmpty);
+      expect(collector.total, 20, reason: '20 לא נאספו ולכן לא הוסרו');
+
+      final result = IndexingResult.finished(
+        failures: collector.collected,
+        totalFailures: collector.total,
+        indexedCount: 0,
+      );
+      expect(result.reason, IndexingStopReason.completedWithFailures);
+      expect(result.isFullyComplete, isFalse);
+    });
+
     test('אוסף ריק', () {
       final collector = IndexingFailureCollector();
       expect(collector.isEmpty, isTrue);

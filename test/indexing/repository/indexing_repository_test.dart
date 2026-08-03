@@ -1013,6 +1013,85 @@ void main() {
       expect(result.isFullyComplete, isTrue);
     });
 
+    test('כשל קבוע בפאס האיטי אינו נחשב הצלחה, ומדווח', () async {
+      // רגרסיה: _indexPdfBook אינו זורק על כשל קבוע, ולכן החזרה הרגילה
+      // נראתה כהחלצה — הכשל נמחק מהדוח, הספר נספר כמאונדקס, והריצה
+      // דווחה "הושלם במלואו" בעוד הספר אינו בחיפוש.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final book = PdfBook(title: 'כבד-פגום', path: r'C:\pdfs\כבד-פגום.pdf');
+      library.books.add(book);
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['כבד-פגום'] = StateError(
+          'TimeoutException after 0:01:00.000000: Future not completed',
+        )
+        // בפאס האיטי המגבלה נדיבה, אך אז נחשף כשל קבוע.
+        ..succeedWhenTimeoutIs = IndexingRepository.slowPassOpenTimeout
+        ..errorWhenGenerous = StateError(
+          'PdfException: No password supplied by PasswordProvider.',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.failureCount, 1, reason: 'רשומה אחת — לא אפס ולא שתיים');
+      expect(result.failures.single.kind, IndexingFailureKind.pdfOpenFailed);
+      expect(result.isFullyComplete, isFalse);
+      // נרשם כמעובד כדי שלא ינוסה שוב לנצח, אך לא נספר כאינדוקס מוצלח.
+      expect(provider.indexedFilePaths, contains(book.path));
+      expect(result.indexedCount, 0);
+    });
+
+    test('כשל כתיבה + ניקוי כושל בפאס האיטי — עוצר בלי commit', () async {
+      // רגרסיה: הפאס האיטי התעלם מערך ההחזרה של _discardPartialBookWrites,
+      // כך שה-commit הסופי חתם ספר חלקי כ"מאונדקס" — בלי rollback.
+      final engine = _RecordingSearchEngine()
+        ..failPdfAddForTitle = 'כבד'
+        ..failDeleteFilePaths = true;
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(PdfBook(title: 'כבד', path: r'C:\pdfs\כבד.pdf'));
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['כבד'] = StateError(
+          'TimeoutException after 0:01:00.000000: Future not completed',
+        )
+        ..succeedWhenTimeoutIs = IndexingRepository.slowPassOpenTimeout;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.reason, IndexingStopReason.abortedOnWriteFailure);
+      expect(engine.commitCount, 0, reason: 'ספר חלקי לא נחתם');
+      expect(engine.rollbackCount, 1);
+    });
+
+    test('ביטול בתוך הפאס האיטי אינו מדווח כהושלם', () async {
+      // רגרסיה: ה-break בפאס האיטי לא עדכן את cancelled, ולכן commit
+      // ו-optimize רצו על ריצה שהמשתמש עצר, והתוצאה דווחה כהושלמה.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      library.books.add(PdfBook(title: 'כבד', path: r'C:\pdfs\כבד.pdf'));
+      final repository = _CancellingSlowPassRepository(provider)
+        ..openErrors['כבד'] = StateError(
+          'TimeoutException after 0:01:00.000000: Future not completed',
+        );
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(result.didFinish, isFalse);
+      expect(result.reason, IndexingStopReason.cancelledByUser);
+      expect(engine.commitCount, 0);
+    });
+
     test('כשל שאינו timeout אינו מנוסה בפאס האיטי', () async {
       // רק מגבלת זמן שווה ניסיון נדיב; קובץ מוצפן ייכשל שוב באותו אופן.
       final engine = _RecordingSearchEngine();
@@ -1494,6 +1573,9 @@ class _FakeExtractionRepository extends IndexingRepository {
   /// מדמה ספר כבד שנפתח רק כשנותנים לו זמן נדיב.
   Duration? succeedWhenTimeoutIs;
 
+  /// שגיאה שמוחזרת דווקא במגבלה הנדיבה — ספר שהפאס האיטי חושף בו כשל אחר.
+  Object? errorWhenGenerous;
+
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(
     PdfBook book, {
@@ -1514,7 +1596,7 @@ class _FakeExtractionRepository extends IndexingRepository {
     }
     final generous =
         succeedWhenTimeoutIs != null && openTimeout == succeedWhenTimeoutIs;
-    final openError = generous ? null : openErrors[book.title];
+    final openError = generous ? errorWhenGenerous : openErrors[book.title];
     if (openError != null) {
       return (
         pages: const <({String reference, String text, int pageIndex})>[],
@@ -1536,6 +1618,27 @@ class _FakeExtractionRepository extends IndexingRepository {
       droppedPages: 0,
     );
     return extraction;
+  }
+}
+
+/// מבטל את האינדוקס בדיוק כשהפאס האיטי מתחיל — מזהה זאת לפי המגבלה הנדיבה.
+class _CancellingSlowPassRepository extends _FakeExtractionRepository {
+  _CancellingSlowPassRepository(super.provider);
+
+  @override
+  Future<PdfExtraction> extractPdfPagesGuarded(
+    PdfBook book, {
+    void Function(IndexingFailure failure)? onPartial,
+    Duration? openTimeout,
+  }) {
+    if (openTimeout == IndexingRepository.slowPassOpenTimeout) {
+      cancelIndexing();
+    }
+    return super.extractPdfPagesGuarded(
+      book,
+      onPartial: onPartial,
+      openTimeout: openTimeout,
+    );
   }
 }
 
