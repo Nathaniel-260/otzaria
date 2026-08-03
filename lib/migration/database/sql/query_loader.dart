@@ -39,6 +39,7 @@ class QueryLoader {
       'LineQueries.sq',
       'LineTocQueries.sq',
       'LinkQueries.sq',
+      'PagedLayoutCacheQueries.sq',
       'PdfAnchorCacheQueries.sq',
       'PdfOutlineCacheQueries.sq',
       'PubDateQueries.sq',

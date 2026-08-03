@@ -7,6 +7,7 @@ import 'book_has_links_dao.dart';
 import 'category_dao.dart';
 import 'connection_type_dao.dart';
 import 'docx_text_cache_dao.dart';
+import 'paged_layout_cache_dao.dart';
 import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'link_dao.dart';
@@ -52,6 +53,7 @@ class MyDatabase {
   GenerationDao? _generationDao;
   LineDao? _lineDao;
   LinkDao? _linkDao;
+  PagedLayoutCacheDao? _pagedLayoutCacheDao;
   PdfAnchorCacheDao? _pdfAnchorCacheDao;
   PdfOutlineCacheDao? _pdfOutlineCacheDao;
   PubDateDao? _pubDateDao;
@@ -109,6 +111,11 @@ class MyDatabase {
   LinkDao get linkDao {
     _ensureDaosInitialized();
     return _linkDao!;
+  }
+
+  PagedLayoutCacheDao get pagedLayoutCacheDao {
+    _ensureDaosInitialized();
+    return _pagedLayoutCacheDao!;
   }
 
   PdfAnchorCacheDao get pdfAnchorCacheDao {
@@ -304,6 +311,7 @@ class MyDatabase {
     _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _linkDao = LinkDao(this);
+    _pagedLayoutCacheDao = PagedLayoutCacheDao(this);
     _pdfAnchorCacheDao = PdfAnchorCacheDao(this);
     _pdfOutlineCacheDao = PdfOutlineCacheDao(this);
     _pubDateDao = PubDateDao(this);
@@ -606,6 +614,20 @@ class MyDatabase {
         );
         ''',
       'CREATE INDEX IF NOT EXISTS idx_docx_text_cache_accessed_at ON docx_text_cache(accessedAt);',
+
+      // Persistent cache of paged book layouts (populated in cache.db)
+      '''
+        CREATE TABLE IF NOT EXISTS paged_layout_cache (
+          layoutKey TEXT PRIMARY KEY,
+          bookTitle TEXT NOT NULL,
+          pageCount INTEGER NOT NULL,
+          layout TEXT NOT NULL,
+          createdAt INTEGER NOT NULL,
+          accessedAt INTEGER NOT NULL
+        );
+        ''',
+      'CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_accessed_at ON paged_layout_cache(accessedAt);',
+      'CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_book ON paged_layout_cache(bookTitle);',
 
       // Links table
       '''

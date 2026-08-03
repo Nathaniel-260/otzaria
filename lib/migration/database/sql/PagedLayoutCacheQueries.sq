@@ -1,0 +1,36 @@
+-- Queries for persistent cache of paged (fixed-page) book layouts
+
+selectByKey:
+SELECT *
+FROM paged_layout_cache
+WHERE layoutKey = ?
+LIMIT 1;
+
+upsert:
+INSERT INTO paged_layout_cache (
+  layoutKey,
+  bookTitle,
+  pageCount,
+  layout,
+  createdAt,
+  accessedAt
+)
+VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(layoutKey) DO UPDATE SET
+  bookTitle = excluded.bookTitle,
+  pageCount = excluded.pageCount,
+  layout = excluded.layout,
+  accessedAt = excluded.accessedAt;
+
+updateAccessedAt:
+UPDATE paged_layout_cache
+SET accessedAt = ?
+WHERE layoutKey = ?;
+
+deleteByBookTitle:
+DELETE FROM paged_layout_cache
+WHERE bookTitle = ?;
+
+deleteAccessedBefore:
+DELETE FROM paged_layout_cache
+WHERE accessedAt < ?;

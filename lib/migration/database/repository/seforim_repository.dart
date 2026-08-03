@@ -9,6 +9,7 @@ import '../../models/author.dart';
 import '../../models/book.dart';
 import '../../models/category.dart';
 import '../../models/docx_text_cache_entry.dart';
+import '../../models/paged_layout_cache_entry.dart';
 import '../../models/line.dart';
 import '../../models/link.dart';
 import '../../models/pdf_anchor_cache_entry.dart';
@@ -1382,6 +1383,33 @@ class SeforimRepository {
 
   Future<void> pruneDocxTextCacheAccessedBefore(int cutoffMillis) async {
     await _database.docxTextCacheDao.deleteAccessedBefore(cutoffMillis);
+  }
+
+  // --- Persistent paged (fixed-page) layout cache ---
+
+  Future<PagedLayoutCacheEntry?> getPagedLayoutCacheEntry(
+    String layoutKey,
+  ) async {
+    return _database.pagedLayoutCacheDao.selectByKey(layoutKey);
+  }
+
+  Future<void> upsertPagedLayoutCacheEntry(PagedLayoutCacheEntry entry) async {
+    await _database.pagedLayoutCacheDao.upsert(entry);
+  }
+
+  Future<void> touchPagedLayoutCacheEntry(
+    String layoutKey,
+    int accessedAt,
+  ) async {
+    await _database.pagedLayoutCacheDao.updateAccessedAt(layoutKey, accessedAt);
+  }
+
+  Future<void> deletePagedLayoutCacheForBook(String bookTitle) async {
+    await _database.pagedLayoutCacheDao.deleteByBookTitle(bookTitle);
+  }
+
+  Future<void> prunePagedLayoutCacheAccessedBefore(int cutoffMillis) async {
+    await _database.pagedLayoutCacheDao.deleteAccessedBefore(cutoffMillis);
   }
 
   Future<void> prunePdfOutlineCacheExceptFilePaths(

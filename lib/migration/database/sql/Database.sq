@@ -266,6 +266,19 @@ CREATE TABLE IF NOT EXISTS docx_text_cache (
 
 CREATE INDEX IF NOT EXISTS idx_docx_text_cache_accessed_at ON docx_text_cache(accessedAt);
 
+-- Persistent cache of paged (fixed-page) book layouts
+CREATE TABLE IF NOT EXISTS paged_layout_cache (
+    layoutKey TEXT PRIMARY KEY,
+    bookTitle TEXT NOT NULL,
+    pageCount INTEGER NOT NULL,
+    layout TEXT NOT NULL,
+    createdAt INTEGER NOT NULL,
+    accessedAt INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_accessed_at ON paged_layout_cache(accessedAt);
+CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_book ON paged_layout_cache(bookTitle);
+
 -- Links table
 CREATE TABLE IF NOT EXISTS link (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
