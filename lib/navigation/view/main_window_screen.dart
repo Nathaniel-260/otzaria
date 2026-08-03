@@ -1316,7 +1316,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
           child: _navigationIcon(item.icon),
         ),
         selectedIcon: _navigationIcon(item.iconFilled),
-        label: item.label,
+        label: context.settingsText(item.label),
       );
     }
 
@@ -3429,7 +3429,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return NavRailItem(
       icon: item.icon,
       iconFilled: item.iconFilled,
-      label: item.label,
+      label: context.settingsText(item.label),
       isSelected: isSelected,
       onTap: () => _onNavTap(context, index, currentScreen),
       tooltip: tooltip,
