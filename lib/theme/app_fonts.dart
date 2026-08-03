@@ -41,6 +41,13 @@ class AppFonts {
   /// מאוכלס ב-[ensureFontLoaded]; נצרך ל-[boldFontVariations].
   static final Set<String> _variableSystemFonts = {};
 
+  static int _registryRevision = 0;
+
+  /// עולה בכל שינוי ברישום הגופנים: טעינת גופן מערכת, זיהוי ציר wght, או
+  /// טעינת קובץ בולד אחי. שלושתם משנים מטריקות של טקסט שכבר נמדד — עימוד
+  /// שנשמר לפני השינוי חייב להיפסל, ולכן החתימה שלו נושאת את המספר הזה.
+  static int get fontRegistryRevision => _registryRevision;
+
   /// מחזיר את ה-[FontVariation] הנדרש כדי לקבל בולד אמיתי בגופן משתנה,
   /// או null כשאין צורך (גופן לא-משתנה, או משקל לא-מודגש — אז בחירת ה-face
   /// הרגילה של Flutter מטפלת). מוחזר רק ממשקל w600 ומעלה.
@@ -568,6 +575,7 @@ class AppFonts {
     return _loadingSystemFonts.putIfAbsent(fontFamily, () async {
       try {
         await SystemFonts().loadFont(fontFamily);
+        _registryRevision++;
       } catch (_) {
         // אם הטעינה נכשלה, מסירים מהקאש כדי לאפשר ניסיון חוזר בעתיד.
         _loadingSystemFonts.remove(fontFamily);
@@ -593,7 +601,7 @@ class AppFonts {
 
       // גופן משתנה: אין קובץ בולד נפרד — הבולד מגיע דרך FontVariation('wght').
       if (selfInfo.hasWeightAxis) {
-        _variableSystemFonts.add(fontFamily);
+        if (_variableSystemFonts.add(fontFamily)) _registryRevision++;
         return;
       }
 
@@ -607,7 +615,7 @@ class AppFonts {
         await (FontLoader(
           fontFamily,
         )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-        _separateBoldSystemFonts.add(fontFamily);
+        if (_separateBoldSystemFonts.add(fontFamily)) _registryRevision++;
         return;
       }
     } catch (_) {
@@ -795,13 +803,17 @@ class AppFonts {
   /// מדמה גופן מערכת שנטען לו קובץ בולד אחי, בלי תלות בגופנים מותקנים.
   @visibleForTesting
   static void debugMarkSeparateBoldSystemFont(String fontFamily) {
-    _separateBoldSystemFonts.add(fontFamily);
+    if (_separateBoldSystemFonts.add(fontFamily)) _registryRevision++;
   }
 
   @visibleForTesting
   static void debugResetSystemFontsCache() {
     _systemFontsHebrewCache = null;
     _warmUpFuture = null;
+    if (_variableSystemFonts.isNotEmpty ||
+        _separateBoldSystemFonts.isNotEmpty) {
+      _registryRevision++;
+    }
     _variableSystemFonts.clear();
     _separateBoldSystemFonts.clear();
   }
