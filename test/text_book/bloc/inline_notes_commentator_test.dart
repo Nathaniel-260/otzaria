@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -30,7 +31,7 @@ TextBookLoaded _seed({
     content: content,
     fontSize: 20,
     showLeftPane: true,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: activeCommentators,
     commentatorGroups: const [],
     availableCommentators: availableCommentators,

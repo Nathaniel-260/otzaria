@@ -24,6 +24,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/page_shape/links_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
@@ -175,8 +176,7 @@ TextBookLoaded _loadedState(TextBook book) {
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,
-    showSplitView: false,
-    showPageShapeView: true,
+    viewMode: TextBookViewMode.pageShape,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

@@ -4,6 +4,7 @@ import 'package:otzaria/text_book/text_book_repository.dart';
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/repository/local_overrides_repository.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/tabs/models/tab.dart';
@@ -85,8 +86,7 @@ class TextBookTab extends OpenedTab {
   final ValueNotifier<int> navNextTocNotifier = ValueNotifier<int>(0);
 
   List<String>? commentators;
-  bool _lastSplitView = false;
-  bool _lastShowPageShapeView = false;
+  TextBookViewMode _lastViewMode = TextBookViewMode.combined;
 
   // StreamSubscription לניהול ה-listener
   StreamSubscription<TextBookState>? _stateSubscription;
@@ -110,8 +110,7 @@ class TextBookTab extends OpenedTab {
     this.searchDistance = 0,
     this.commentators,
     bool openLeftPane = false,
-    bool? splitedView,
-    bool? showPageShapeView,
+    TextBookViewMode? viewMode,
     bool isPinned = false,
     String? dedupeKey,
     this.pinpointHighlight,
@@ -125,16 +124,15 @@ class TextBookTab extends OpenedTab {
          isPinned: isPinned,
          dedupeKey: dedupeKey,
        ) {
-    // קביעת ברירת המחדל של splitedView מההגדרות אם לא סופק
-    final bool effectiveSplitedView =
-        splitedView ?? (Settings.getValue<bool>('key-splited-view') ?? true);
+    // ללא מצב מפורש — ההעדפה הגלובלית "מפרשים בצד" קובעת. צורת הדף היא העדפה
+    // פר-ספר ולכן היא מגיעה תמיד מפורשות מהקורא, ולא מברירת מחדל.
+    final effectiveViewMode =
+        viewMode ??
+        ((Settings.getValue<bool>('key-splited-view') ?? true)
+            ? TextBookViewMode.split
+            : TextBookViewMode.combined);
 
-    // מצב צורת הדף הוא פר-ספר - ברירת המחדל היא false (תצוגה רגילה)
-    // רק אם הספר כבר היה פתוח במצב צורת הדף, הוא יישאר כך
-    final bool effectiveShowPageShapeView = showPageShapeView ?? false;
-
-    _lastSplitView = effectiveSplitedView;
-    _lastShowPageShapeView = effectiveShowPageShapeView;
+    _lastViewMode = effectiveViewMode;
 
     // Initialize the bloc with initial state. ב‑production תמיד נבנה bloc חדש;
     // ה‑blocOverride קיים רק לטסטים שצריכים להזריק bloc עם repository מזויף
@@ -157,8 +155,7 @@ class TextBookTab extends OpenedTab {
             spacingValues: spacingValues,
             searchMode: searchMode,
             searchDistance: searchDistance,
-            splitedView: effectiveSplitedView,
-            showPageShapeView: effectiveShowPageShapeView,
+            viewMode: effectiveViewMode,
             highlightText: highlightText,
             permanentHighlightLine: permanentHighlightLine,
             pinpointHighlightIndex:
@@ -179,8 +176,7 @@ class TextBookTab extends OpenedTab {
     _stateSubscription = bloc.stream.listen((state) {
       if (state is TextBookLoaded && state.visibleIndices.isNotEmpty) {
         index = state.visibleIndices.first;
-        _lastSplitView = state.showSplitView;
-        _lastShowPageShapeView = state.showPageShapeView;
+        _lastViewMode = state.viewMode;
         // עדכון הכותרת הנוכחית
         if (state.currentTitle != null && state.currentTitle!.isNotEmpty) {
           currentTitle.value = state.currentTitle!;
@@ -211,10 +207,16 @@ class TextBookTab extends OpenedTab {
   factory TextBookTab.fromJson(Map<String, dynamic> json) {
     final bool shouldOpenLeftPane = resolveRestoredReadingLeftPaneState(json);
 
-    // שחזור מצב התצוגה המפוצלת מה-JSON
-    final bool splitedView =
-        json['splitedView'] ??
-        (Settings.getValue<bool>('key-splited-view') ?? true);
+    // 'splitedView'/'showPageShapeView' הם הפורמט שקדם לאיחוד ל-enum — נקראים
+    // כדי ששולחנות עבודה שנשמרו לפני העדכון לא יאבדו את מצב התצוגה.
+    final TextBookViewMode viewMode = json['viewMode'] != null
+        ? TextBookViewModeX.fromStorageKey(json['viewMode'] as String?)
+        : ((json['showPageShapeView'] ?? false)
+              ? TextBookViewMode.pageShape
+              : ((json['splitedView'] ??
+                        (Settings.getValue<bool>('key-splited-view') ?? true))
+                    ? TextBookViewMode.split
+                    : TextBookViewMode.combined));
 
     final TextBook restoredBook = json['book'] != null
         ? Book.fromJson(Map<String, dynamic>.from(json['book'])) as TextBook
@@ -225,8 +227,7 @@ class TextBookTab extends OpenedTab {
       index: json['initalIndex'],
       book: restoredBook,
       commentators: List<String>.from(json['commentators']),
-      splitedView: splitedView,
-      showPageShapeView: json['showPageShapeView'] ?? false,
+      viewMode: viewMode,
       openLeftPane: shouldOpenLeftPane,
       isPinned: json['isPinned'] ?? false,
     );
@@ -241,8 +242,7 @@ class TextBookTab extends OpenedTab {
     // בטאב שטרם נטען (שולחן עבודה לא-פעיל) הערכים חיים רק בשדות/ב-state
     // ההתחלתי — ברירות מחדל קבועות היו מאפסות אותם בשמירה לדיסק.
     List<String> commentators = this.commentators ?? [];
-    bool splitedView = _lastSplitView;
-    bool showPageShapeView = _lastShowPageShapeView;
+    TextBookViewMode viewMode = _lastViewMode;
     int currentIndex = index; // שמירת האינדקס הנוכחי כברירת מחדל
     // ספר ה-state כולל העשרה שנעשתה ברקע (id/מחבר/קטגוריות) — עדיף לשמירה.
     TextBook bookToSave = book;
@@ -251,8 +251,7 @@ class TextBookTab extends OpenedTab {
       final loadedState = bloc.state as TextBookLoaded;
       bookToSave = loadedState.book;
       commentators = loadedState.activeCommentators;
-      splitedView = loadedState.showSplitView;
-      showPageShapeView = loadedState.showPageShapeView;
+      viewMode = loadedState.viewMode;
       // עדכון האינדקס מה-state הנטען - תמיד לוקחים את האינדקס האחרון שנראה
       if (loadedState.visibleIndices.isNotEmpty) {
         currentIndex = loadedState.visibleIndices.first;
@@ -266,8 +265,7 @@ class TextBookTab extends OpenedTab {
       'book': bookToSave.toJson(),
       'initalIndex': currentIndex,
       'commentators': commentators,
-      'splitedView': splitedView,
-      'showPageShapeView': showPageShapeView,
+      'viewMode': viewMode.storageKey,
       'showLeftPane': bloc.state.showLeftPane,
       'isPinned': isPinned,
       'type': 'TextBookTab',

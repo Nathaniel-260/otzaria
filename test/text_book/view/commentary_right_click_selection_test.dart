@@ -19,6 +19,7 @@ import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/utils/ui/context_menu_utils.dart';
 import 'package:otzaria/widgets/misc/app_menu_exports.dart';
 import 'package:otzaria/widgets/misc/progressive_scrolling.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -472,7 +473,7 @@ TextBookLoaded _loadedState() {
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const ['מפרש בדיקה'],
     commentatorGroups: const [],
     availableCommentators: const ['מפרש בדיקה'],

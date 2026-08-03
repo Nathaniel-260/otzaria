@@ -5,6 +5,7 @@ import 'package:otzaria/plugins/utils/reader_location_resolver.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -161,7 +162,7 @@ void main() {
           book: textTab.book,
           index: textTab.index,
           showLeftPane: false,
-          splitView: false,
+          viewMode: TextBookViewMode.combined,
         ).copyWith(
           visibleIndices: [42],
           currentTitle: 'פרק ג',
@@ -204,7 +205,7 @@ void main() {
           book: textTab.book,
           index: textTab.index,
           showLeftPane: false,
-          splitView: false,
+          viewMode: TextBookViewMode.combined,
         ).copyWith(
           visibleIndices: [42],
           currentTitle: 'פרק ג מה-state',

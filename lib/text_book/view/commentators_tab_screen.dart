@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -428,7 +429,7 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       widget.tab.bloc.add(
         LoadContent(
           fontSize: settings.fontSize,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: settings.defaultRemoveNikud,
           loadCommentators: true,
         ),

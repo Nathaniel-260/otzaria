@@ -10,6 +10,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
@@ -24,7 +25,7 @@ TextBookLoaded _seed(TextBook book, {List<String> active = const []}) {
     content: const ['שורה'],
     fontSize: 20,
     showLeftPane: true,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: active,
     commentatorGroups: const [],
     availableCommentators: const ['רש"י', 'רמב"ן'],

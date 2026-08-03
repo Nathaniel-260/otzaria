@@ -11,6 +11,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 
 @GenerateMocks([TabsBloc])
 import 'reader_location_tracker_test.mocks.dart';
@@ -160,7 +161,7 @@ void main() {
             book: textTab.book,
             index: textTab.index,
             showLeftPane: false,
-            splitView: false,
+            viewMode: TextBookViewMode.combined,
           ).copyWith(
             visibleIndices: [42],
             currentTitle: 'פרק ג',

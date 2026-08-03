@@ -26,6 +26,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../helpers/memory_settings_cache.dart';
 
@@ -1483,7 +1484,7 @@ TextBookTab _makeTextTab(String title, {String currentTitle = ''}) {
       showLeftPane: false,
       content: const ['שורה א'],
       fontSize: 18,
-      showSplitView: false,
+      viewMode: TextBookViewMode.combined,
       activeCommentators: const [],
       commentatorGroups: const [],
       availableCommentators: const [],

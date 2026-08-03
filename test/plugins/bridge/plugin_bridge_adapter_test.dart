@@ -41,6 +41,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/tools/calendar/utils/calendar_cubit.dart';
 import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/workspaces/bloc/workspace_bloc.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 
 class _MockHistoryBloc extends Mock implements HistoryBloc {}
 
@@ -448,7 +449,7 @@ void main() {
             book: currentTab.book,
             index: currentTab.index,
             showLeftPane: false,
-            splitView: false,
+            viewMode: TextBookViewMode.combined,
           ).copyWith(
             visibleIndices: [42],
             currentTitle: 'פרק ג',
@@ -484,7 +485,7 @@ void main() {
           book: currentTab.book,
           index: currentTab.index,
           showLeftPane: false,
-          splitView: false,
+          viewMode: TextBookViewMode.combined,
         ).copyWith(
           content: const ['כותרת', 'אני אומר שאני יודע'],
           currentTitle: 'פרק א',
@@ -520,7 +521,7 @@ void main() {
           book: currentTab.book,
           index: currentTab.index,
           showLeftPane: false,
-          splitView: false,
+          viewMode: TextBookViewMode.combined,
         ).copyWith(
           content: const ['כותרת', 'אני אומר שאני יודע שאני'],
           currentTitle: 'פרק א',
@@ -557,7 +558,7 @@ void main() {
           book: currentTab.book,
           index: currentTab.index,
           showLeftPane: false,
-          splitView: false,
+          viewMode: TextBookViewMode.combined,
         ).copyWith(
           content: const ['כותרת', 'בְּרֵאשִׁית ברא'],
           currentTitle: 'פרק א',

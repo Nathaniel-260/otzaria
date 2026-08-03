@@ -9,6 +9,7 @@ import 'package:otzaria/navigation/bloc/navigation_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/tab.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/ui/reading_left_pane_policy.dart';
 
@@ -151,7 +152,8 @@ class BookOpenCoordinator {
       permanentHighlightLine: effectivePermanentHighlightLine,
       commentators: resolvedCommentators,
       openLeftPane: shouldOpenLeftPane,
-      showPageShapeView: savedViewMode,
+      // null = ההעדפה הגלובלית "מפרשים בצד" תקבע; אין העדפת צורת דף לספר הזה.
+      viewMode: savedViewMode == true ? TextBookViewMode.pageShape : null,
       requiresStableLayout: requiresStableLayout,
       pinpointHighlight: effectivePinpoint,
       pinpointHighlightSectionIndex: effectivePinpoint != null

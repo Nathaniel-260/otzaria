@@ -4,6 +4,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_bloc.dart';
 import 'package:otzaria/bookmarks/bloc/bookmark_state.dart';
 import 'package:otzaria/bookmarks/models/bookmark.dart';
@@ -188,7 +189,7 @@ void main() {
         // directly on the tab so SplitedViewScreen always opens the panel.
         final book = TextBook(title: 'ספר בדיקה');
         final bloc = _TestTextBookBloc(
-          _loadedState(book).copyWith(showSplitView: true),
+          _loadedState(book).copyWith(viewMode: TextBookViewMode.split),
         );
         final tab = TextBookTab(
           book: book,
@@ -341,7 +342,9 @@ void main() {
         // רגרסיה: בעבר תצוגה משולבת כפתה "מפרשים מתחת" ל-state (ההעדפה אבדה
         // בפירוק ההצמדה) ונטרלה את תפריט בחירת התצוגה.
         final book = TextBook(title: 'ספר בדיקה');
-        final bloc = _TestTextBookBloc(_loadedState(book, showSplitView: true));
+        final bloc = _TestTextBookBloc(
+          _loadedState(book, viewMode: TextBookViewMode.split),
+        );
         final tab = TextBookTab(
           book: book,
           index: 0,
@@ -603,13 +606,16 @@ Future<void> _setSurfaceSize(WidgetTester tester, Size size) async {
   addTearDown(tester.view.resetDevicePixelRatio);
 }
 
-TextBookLoaded _loadedState(TextBook book, {bool showSplitView = false}) {
+TextBookLoaded _loadedState(
+  TextBook book, {
+  TextBookViewMode viewMode = TextBookViewMode.combined,
+}) {
   return TextBookLoaded(
     book: book,
     showLeftPane: false,
     content: const ['שורה א', 'שורה ב', 'שורה ג'],
     fontSize: 18,
-    showSplitView: showSplitView,
+    viewMode: viewMode,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

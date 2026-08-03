@@ -5,6 +5,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
@@ -965,7 +966,7 @@ TextBookLoaded _loadedState() {
     showLeftPane: false,
     content: const ['פסקה ראשונה', 'פסקה שניה'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

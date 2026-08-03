@@ -23,6 +23,7 @@ import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
 import 'package:otzaria/widgets/lists/commentators_selection_panel.dart';
 import 'package:otzaria/widgets/misc/commentators_filter_button.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -685,7 +686,7 @@ TextBookLoaded _stateForLinks({
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: commentators,
     commentatorGroups: [
       CommentatorGroup(

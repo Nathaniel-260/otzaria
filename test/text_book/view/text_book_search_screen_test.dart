@@ -13,6 +13,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/search_results.dart';
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../support/search_engine_test_init.dart';
 import '../../test_helpers/memory_cache_provider.dart';
@@ -868,7 +869,7 @@ TextBookLoaded _loadedState({List<int> visibleIndices = const [0]}) {
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

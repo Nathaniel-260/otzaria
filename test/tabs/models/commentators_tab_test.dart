@@ -9,6 +9,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../helpers/memory_settings_cache.dart';
@@ -268,8 +269,7 @@ TextBookLoaded _loadedState({
   showLeftPane: false,
   content: const ['א', 'ב', 'ג'],
   fontSize: 18,
-  showSplitView: true,
-  showPageShapeView: false,
+  viewMode: TextBookViewMode.split,
   activeCommentators: activeCommentators,
   commentatorGroups: const [],
   availableCommentators: const <String>[],

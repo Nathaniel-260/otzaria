@@ -26,6 +26,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../test_helpers/memory_cache_provider.dart';
@@ -109,7 +110,13 @@ void main() {
 
   group('ReadingSettingsPanel — זיהוי מצב צורת הדף', () {
     Widget buildBody({required bool pageShape}) {
-      final textBloc = _TestTextBookBloc(_loaded(showPageShapeView: pageShape));
+      final textBloc = _TestTextBookBloc(
+        _loaded(
+          viewMode: pageShape
+              ? TextBookViewMode.pageShape
+              : TextBookViewMode.split,
+        ),
+      );
       final tab = TextBookTab(
         book: TextBook(title: 'ספר בדיקה'),
         index: 0,
@@ -158,13 +165,12 @@ void main() {
 
 // ===== Helpers =====
 
-TextBookLoaded _loaded({required bool showPageShapeView}) => TextBookLoaded(
+TextBookLoaded _loaded({required TextBookViewMode viewMode}) => TextBookLoaded(
   book: TextBook(title: 'ספר בדיקה'),
   showLeftPane: false,
   content: const ['שורה א', 'שורה ב'],
   fontSize: 18,
-  showSplitView: true,
-  showPageShapeView: showPageShapeView,
+  viewMode: viewMode,
   activeCommentators: const [],
   commentatorGroups: const [],
   availableCommentators: const [],

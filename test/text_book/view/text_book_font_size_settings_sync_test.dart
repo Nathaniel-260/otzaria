@@ -31,6 +31,7 @@ import 'package:otzaria/text_book/view/text_book_screen.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:provider/provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -152,7 +153,7 @@ void main() {
         false,
         const [],
         searchMode: SearchMode.exact,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
       ),
       scrollController: ItemScrollController(),
       positionsListener: ItemPositionsListener.create(),
@@ -166,7 +167,7 @@ void main() {
     bloc.add(
       const LoadContent(
         fontSize: 18,
-        showSplitView: false,
+        viewMode: TextBookViewMode.combined,
         removeNikud: false,
         loadCommentators: false,
       ),
@@ -192,7 +193,7 @@ TextBookLoaded _loadedState(TextBook book, {required double fontSize}) {
     showLeftPane: false,
     content: const ['שורה א', 'שורה ב', 'שורה ג'],
     fontSize: fontSize,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

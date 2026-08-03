@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'dart:ui';
 
@@ -106,7 +107,6 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
           index: 0,
           searchText: '',
           openLeftPane: false,
-          splitedView: Settings.getValue<bool>('key-splited-view') ?? true,
         );
       });
     } else if (book is PdfBook) {
@@ -310,7 +310,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                       _currentTextTab!.bloc.add(
                         LoadContent(
                           fontSize: _fontSize,
-                          showSplitView: false,
+                          viewMode: TextBookViewMode.combined,
                           removeNikud: settingsState.defaultRemoveNikud,
                           loadCommentators: false,
                         ),

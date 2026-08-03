@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
@@ -35,7 +36,7 @@ void main() {
         false,
         const [],
         searchMode: SearchMode.exact,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
       ),
       scrollController: ItemScrollController(),
       positionsListener: ItemPositionsListener.create(),
@@ -43,7 +44,7 @@ void main() {
     bloc.add(
       const LoadContent(
         fontSize: 20,
-        showSplitView: false,
+        viewMode: TextBookViewMode.combined,
         removeNikud: false,
         loadCommentators: false,
       ),

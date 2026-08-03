@@ -3,6 +3,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 /// טסטים ללוגיקה הטהורה של החלטות מצב-רצף ב-bloc. השאר (תופעת לוואי של
@@ -151,7 +152,7 @@ TextBookLoaded _loaded({
     showLeftPane: false,
     content: const ['בראשית', 'ברא', 'אלהים'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

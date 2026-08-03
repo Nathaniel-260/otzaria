@@ -4,6 +4,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
@@ -60,8 +61,10 @@ class TextBookInitial extends TextBookState {
   final Map<String, String> spacingValues;
   final SearchMode searchMode;
   final int searchDistance;
-  final bool splitedView;
-  final bool showPageShapeView;
+  final TextBookViewMode viewMode;
+
+  bool get splitedView => viewMode == TextBookViewMode.split;
+  bool get showPageShapeView => viewMode == TextBookViewMode.pageShape;
 
   /// טקסט להדגשה בלבד — לא מפעיל חלונית חיפוש.
   final String highlightText;
@@ -86,8 +89,7 @@ class TextBookInitial extends TextBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
-    this.splitedView = true,
-    this.showPageShapeView = false,
+    this.viewMode = TextBookViewMode.split,
     this.highlightText = '',
     this.permanentHighlightLine,
     this.pinpointHighlightIndex,
@@ -106,13 +108,12 @@ class TextBookInitial extends TextBookState {
     this.spacingValues = const {},
     this.searchMode = SearchMode.exact,
     this.searchDistance = 0,
-    bool? splitedView,
-    this.showPageShapeView = false,
+    this.viewMode = TextBookViewMode.combined,
     this.highlightText = '',
     this.permanentHighlightLine,
     this.pinpointHighlightIndex,
     this.pinpointHighlightText,
-  }) : splitedView = splitedView ?? false;
+  });
 
   @override
   List<Object?> get props => [
@@ -125,8 +126,7 @@ class TextBookInitial extends TextBookState {
     _spacingValuesSignature(spacingValues),
     searchMode,
     searchDistance,
-    splitedView,
-    showPageShapeView,
+    viewMode,
     pinpointHighlightIndex,
     pinpointHighlightText,
   ];
@@ -163,9 +163,11 @@ class TextBookLoaded extends TextBookState {
   final List<String> content;
   final int contentVersion;
   final double fontSize;
-  final bool showSplitView;
-  final bool showTzuratHadafView;
-  final bool showPageShapeView;
+  final TextBookViewMode viewMode;
+
+  bool get showSplitView => viewMode == TextBookViewMode.split;
+  bool get showPageShapeView => viewMode == TextBookViewMode.pageShape;
+
   final List<String> activeCommentators;
   final List<CommentatorGroup> commentatorGroups;
   final List<String> availableCommentators;
@@ -249,9 +251,7 @@ class TextBookLoaded extends TextBookState {
     required this.content,
     this.contentVersion = 0,
     required this.fontSize,
-    required this.showSplitView,
-    this.showTzuratHadafView = false,
-    this.showPageShapeView = false,
+    required this.viewMode,
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
@@ -303,7 +303,7 @@ class TextBookLoaded extends TextBookState {
     required TextBook book,
     required int index,
     required bool showLeftPane,
-    required bool splitView,
+    required TextBookViewMode viewMode,
     List<String>? commentators,
   }) {
     return TextBookLoaded(
@@ -312,9 +312,7 @@ class TextBookLoaded extends TextBookState {
       contentVersion: 0,
       fontSize: 25.0, // Default font size
       showLeftPane: showLeftPane,
-      showSplitView: splitView,
-      showTzuratHadafView: false,
-      showPageShapeView: false,
+      viewMode: viewMode,
       activeCommentators: commentators ?? const [],
       commentatorGroups: const [],
       availableCommentators: const [],
@@ -353,9 +351,7 @@ class TextBookLoaded extends TextBookState {
     int? contentVersion,
     double? fontSize,
     bool? showLeftPane,
-    bool? showSplitView,
-    bool? showTzuratHadafView,
-    bool? showPageShapeView,
+    TextBookViewMode? viewMode,
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
@@ -415,9 +411,7 @@ class TextBookLoaded extends TextBookState {
       contentVersion: contentVersion ?? this.contentVersion,
       fontSize: fontSize ?? this.fontSize,
       showLeftPane: showLeftPane ?? this.showLeftPane,
-      showSplitView: showSplitView ?? this.showSplitView,
-      showTzuratHadafView: showTzuratHadafView ?? this.showTzuratHadafView,
-      showPageShapeView: showPageShapeView ?? this.showPageShapeView,
+      viewMode: viewMode ?? this.viewMode,
       activeCommentators: activeCommentators ?? this.activeCommentators,
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
@@ -518,9 +512,7 @@ class TextBookLoaded extends TextBookState {
     content.length,
     fontSize,
     showLeftPane,
-    showSplitView,
-    showTzuratHadafView,
-    showPageShapeView,
+    viewMode,
     // השוואה לפי תוכן (לא רק אורך) — אחרת החלפת מפרש אחד באחר באותו אורך
     // נבלעת ע"י השוואת ה-state והבחירה לא מתעדכנת.
     activeCommentators,

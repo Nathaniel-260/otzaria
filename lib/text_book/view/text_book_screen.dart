@@ -29,6 +29,7 @@ import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
@@ -821,7 +822,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           context.read<TextBookBloc>().add(
             LoadContent(
               fontSize: state.fontSize,
-              showSplitView: currentState.showSplitView,
+              // ללא viewMode — טעינה מחדש בעקבות גופן/ניקוד שומרת על התצוגה.
               removeNikud: state.defaultRemoveNikud,
               forceCloseLeftPane: widget.isInCombinedView,
               preserveState: true,
@@ -946,8 +947,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         if (settings.fontSize != null) {
           textBookBloc.add(UpdateFontSize(settings.fontSize!));
         }
-        if (settings.commentatorsBelow != null) {
-          textBookBloc.add(ToggleSplitView(!settings.commentatorsBelow!));
+        // בצורת הדף אין מפרשים בצד/מתחת — ההעדפה תחול כשהמשתמש יבחר תצוגה.
+        if (settings.commentatorsBelow != null &&
+            state.viewMode != TextBookViewMode.pageShape) {
+          textBookBloc.add(
+            SetViewMode(
+              settings.commentatorsBelow!
+                  ? TextBookViewMode.combined
+                  : TextBookViewMode.split,
+            ),
+          );
         }
         if (settings.removeNikud != null) {
           textBookBloc.add(ToggleNikud(settings.removeNikud!));
@@ -977,7 +986,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     textBookBloc.add(
       LoadContent(
         fontSize: settingsBloc.state.fontSize,
-        showSplitView: Settings.getValue<bool>('key-splited-view') ?? true,
+        viewMode: (Settings.getValue<bool>('key-splited-view') ?? true)
+            ? TextBookViewMode.split
+            : TextBookViewMode.combined,
         removeNikud: settingsBloc.state.defaultRemoveNikud,
         preserveState: true,
         // בתצוגה משולבת, חלונית הצד תמיד סגורה
@@ -1023,11 +1034,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     setState(() {
       _sidebarTabIndex = 2;
     });
-    // Fire the notifier directly so SplitedViewScreen always opens the panel,
-    // even when showSplitView is already true and the bloc won't emit a new state
-    // (TextBookLoaded uses Equatable, so a no-op ToggleSplitView is swallowed).
+    // ה-notifier נורה ישירות כי כשהתצוגה כבר "מפרשים בצד" ה-bloc לא יפלוט
+    // state חדש (Equatable בולע אירוע חסר-שינוי) והחלונית לא הייתה נפתחת.
     widget.tab.openNotesTabNotifier.value++;
-    context.read<TextBookBloc>().add(const ToggleSplitView(true));
+    context.read<TextBookBloc>().add(
+      const SetViewMode(TextBookViewMode.split),
+    );
   }
 
   void _openLeftPaneTab(int index, {String? searchText}) {
@@ -1231,7 +1243,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
                   context.read<TextBookBloc>().add(
                     LoadContent(
                       fontSize: settingsState.fontSize,
-                      showSplitView: state.splitedView,
+                      viewMode: state.viewMode,
                       removeNikud: settingsState.defaultRemoveNikud,
                       // בתצוגה משולבת, חלונית הצד תמיד סגורה
                       forceCloseLeftPane: widget.isInCombinedView,
@@ -1906,26 +1918,15 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   /// קבלת האייקון המתאים למצב התצוגה הנוכחי
-  IconData _getViewModeIcon(TextBookLoaded state) {
-    if (state.showPageShapeView) {
-      return OtzariaIcons.book_open_tzurat_hadaf_24_filled;
-    }
-    if (state.showSplitView) {
-      return FluentIcons.panel_left_24_regular;
-    }
-    return FluentIcons.panel_bottom_20_regular;
-  }
+  IconData _getViewModeIcon(TextBookLoaded state) => switch (state.viewMode) {
+    TextBookViewMode.pageShape => OtzariaIcons.book_open_tzurat_hadaf_24_filled,
+    TextBookViewMode.split => FluentIcons.panel_left_24_regular,
+    TextBookViewMode.combined => FluentIcons.panel_bottom_20_regular,
+  };
 
   /// קבלת ה-tooltip למצב התצוגה הנוכחי
-  String _getViewModeTooltip(TextBookLoaded state) {
-    if (state.showPageShapeView) {
-      return 'תצוגה: צורת הדף';
-    } else if (state.showSplitView) {
-      return 'תצוגה: מפרשים בצד';
-    } else {
-      return 'תצוגה: מפרשים מתחת';
-    }
-  }
+  String _getViewModeTooltip(TextBookLoaded state) =>
+      'תצוגה: ${state.viewMode.displayName}';
 
   /// טיפול בבחירת מצב תצוגה — משותף לתפריט הכפתור ולתת-התפריט ב-overflow
   Future<void> _onViewModeSelected(
@@ -1947,26 +1948,25 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final bloc = context.read<TextBookBloc>();
     final tourCubit = context.read<TourCubit>();
 
-    // קביעת מצב היעד לפי הבחירה
-    final bool isPageSelected = value == _viewModePage;
-    final bool isSplitSelected = value == _viewModeSplit;
+    final mode = switch (value) {
+      _viewModePage => TextBookViewMode.pageShape,
+      _viewModeSplit => TextBookViewMode.split,
+      _viewModeBelow => TextBookViewMode.combined,
+      _ => null,
+    };
+    if (mode == null || mode == state.viewMode) return;
 
-    // עדכון תצוגת צורת הדף במידת הצורך
-    if (isPageSelected != state.showPageShapeView) {
-      bloc.add(TogglePageShapeView(isPageSelected));
-    }
+    bloc.add(SetViewMode(mode));
 
-    // עדכון תצוגת המפרשים במידת הצורך (רק במצבים שאינם 'צורת הדף')
-    if (!isPageSelected && isSplitSelected != state.showSplitView) {
-      bloc.add(ToggleSplitView(isSplitSelected));
+    if (mode != TextBookViewMode.pageShape) {
       await savePerBookDisplaySettings(
         context,
         state,
-        showSplitView: isSplitSelected,
+        showSplitView: mode == TextBookViewMode.split,
       );
     }
 
-    if (isPageSelected || isSplitSelected) {
+    if (mode != TextBookViewMode.combined) {
       tourCubit.recordInteraction(
         TourInteraction(
           type: TourInteractionType.commentaryUsed,
@@ -1980,17 +1980,19 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   Widget _buildViewModeDropdown(BuildContext context, TextBookLoaded state) {
     final iconWidget = Icon(_getViewModeIcon(state));
 
-    final isSplit = !state.showPageShapeView && state.showSplitView;
-    final isBelow = !state.showPageShapeView && !state.showSplitView;
-    final isPage = state.showPageShapeView;
+    final isSplit = state.viewMode == TextBookViewMode.split;
+    final isBelow = state.viewMode == TextBookViewMode.combined;
+    final isPage = state.viewMode == TextBookViewMode.pageShape;
 
     return AppPopupMenuButton<String>(
       tooltip: 'בחר סוג תצוגת מפרשים',
       iconData: _getViewModeIcon(state),
       icon: iconWidget,
-      initialValue: state.showPageShapeView
-          ? _viewModePage
-          : (state.showSplitView ? _viewModeSplit : _viewModeBelow),
+      initialValue: switch (state.viewMode) {
+        TextBookViewMode.pageShape => _viewModePage,
+        TextBookViewMode.split => _viewModeSplit,
+        TextBookViewMode.combined => _viewModeBelow,
+      },
       onSelected: (value) => _onViewModeSelected(context, state, value),
       entries: [
         AppMenuEntry(

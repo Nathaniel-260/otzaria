@@ -11,6 +11,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 void main() {
@@ -25,13 +26,13 @@ void main() {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
       );
 
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -54,13 +55,13 @@ void main() {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
       );
 
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -85,13 +86,13 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -225,7 +226,7 @@ void main() {
 
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
           // ספר אישי בשם זהה לספר רשמי: בלי preferUserBooks ה-quick preview
           // היה מאתר את הספר הרשמי לפי שם בלבד מ-seforim.db.
           book: TextBook(
@@ -261,7 +262,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -293,13 +294,13 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: true,
+          viewMode: TextBookViewMode.pageShape,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -386,14 +387,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: true,
+          viewMode: TextBookViewMode.pageShape,
           initialIndex: 0,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -434,14 +435,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: true,
+          viewMode: TextBookViewMode.pageShape,
           initialIndex: 10,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -494,7 +495,7 @@ void main() {
 
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: true,
+        viewMode: TextBookViewMode.pageShape,
         commentators: const [
           'אבן עזרא על בראשית',
           'תרגום אונקלוס על בראשית',
@@ -508,7 +509,7 @@ void main() {
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -565,7 +566,7 @@ void main() {
 
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: true,
+        viewMode: TextBookViewMode.pageShape,
         commentators: const [
           'אבן עזרא על בראשית',
           'תרגום אונקלוס על בראשית',
@@ -577,7 +578,7 @@ void main() {
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -619,7 +620,7 @@ void main() {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
         commentators: const [
           'רש"י על בראשית',
           'אבן עזרא על בראשית',
@@ -629,7 +630,7 @@ void main() {
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: true,
+          viewMode: TextBookViewMode.split,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -652,14 +653,14 @@ void main() {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
         commentators: const ['רש"י על בראשית'],
       );
 
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -682,14 +683,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
           commentators: const ['רש"י על בראשית'],
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -718,14 +719,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
           commentators: const ['רש"י על בראשית'],
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -779,14 +780,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
           commentators: const ['רש"י על בראשית'],
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -814,13 +815,13 @@ void main() {
       final repository = _FakeTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
       );
 
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -850,14 +851,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         // טעינה ראשונית עם removeNikud=false
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -874,7 +875,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false, // ערך Settings: false
             preserveState: true,
             preserveRemoveNikud: true, // שמור את מה שהמשתמש בחר
@@ -899,14 +900,14 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         // טעינה ראשונית עם removeNikud=false
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -922,7 +923,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false, // ערך Settings החדש: false
             preserveState: true,
             preserveRemoveNikud: false, // אל תשמר – החל ערך חדש
@@ -947,13 +948,13 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -970,7 +971,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             preserveState: true,
             preserveRemoveNikud: true,
@@ -996,13 +997,13 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1017,7 +1018,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             preserveState: true,
             loadCommentators: false,
@@ -1041,7 +1042,7 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         // Settings: pin-sidebar = false
@@ -1050,7 +1051,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1067,7 +1068,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             preserveState: true,
             preserveRemoveNikud: true,
@@ -1092,7 +1093,7 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         await Settings.setValue<bool>('key-pin-sidebar', false);
@@ -1100,7 +1101,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1115,7 +1116,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             preserveState: true,
             preserveRemoveNikud: false,
@@ -1137,7 +1138,7 @@ void main() {
       final repository = _DelayedContentTextBookRepository();
       final bloc = _createBloc(
         repository: repository,
-        showPageShapeView: false,
+        viewMode: TextBookViewMode.combined,
         quickPreviewLoader:
             (
               String title,
@@ -1153,7 +1154,7 @@ void main() {
       bloc.add(
         const LoadContent(
           fontSize: 20,
-          showSplitView: false,
+          viewMode: TextBookViewMode.combined,
           removeNikud: false,
           loadCommentators: false,
         ),
@@ -1200,7 +1201,7 @@ void main() {
         final repository = _DelayedContentTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
           quickPreviewLoader:
               (
                 String title,
@@ -1215,7 +1216,7 @@ void main() {
         bloc.add(
           const LoadContent(
             fontSize: 16, // ערך ברירת מחדל "תקוע" של SettingsState.initial()
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1253,13 +1254,13 @@ void main() {
           final repository = _FakeTextBookRepository();
           final bloc = _createBloc(
             repository: repository,
-            showPageShapeView: false,
+            viewMode: TextBookViewMode.combined,
           );
 
           bloc.add(
             const LoadContent(
               fontSize: 20,
-              showSplitView: false,
+              viewMode: TextBookViewMode.combined,
               removeNikud: false,
               loadCommentators: false,
             ),
@@ -1299,13 +1300,13 @@ void main() {
           final repository = _FakeTextBookRepository();
           final bloc = _createBloc(
             repository: repository,
-            showPageShapeView: false,
+            viewMode: TextBookViewMode.combined,
           );
 
           bloc.add(
             const LoadContent(
               fontSize: 20,
-              showSplitView: false,
+              viewMode: TextBookViewMode.combined,
               removeNikud: false,
               loadCommentators: false,
             ),
@@ -1334,13 +1335,13 @@ void main() {
         final repository = _FakeTextBookRepository();
         final bloc = _createBloc(
           repository: repository,
-          showPageShapeView: false,
+          viewMode: TextBookViewMode.combined,
         );
 
         bloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1387,7 +1388,7 @@ Future<void> _waitFor(
 
 TextBookBloc _createBloc({
   required TextBookRepository repository,
-  required bool showPageShapeView,
+  required TextBookViewMode viewMode,
   List<String> commentators = const [],
   TextBook? book,
   int initialIndex = 10,
@@ -1409,7 +1410,7 @@ TextBookBloc _createBloc({
       false,
       commentators,
       searchMode: SearchMode.exact,
-      showPageShapeView: showPageShapeView,
+      viewMode: viewMode,
     ),
     scrollController: ItemScrollController(),
     positionsListener: ItemPositionsListener.create(),

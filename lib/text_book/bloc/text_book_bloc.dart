@@ -11,6 +11,7 @@ import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -159,9 +160,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<UpdateResolvedBookId>(_onUpdateResolvedBookId);
     on<UpdateFontSize>(_onUpdateFontSize);
     on<ToggleLeftPane>(_onToggleLeftPane);
-    on<ToggleSplitView>(_onToggleSplitView);
-    on<ToggleTzuratHadafView>(_onToggleTzuratHadafView);
-    on<TogglePageShapeView>(_onTogglePageShapeView);
+    on<SetViewMode>(_onSetViewMode);
     on<UpdateCommentators>(_onUpdateCommentators);
     on<UpdateLinkTypeFilter>(_onUpdateLinkTypeFilter);
     on<ToggleNikud>(_onToggleNikud);
@@ -601,6 +600,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     late final List<int> visibleIndices;
 
     bool initialShowPageShapeView = false;
+    TextBookViewMode? preservedViewMode;
     int? pinpointHighlightIndex;
     String? pinpointHighlightText;
 
@@ -625,6 +625,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       commentators = currentState.activeCommentators;
       visibleIndices = currentState.visibleIndices;
       initialShowPageShapeView = currentState.showPageShapeView;
+      preservedViewMode = currentState.viewMode;
       existingAvailableCommentators = currentState.availableCommentators;
       existingCommentatorGroups = currentState.commentatorGroups;
       preservedRemoveNikud = currentState.removeNikud;
@@ -652,6 +653,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       commentators = initial.commentators;
       visibleIndices = [initial.index < 0 ? 0 : initial.index];
       initialShowPageShapeView = initial.showPageShapeView;
+      preservedViewMode = initial.viewMode;
       pinpointHighlightIndex = initial.pinpointHighlightIndex;
       pinpointHighlightText = initial.pinpointHighlightText;
 
@@ -930,8 +932,11 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
                 explicitOpen: showLeftPane,
                 hasSearchText: searchText.isNotEmpty,
               ),
-        showSplitView: event.showSplitView,
-        showPageShapeView: initialShowPageShapeView,
+        // צורת הדף גוברת על המצב שב-event: היא העדפה פר-ספר שנטענה כבר,
+        // וה-event נושא רק את הבחירה בין מפרשים-בצד למפרשים-מתחת.
+        viewMode: initialShowPageShapeView
+            ? TextBookViewMode.pageShape
+            : (event.viewMode ?? preservedViewMode),
         activeCommentators: commentators,
         commentatorGroups: existingCommentatorGroups,
         removeNikud: (event.preserveRemoveNikud && preservedRemoveNikud != null)
@@ -1097,80 +1102,52 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
-  void _onToggleSplitView(
-    ToggleSplitView event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-      Settings.setValue<bool>('key-splited-view', event.show);
-      final updatedState = currentState.copyWith(
-        showSplitView: event.show,
-        selectedIndex: currentState.selectedIndex,
-      );
-      emit(updatedState);
-      _loadLinksInBackground(
-        updatedState.book,
-        updatedState.visibleIndices,
-        force: true,
+  void _onSetViewMode(SetViewMode event, Emitter<TextBookState> emit) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    if (currentState.viewMode == event.mode) return;
+
+    final wasPageShape = currentState.viewMode == TextBookViewMode.pageShape;
+    final isPageShape = event.mode == TextBookViewMode.pageShape;
+
+    // ההעדפה הגלובלית "מפרשים בצד" נשמרת רק כשהיא הבחירה בפועל — מעבר לצורת
+    // הדף אינו אמור לדרוס את מה שהמשתמש בחר לשאר הספרים.
+    if (!isPageShape) {
+      Settings.setValue<bool>(
+        'key-splited-view',
+        event.mode == TextBookViewMode.split,
       );
     }
-  }
-
-  void _onToggleTzuratHadafView(
-    ToggleTzuratHadafView event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-
-      emit(
-        currentState.copyWith(
-          showTzuratHadafView: event.show,
-          showPageShapeView: false,
-          selectedIndex: currentState.selectedIndex,
-          showLeftPane: event.show ? false : currentState.showLeftPane,
-        ),
-      );
-    }
-  }
-
-  void _onTogglePageShapeView(
-    TogglePageShapeView event,
-    Emitter<TextBookState> emit,
-  ) {
-    if (state is TextBookLoaded) {
-      final currentState = state as TextBookLoaded;
-
+    if (isPageShape != wasPageShape) {
       PageShapeSettingsManager.saveViewModePreference(
         currentState.book.title,
-        event.show,
+        isPageShape,
       );
+      _setAwaitingInitialPageShapeVisibleSync(isPageShape);
+    }
 
-      _setAwaitingInitialPageShapeVisibleSync(event.show);
-      final updatedState = currentState.copyWith(
-        showPageShapeView: event.show,
-        showTzuratHadafView: false,
-        selectedIndex: currentState.selectedIndex,
-        showLeftPane: event.show ? false : currentState.showLeftPane,
-      );
-      emit(updatedState);
-      _loadLinksInBackground(
-        updatedState.book,
-        updatedState.visibleIndices,
-        force: true,
-      );
+    final updatedState = currentState.copyWith(
+      viewMode: event.mode,
+      selectedIndex: currentState.selectedIndex,
+      showLeftPane: isPageShape ? false : currentState.showLeftPane,
+    );
+    emit(updatedState);
+    _loadLinksInBackground(
+      updatedState.book,
+      updatedState.visibleIndices,
+      force: true,
+    );
 
-      if (!event.show && currentState.selectedIndex != null) {
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (scrollController.isAttached) {
-            scrollController.scrollTo(
-              index: currentState.selectedIndex!,
-              duration: const Duration(milliseconds: 300),
-            );
-          }
-        });
-      }
+    // יציאה מצורת הדף בונה רשימה חדשה שמאבדת את המיקום — גוללים חזרה לבחירה.
+    if (wasPageShape && currentState.selectedIndex != null) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (scrollController.isAttached) {
+          scrollController.scrollTo(
+            index: currentState.selectedIndex!,
+            duration: const Duration(milliseconds: 300),
+          );
+        }
+      });
     }
   }
 

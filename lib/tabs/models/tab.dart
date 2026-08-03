@@ -7,6 +7,7 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 
 abstract class OpenedTab {
   String title;
@@ -26,8 +27,7 @@ abstract class OpenedTab {
 
   factory OpenedTab.from(OpenedTab tab) {
     if (tab is TextBookTab) {
-      bool? splitedView;
-      bool? showPageShapeView;
+      TextBookViewMode? viewMode;
       List<String>? commentators = tab.commentators;
       // ערכי ברירת מחדל לוקחים את ה‑pinpoint שאיתו נבנה הטאב המקורי. אם
       // ה‑bloc כבר נטען, נעדיף את הערכים המעודכנים מה‑state — כדי לתפוס שינויים
@@ -36,16 +36,14 @@ abstract class OpenedTab {
       int? pinpointSectionIndex = tab.pinpointHighlightSectionIndex;
       final state = tab.bloc.state;
       if (state is TextBookLoaded) {
-        splitedView = state.showSplitView;
-        showPageShapeView = state.showPageShapeView;
+        viewMode = state.viewMode;
         commentators = state.activeCommentators;
         pinpointText = state.pinpointHighlightText;
         pinpointSectionIndex = state.pinpointHighlightIndex;
       } else if (state is TextBookInitial) {
         // טאב ששמור בשולחן עבודה לא-פעיל מעולם לא נטען — בלי הענף הזה
-        // צורת הדף והתצוגה המפוצלת מתאפסות בכל החלפת שולחן עבודה.
-        splitedView = state.splitedView;
-        showPageShapeView = state.showPageShapeView;
+        // מצב התצוגה מתאפס בכל החלפת שולחן עבודה.
+        viewMode = state.viewMode;
       }
       return TextBookTab(
         index: tab.index,
@@ -53,8 +51,7 @@ abstract class OpenedTab {
         searchText: tab.searchText,
         commentators: commentators,
         openLeftPane: state.showLeftPane,
-        splitedView: splitedView,
-        showPageShapeView: showPageShapeView,
+        viewMode: viewMode,
         isPinned: tab.isPinned,
         dedupeKey: tab.dedupeKey,
         pinpointHighlight: pinpointText,
@@ -91,7 +88,7 @@ abstract class OpenedTab {
     List<String>? commentators,
     bool openLeftPane = false,
     bool isPinned = false,
-    bool? showPageShapeView,
+    TextBookViewMode? viewMode,
     bool requiresStableLayout = false,
     String? pinpointHighlight,
     int? pinpointHighlightSectionIndex,
@@ -121,7 +118,7 @@ abstract class OpenedTab {
         commentators: commentators,
         openLeftPane: openLeftPane,
         isPinned: isPinned,
-        showPageShapeView: showPageShapeView,
+        viewMode: viewMode,
         pinpointHighlight: pinpointHighlight,
         pinpointHighlightSectionIndex: pinpointHighlightSectionIndex,
         dedupeKey: dedupeKey,
@@ -136,7 +133,7 @@ abstract class OpenedTab {
         commentators: commentators,
         openLeftPane: openLeftPane,
         isPinned: isPinned,
-        showPageShapeView: showPageShapeView,
+        viewMode: viewMode,
         pinpointHighlight: pinpointHighlight,
         pinpointHighlightSectionIndex: pinpointHighlightSectionIndex,
         dedupeKey: dedupeKey,

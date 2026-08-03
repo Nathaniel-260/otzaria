@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 
 sealed class TextBookEvent extends Equatable {
   const TextBookEvent();
@@ -10,7 +11,10 @@ sealed class TextBookEvent extends Equatable {
 
 class LoadContent extends TextBookEvent {
   final double fontSize;
-  final bool showSplitView;
+
+  /// מצב התצוגה המבוקש. `null` = שמור על המצב הקיים (נדרש לטעינה מחדש שנובעת
+  /// משינוי גופן/ניקוד, שאינה אמורה להחזיר את התצוגה לברירת המחדל).
+  final TextBookViewMode? viewMode;
   final bool removeNikud;
   final bool preserveState; // Whether to preserve current state during reload
   final bool loadCommentators; // Whether to load commentators
@@ -31,7 +35,7 @@ class LoadContent extends TextBookEvent {
 
   const LoadContent({
     required this.fontSize,
-    required this.showSplitView,
+    this.viewMode,
     required this.removeNikud,
     this.preserveState = false, // Default to false for backward compatibility
     this.loadCommentators = true, // Default to true for backward compatibility
@@ -45,7 +49,7 @@ class LoadContent extends TextBookEvent {
   @override
   List<Object?> get props => [
     fontSize,
-    showSplitView,
+    viewMode,
     removeNikud,
     preserveState,
     loadCommentators,
@@ -85,31 +89,15 @@ class ToggleLeftPane extends TextBookEvent {
   List<Object?> get props => [show];
 }
 
-class ToggleSplitView extends TextBookEvent {
-  final bool show;
+/// מחליף את מצב התצוגה של הקורא. מחליף שלושה דגלים בוליאניים נפרדים שאיפשרו
+/// שילובים לא-חוקיים.
+class SetViewMode extends TextBookEvent {
+  final TextBookViewMode mode;
 
-  const ToggleSplitView(this.show);
-
-  @override
-  List<Object?> get props => [show];
-}
-
-class ToggleTzuratHadafView extends TextBookEvent {
-  final bool show;
-
-  const ToggleTzuratHadafView(this.show);
+  const SetViewMode(this.mode);
 
   @override
-  List<Object?> get props => [show];
-}
-
-class TogglePageShapeView extends TextBookEvent {
-  final bool show;
-
-  const TogglePageShapeView(this.show);
-
-  @override
-  List<Object?> get props => [show];
+  List<Object?> get props => [mode];
 }
 
 class UpdateCommentators extends TextBookEvent {

@@ -18,6 +18,7 @@ import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/searching_tab.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/view/page_shape/utils/page_shape_settings_manager.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -303,9 +304,9 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
         spacingValues: widget.tab.spacingValues,
         searchMode: inBookMode,
         searchDistance: inBookDistance,
-        showPageShapeView: PageShapeSettingsManager.getViewModePreference(
-          title,
-        ),
+        viewMode: PageShapeSettingsManager.getViewModePreference(title) == true
+            ? TextBookViewMode.pageShape
+            : null,
         openLeftPane: openLeftPane,
       );
 

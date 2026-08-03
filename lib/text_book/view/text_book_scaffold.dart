@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/strategies/strategies.dart';
 import 'package:otzaria/text_book/widgets/text_book_state_builder.dart';
 
@@ -74,19 +75,17 @@ class TextBookScaffold extends StatelessWidget {
     );
   }
 
-  /// Selects the appropriate view strategy based on the current state
-  TextBookViewStrategy _selectStrategy(dynamic state) {
-    // Check for page shape view first (highest priority)
-    if (state.showPageShapeView) {
-      return PageShapeStrategyImpl();
-    }
-
-    // Check for split view (commentaries on side)
-    if (state.showSplitView) {
-      return SplitViewStrategyImpl();
-    }
-
-    // Default to combined view (commentaries below)
-    return CombinedViewStrategyImpl();
+  /// בוחר את האסטרטגיה לפי מצב התצוגה שב-state.
+  TextBookViewStrategy _selectStrategy(TextBookState state) {
+    final mode = switch (state) {
+      TextBookLoaded() => state.viewMode,
+      TextBookInitial() => state.viewMode,
+      _ => TextBookViewMode.combined,
+    };
+    return switch (mode) {
+      TextBookViewMode.pageShape => PageShapeStrategyImpl(),
+      TextBookViewMode.split => SplitViewStrategyImpl(),
+      TextBookViewMode.combined => CombinedViewStrategyImpl(),
+    };
   }
 }

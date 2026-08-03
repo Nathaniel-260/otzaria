@@ -31,6 +31,7 @@ import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -1378,7 +1379,7 @@ class _PersonalNotesManagerScreenState
       if (currentTab is TextBookTab) {
         currentTab.bloc.add(UpdateSelectedIndex(lineIndex));
         currentTab.bloc.add(HighlightLine(lineIndex));
-        currentTab.bloc.add(const ToggleSplitView(true));
+        currentTab.bloc.add(const SetViewMode(TextBookViewMode.split));
       }
 
       if (previousSidebarTab != null) {

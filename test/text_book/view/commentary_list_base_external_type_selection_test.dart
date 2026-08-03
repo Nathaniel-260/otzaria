@@ -21,6 +21,7 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/utils/commentary_type_filter.dart';
 import 'package:otzaria/text_book/view/commentary_list_base.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -250,7 +251,7 @@ TextBookLoaded _stateWithTypes(List<String> types) {
     showLeftPane: false,
     content: const ['שורה א'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: titles,
     commentatorGroups: [
       CommentatorGroup(title: 'ראשונים', commentators: titles),

@@ -3,6 +3,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/commentators_tab_screen.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 TextBookLoaded _loaded(TextBook book, {int? selectedIndex}) {
@@ -11,7 +12,7 @@ TextBookLoaded _loaded(TextBook book, {int? selectedIndex}) {
     showLeftPane: false,
     content: const ['שורה א', 'שורה ב', 'שורה ג'],
     fontSize: 18,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],

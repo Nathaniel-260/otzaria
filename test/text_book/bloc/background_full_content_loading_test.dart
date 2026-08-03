@@ -7,6 +7,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -46,7 +47,7 @@ void main() {
       content: const ['שורת preview 1', 'שורת preview 2'],
       fontSize: 20,
       showLeftPane: true,
-      showSplitView: false,
+      viewMode: TextBookViewMode.combined,
       activeCommentators: const [],
       commentatorGroups: const [],
       availableCommentators: const [],
@@ -81,7 +82,7 @@ void main() {
     content: content,
     fontSize: 20,
     showLeftPane: true,
-    showSplitView: false,
+    viewMode: TextBookViewMode.combined,
     activeCommentators: const [],
     commentatorGroups: const [],
     availableCommentators: const [],
@@ -223,7 +224,7 @@ void main() {
       content: const ['שורה 0', 'שורה 1'],
       fontSize: 20,
       showLeftPane: true,
-      showSplitView: false,
+      viewMode: TextBookViewMode.combined,
       activeCommentators: const [],
       commentatorGroups: const [],
       availableCommentators: const [],

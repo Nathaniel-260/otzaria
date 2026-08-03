@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/text_tab.dart';
 
+export 'package:otzaria/text_book/models/text_book_view_mode.dart';
+
 /// Configuration for text book view strategies
 class TextBookViewConfig {
   final List<String> content;
@@ -54,31 +56,4 @@ abstract class TextBookViewStrategy {
 
   /// Called when switching away from this strategy (optional cleanup)
   void onDeactivate() {}
-}
-
-/// Enum representing available view modes
-enum TextBookViewMode {
-  /// Split view - commentaries shown in a side panel
-  split,
-
-  /// Combined view - commentaries shown below text
-  combined,
-
-  /// Page shape view - traditional Talmud page layout
-  pageShape,
-}
-
-/// Extension to get display name for view modes
-extension TextBookViewModeExtension on TextBookViewMode {
-  /// Returns display name for UI
-  String get displayName {
-    switch (this) {
-      case TextBookViewMode.split:
-        return 'מפרשים בצד';
-      case TextBookViewMode.combined:
-        return 'מפרשים מתחת';
-      case TextBookViewMode.pageShape:
-        return 'צורת הדף';
-    }
-  }
 }

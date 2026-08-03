@@ -18,6 +18,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/text_book_repository.dart';
+import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:path/path.dart' as p;
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -1390,8 +1391,7 @@ void main() {
       final original = TextBookTab(
         book: TextBook(title: 'בראשית'),
         index: 3,
-        splitedView: false,
-        showPageShapeView: true,
+        viewMode: TextBookViewMode.pageShape,
         openLeftPane: true,
       );
 
@@ -1419,18 +1419,49 @@ void main() {
         index: 3,
         commentators: ['רש"י'],
         openLeftPane: true,
-        splitedView: false,
-        showPageShapeView: true,
+        viewMode: TextBookViewMode.pageShape,
       );
 
       final json = tab.toJson();
 
       expect(json['commentators'], ['רש"י']);
       expect(json['showLeftPane'], isTrue);
-      expect(json['showPageShapeView'], isTrue);
-      expect(json['splitedView'], isFalse);
+      expect(json['viewMode'], TextBookViewMode.pageShape.storageKey);
 
       tab.dispose();
+    });
+
+    test('TextBookTab.fromJson קורא את דגלי התצוגה שקדמו ל-viewMode', () {
+      // שולחנות עבודה שנשמרו לפני איחוד הדגלים ל-enum חייבים להמשיך להיפתח
+      // באותה תצוגה — בלי הנפילה הזו כל טאב שמור היה חוזר לברירת המחדל.
+      final pageShapeTab = TextBookTab.fromJson({
+        'title': 'בראשית',
+        'initalIndex': 3,
+        'commentators': <String>['רש"י'],
+        'splitedView': false,
+        'showPageShapeView': true,
+        'type': 'TextBookTab',
+      });
+      final splitTab = TextBookTab.fromJson({
+        'title': 'בראשית',
+        'initalIndex': 0,
+        'commentators': <String>[],
+        'splitedView': true,
+        'showPageShapeView': false,
+        'type': 'TextBookTab',
+      });
+
+      expect(
+        (pageShapeTab.bloc.state as TextBookInitial).viewMode,
+        TextBookViewMode.pageShape,
+      );
+      expect(
+        (splitTab.bloc.state as TextBookInitial).viewMode,
+        TextBookViewMode.split,
+      );
+
+      pageShapeTab.dispose();
+      splitTab.dispose();
     });
 
     test('TextBookTab dispose משחרר גם את openNotesTabNotifier', () {
@@ -1548,7 +1579,7 @@ void main() {
         existingBloc.add(
           const LoadContent(
             fontSize: 20,
-            showSplitView: false,
+            viewMode: TextBookViewMode.combined,
             removeNikud: false,
             loadCommentators: false,
           ),
@@ -1729,7 +1760,7 @@ TextBookBloc _createLoadedTextBookBloc({
   bloc.add(
     const LoadContent(
       fontSize: 20,
-      showSplitView: false,
+      viewMode: TextBookViewMode.combined,
       removeNikud: false,
       loadCommentators: false,
     ),
