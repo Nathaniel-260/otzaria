@@ -125,6 +125,7 @@ class IndexingFailureReporter {
     IndexingFailureKind.fileMissing => 'קובץ חסר',
     IndexingFailureKind.pdfOpenFailed => 'PDF שלא נפתח',
     IndexingFailureKind.pdfOpenTimeout => 'PDF שפתיחתו לא הסתיימה בזמן',
+    IndexingFailureKind.pdfLoadUnsupported => 'PDF שמנוע ה-PDF לא טוען',
     IndexingFailureKind.pdfTextTimeout => 'PDF שאונדקס חלקית',
     IndexingFailureKind.diskFull => 'דיסק מלא',
     IndexingFailureKind.permissionDenied => 'הרשאות',

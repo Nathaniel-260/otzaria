@@ -13,6 +13,10 @@ enum IndexingFailureKind {
   /// [pdfTextTimeout], שבו הספר כן נכנס אך חסרים בו עמודים.
   pdfOpenTimeout,
 
+  /// מנוע ה-PDF נכשל בטעינת מבנה המסמך (שגיאת טווח מתוך pdfrx). חוזר על
+  /// עצמו בכל ריצה על אותו קובץ — ולכן קבוע, ולא שווה ניסיון נוסף.
+  pdfLoadUnsupported,
+
   /// חלק מעמודי ה-PDF נשמטו בגלל timeout בחילוץ הטקסט. הספר נרשם
   /// כמאונדקס — התוכן שלו חלקי.
   pdfTextTimeout,
@@ -40,6 +44,7 @@ extension IndexingFailureKindTraits on IndexingFailureKind {
   bool get isPermanent => switch (this) {
     IndexingFailureKind.pdfOpenFailed => true,
     IndexingFailureKind.fileMissing => true,
+    IndexingFailureKind.pdfLoadUnsupported => true,
     IndexingFailureKind.pdfOpenTimeout => false,
     IndexingFailureKind.pdfTextTimeout => false,
     IndexingFailureKind.diskFull => false,
@@ -99,13 +104,21 @@ class IndexingFailure extends Equatable {
   /// מסווג טקסט שגיאה לסוג כשל. הבדיקות מסודרות מהספציפי לכללי — הודעת
   /// שגיאה יכולה להכיל כמה סימנים, והראשון שמתאים הוא המדויק יותר.
   ///
-  /// [stackTrace] נדרש כדי לזהות כשל שנגרם ע"י ה-timeout עצמו: pdfrx
-  /// שנקטע באמצע טעינה זורק RangeError שהודעתו אינה מרמזת על timeout.
+  /// [stack] נדרש כדי לזהות מאיזו ספרייה נזרקה השגיאה — ‏`RangeError`
+  /// לבדו אינו אומר דבר, ורק המסגרת של pdfrx מסגירה כשל טעינת מסמך.
+  ///
+  /// ‏[pdfTextTimeout] אינו מסווג כאן: הוא נקבע מפורשות ע"י מדווח העמודים
+  /// שנשמטו, כי מנקודת המבט של טקסט השגיאה הוא זהה ל-[pdfOpenTimeout].
   static IndexingFailureKind classify(String rawError, [StackTrace? stack]) {
     final text = rawError.toLowerCase();
 
-    if (_isTimeoutCasualty(text, stack)) {
+    if (text.contains('timeoutexception')) {
       return IndexingFailureKind.pdfOpenTimeout;
+    }
+    // שגיאת טווח מתוך pdfrx — מבנה המסמך אינו נטען. חייב להיבדק לפני
+    // הבדיקות הכלליות, אחרת הוא נופל ל-unknown ומנוסה שוב לנצח.
+    if (text.contains('rangeerror') && _isFromPdfrx(stack)) {
+      return IndexingFailureKind.pdfLoadUnsupported;
     }
 
     if (text.contains('no space left') ||
@@ -128,9 +141,6 @@ class IndexingFailure extends Equatable {
         text.contains('filesystemexception: cannot open file')) {
       return IndexingFailureKind.fileMissing;
     }
-    if (text.contains('timeoutexception')) {
-      return IndexingFailureKind.pdfTextTimeout;
-    }
     if (text.contains('password') ||
         text.contains('pdfexception') ||
         text.contains('failed to load pdf') ||
@@ -145,15 +155,11 @@ class IndexingFailure extends Equatable {
     return IndexingFailureKind.unknown;
   }
 
-  /// כשל שנגרם ע"י ה-timeout עצמו. ‏`TimeoutException` מזוהה מההודעה;
-  /// שגיאה אחרת מזוהה מה-stack — ‏pdfrx שנקטע באמצע טעינה זורק שגיאת
-  /// טווח שהודעתה אינה מרמזת על כך.
-  static bool _isTimeoutCasualty(String lowerText, StackTrace? stack) {
-    if (lowerText.contains('timeoutexception')) return true;
-    if (stack == null) return false;
-    final frames = stack.toString();
-    return frames.contains('Future.timeout') && frames.contains('pdfrx');
-  }
+  /// האם השגיאה נזרקה מתוך pdfrx. ‏`Future.timeout` אינו סימן מבדיל —
+  /// הוא נמצא בשרשרת של כל פתיחה, וחיפוש שלו סיווג בטעות גם קבצים
+  /// מוצפנים כ-timeout, כך שהם לא נרשמו כמעובדים וחזרו בכל ריצה.
+  static bool _isFromPdfrx(StackTrace? stack) =>
+      stack != null && stack.toString().contains('pdfrx');
 
   /// כשל שלא ישתנה בריצה חוזרת — הקובץ עצמו אינו ניתן לאינדוקס. ספר כזה
   /// נרשם כמעובד, אחרת כל הפעלה מנסה אותו שוב ומכריזה "האינדקס לא מעודכן".
@@ -164,6 +170,8 @@ class IndexingFailure extends Equatable {
     IndexingFailureKind.fileMissing => 'הקובץ לא נמצא',
     IndexingFailureKind.pdfOpenFailed => 'קובץ PDF פגום או מוגן בסיסמה',
     IndexingFailureKind.pdfOpenTimeout => 'פתיחת ה-PDF ארכה זמן רב מדי',
+    IndexingFailureKind.pdfLoadUnsupported =>
+      'מנוע ה-PDF לא הצליח לטעון את הקובץ',
     IndexingFailureKind.pdfTextTimeout => 'חילוץ הטקסט מה-PDF ארך זמן רב מדי',
     IndexingFailureKind.diskFull => 'אין מקום פנוי בדיסק',
     IndexingFailureKind.permissionDenied => 'אין הרשאת גישה לקובץ',
@@ -180,6 +188,8 @@ class IndexingFailure extends Equatable {
       'החלף את הקובץ בעותק תקין, או הסר אותו מהספרייה',
     IndexingFailureKind.pdfOpenTimeout =>
       'הספר לא נכנס לאינדקס. הרץ עדכון חוזר במחשב פנוי; אם זה חוזר, הקובץ כבד מדי לעיבוד',
+    IndexingFailureKind.pdfLoadUnsupported =>
+      'הספר לא ייכנס לאינדקס. שמור את הקובץ מחדש מקורא PDF, או החלף אותו בעותק אחר',
     IndexingFailureKind.pdfTextTimeout =>
       'הספר אונדקס חלקית — חלק מעמודיו לא ייכנסו לחיפוש. עדכון חוזר עשוי להשלים אותו',
     IndexingFailureKind.diskFull => 'פנה מקום בכונן והרץ את העדכון שוב',
@@ -254,6 +264,14 @@ class IndexingFailureCollector {
     if (_collected.length < maxCollected) {
       _collected.add(failure);
     }
+  }
+
+  /// מסיר כשלים של ספרים שהצליחו בניסיון חוזר, כדי שלא ידווחו כנכשלים.
+  void dropFor(Set<String> bookPaths) {
+    if (bookPaths.isEmpty) return;
+    final before = _collected.length;
+    _collected.removeWhere((f) => bookPaths.contains(f.bookPath));
+    _total -= before - _collected.length;
   }
 }
 

@@ -43,23 +43,22 @@ void main() {
       );
     });
 
-    test('שגיאת pdfrx שנקטעה ע"י ה-timeout מזוהה כ-timeout ולא כבאג', () {
-      // pdfrx שנקטע באמצע טעינה זורק RangeError שהודעתו אינה מרמזת על
-      // timeout — רק ה-stack מסגיר זאת.
+    test('RangeError מתוך pdfrx = כשל טעינה קבוע', () {
+      // מלוג אמיתי: אותם קבצים חזרו על RangeError גם אחרי שהסריאליזציה
+      // חיסלה את ה-timeouts — כולל קובץ של 0.5MB. כלומר זה כשל טעינה
+      // של pdfrx, לא קורבן של מגבלת הזמן.
       final stack = StackTrace.fromString(
         '#0 _PdfDocumentPdfium._loadPagesInLimitedTime '
-        '(package:pdfrx_engine/src/native/pdfrx_pdfium.dart)\n'
-        '#1 Future.timeout.<anonymous closure> '
-        '(dart:async/future_impl.dart:1061)',
+        '(package:pdfrx_engine/src/native/pdfrx_pdfium.dart)',
       );
       expect(
         IndexingFailure.classify(
           'RangeError (length): Invalid value: Not in inclusive range 0..3: -1',
           stack,
         ),
-        IndexingFailureKind.pdfOpenTimeout,
+        IndexingFailureKind.pdfLoadUnsupported,
       );
-      // בלי ה-stack אין דרך לדעת — נשאר unknown.
+      // בלי ה-stack אין דרך לדעת שזה pdfrx — נשאר unknown.
       expect(
         IndexingFailure.classify(
           'RangeError (length): Invalid value: Not in inclusive range 0..3: -1',
@@ -68,11 +67,31 @@ void main() {
       );
     });
 
+    test('Future.timeout ב-stack אינו מסווג שגיאה כ-timeout', () {
+      // רגרסיה חמורה מלוג אמיתי: הסיווג חיפש 'Future.timeout' ב-stack,
+      // אבל ‎.timeout()‎ נמצא בשרשרת של כל פתיחה — כך שכל 43 הכשלים
+      // סווגו כ-timeout זמני, קבצים מוצפנים לא נרשמו כמעובדים, וחזרו
+      // בכל ריצה. שלוש ריצות רצופות יצאו זהות לחלוטין.
+      final stack = StackTrace.fromString(
+        '#0 Future.timeout.<anonymous closure> '
+        '(dart:async/future_impl.dart:1061)\n'
+        '#1 _PdfDocumentPdfium.fromPdfDocument '
+        '(package:pdfrx_engine/src/native/pdfrx_pdfium.dart:1056)',
+      );
+      final kind = IndexingFailure.classify(
+        'PdfException: No password supplied by PasswordProvider.',
+        stack,
+      );
+      expect(kind, IndexingFailureKind.pdfOpenFailed);
+      expect(kind.isPermanent, isTrue, reason: 'מוצפן — אין טעם לנסות שוב');
+    });
+
     test('כשל קבוע מובחן מכשל שווה-ניסיון-חוזר', () {
       // קובץ מוצפן/חסר לא ישתנה בריצה חוזרת; עומס וזיכרון כן.
       for (final kind in [
         IndexingFailureKind.pdfOpenFailed,
         IndexingFailureKind.fileMissing,
+        IndexingFailureKind.pdfLoadUnsupported,
       ]) {
         expect(kind.isPermanent, isTrue, reason: '$kind קבוע');
       }

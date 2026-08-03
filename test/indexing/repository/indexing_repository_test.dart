@@ -987,6 +987,49 @@ void main() {
       expect(repository.isBookIndexed(locked), isTrue);
     });
 
+    test('ספר כבד שנפל על timeout נחלץ בפאס האיטי שבסוף', () async {
+      // הבקשה: בסיום להריץ את הכבדים שוב באיטיות, כך שגם אם ייקח זמן רב
+      // הם ייכנסו לאינדקס במקום להיכשל שוב באותה מגבלה בכל ריצה.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final heavy = PdfBook(title: 'כבד', path: r'C:\pdfs\כבד.pdf');
+      library.books.add(heavy);
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['כבד'] = StateError(
+          'TimeoutException after 0:01:00.000000: Future not completed',
+        )
+        // בפאס האיטי המגבלה נדיבה — החילוץ מצליח.
+        ..succeedWhenTimeoutIs = IndexingRepository.slowPassOpenTimeout;
+
+      final result = await repository.indexAllBooks(
+        library,
+        onProgress: (_, _) {},
+      );
+
+      expect(repository.extractedTitles, ['כבד', 'כבד'], reason: 'שני פאסים');
+      expect(provider.indexedFilePaths, contains(heavy.path));
+      expect(result.failureCount, 0, reason: 'הכשל הוסר אחרי שנחלץ');
+      expect(result.isFullyComplete, isTrue);
+    });
+
+    test('כשל שאינו timeout אינו מנוסה בפאס האיטי', () async {
+      // רק מגבלת זמן שווה ניסיון נדיב; קובץ מוצפן ייכשל שוב באותו אופן.
+      final engine = _RecordingSearchEngine();
+      final provider = _RecordingTantivyDataProvider(engine);
+      final library = Library(categories: []);
+      final locked = PdfBook(title: 'מוצפן2', path: r'C:\pdfs\מוצפן2.pdf');
+      library.books.add(locked);
+      final repository = _FakeExtractionRepository(provider)
+        ..openErrors['מוצפן2'] = StateError(
+          'PdfException: No password supplied by PasswordProvider.',
+        );
+
+      await repository.indexAllBooks(library, onProgress: (_, _) {});
+
+      expect(repository.extractedTitles, ['מוצפן2'], reason: 'פאס אחד בלבד');
+    });
+
     test('כשל פתיחה זמני אינו נרשם כמעובד — ינוסה שוב בריצה הבאה', () async {
       // ההפך מהמקרה הקבוע: timeout עשוי לחלוף, ולכן אסור לסמן את הספר
       // כמעובד — אחרת הוא נעלם מהחיפוש לתמיד.
@@ -1447,10 +1490,15 @@ class _FakeExtractionRepository extends IndexingRepository {
   /// אמיתי, שבו הקורא מכריע בין sidecar להפצת השגיאה.
   final openErrors = <String, Object>{};
 
+  /// כשמוגדר, [openErrors] מדולג כשמגבלת הפתיחה שווה לערך הזה — כך הטסט
+  /// מדמה ספר כבד שנפתח רק כשנותנים לו זמן נדיב.
+  Duration? succeedWhenTimeoutIs;
+
   @override
   Future<PdfExtraction> extractPdfPagesGuarded(
     PdfBook book, {
     void Function(IndexingFailure failure)? onPartial,
+    Duration? openTimeout,
   }) async {
     extractedTitles.add(book.title);
     _activeExtractions++;
@@ -1464,7 +1512,9 @@ class _FakeExtractionRepository extends IndexingRepository {
     if (failingTitles.contains(book.title)) {
       throw StateError('חילוץ נכשל: ${book.title}');
     }
-    final openError = openErrors[book.title];
+    final generous =
+        succeedWhenTimeoutIs != null && openTimeout == succeedWhenTimeoutIs;
+    final openError = generous ? null : openErrors[book.title];
     if (openError != null) {
       return (
         pages: const <({String reference, String text, int pageIndex})>[],

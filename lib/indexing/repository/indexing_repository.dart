@@ -173,6 +173,17 @@ class IndexingRepository {
     var actuallyIndexed = 0;
     final failures = IndexingFailureCollector();
 
+    // ספרים שפתיחתם לא הסתיימה במגבלה הרגילה — מנוסים שוב בפאס איטי
+    // בסוף הריצה, כדי שקובץ כבד לא יישאר מחוץ לחיפוש.
+    final slowRetry = <PdfBook>[];
+    void recordFailure(Book book, IndexingFailure failure) {
+      failures.add(failure);
+      if (book is PdfBook &&
+          failure.kind == IndexingFailureKind.pdfOpenTimeout) {
+        slowRetry.add(book);
+      }
+    }
+
     // חילוץ ה-PDF איטי בסדר גודל מאינדוקס ספר טקסט, ולכן חילוצי ה-PDF הבאים
     // רצים מראש ברקע בזמן שהמנוע מאנדקס את הספרים שלפניהם.
     final prefetcher = PdfExtractionPrefetcher(
@@ -262,7 +273,7 @@ class IndexingRepository {
             indexedSinceCommit++;
           } catch (e, st) {
             debugPrint('❌ שגיאה באינדוקס מוקדם של ${readyBook.title}: $e');
-            failures.add(_failureFor(readyBook, e, st));
+            recordFailure(readyBook, _failureFor(readyBook, e, st));
             if (!isBookIndexed(readyBook) &&
                 !await _discardPartialBookWrites(readyBook)) {
               await _recoverEngineAfterWriteFailure();
@@ -387,7 +398,7 @@ class IndexingRepository {
           }
         } catch (e, st) {
           debugPrint('❌ שגיאה באינדוקס של ${book.title}: $e');
-          failures.add(_failureFor(book, e, st));
+          recordFailure(book, _failureFor(book, e, st));
           processedBooks++;
           onProgress(processedBooks, totalBooks);
           if (!isBookIndexed(book) && !await _discardPartialBookWrites(book)) {
@@ -401,6 +412,19 @@ class IndexingRepository {
         }
 
         await Future.delayed(Duration.zero);
+      }
+
+      // פאס איטי: הכבדים שנפלו על מגבלת הזמן מנוסים שוב אחד-אחד, עם
+      // מגבלה נדיבה. רץ לפני ה-commit הסופי כדי שמה שיצליח ייחתם איתו.
+      if (!cancelled && slowRetry.isNotEmpty) {
+        final recovered = await _runSlowPass(
+          slowRetry,
+          catalogueOrderByBookKey: catalogueOrderByBookKey,
+          onProgress: onProgress,
+          onPermanentFailure: failures.add,
+        );
+        failures.dropFor(recovered);
+        actuallyIndexed += recovered.length;
       }
 
       if (!cancelled) {
@@ -441,6 +465,51 @@ class IndexingRepository {
       failures: failures,
       indexedCount: actuallyIndexed,
     );
+  }
+
+  /// מנסה שוב את הספרים שפתיחתם לא הסתיימה במגבלה הרגילה — אחד-אחד, עם
+  /// [slowPassOpenTimeout]. מחזיר את נתיבי הספרים שאונדקסו בהצלחה.
+  ///
+  /// בלי הפאס הזה קובץ כבד נשאר מחוץ לחיפוש לצמיתות: הוא נכשל בכל ריצה
+  /// באותה מגבלה, כי הזמן שהוא צריך פשוט גדול ממנה.
+  Future<Set<String>> _runSlowPass(
+    List<PdfBook> books, {
+    required Map<String, int> catalogueOrderByBookKey,
+    required void Function(int processed, int total) onProgress,
+    required void Function(IndexingFailure failure) onPermanentFailure,
+  }) async {
+    final recovered = <String>{};
+    debugPrint('🐢 פאס איטי: ${books.length} ספרים כבדים, מגבלה נדיבה');
+
+    for (var i = 0; i < books.length; i++) {
+      if (!_tantivyDataProvider.isIndexing.value) break;
+      final book = books[i];
+      onProgress(i + 1, books.length);
+      try {
+        await _indexPdfBook(
+          book,
+          catalogueOrderByBookKey: catalogueOrderByBookKey,
+          openTimeout: slowPassOpenTimeout,
+          onPermanentFailure: onPermanentFailure,
+        );
+        if (!_tantivyDataProvider.isIndexing.value) break;
+        _tantivyDataProvider.indexedFilePaths.add(
+          buildIndexedBookFilePath(book),
+        );
+        recovered.add(book.path);
+        debugPrint('🐢 ✅ "${book.title}" אונדקס בפאס האיטי');
+      } catch (e) {
+        // נשאר ככשל מהפאס הראשון — הספר באמת אינו ניתן לפתיחה.
+        debugPrint('🐢 ❌ "${book.title}" נכשל גם בפאס האיטי: $e');
+        if (!isBookIndexed(book)) {
+          await _discardPartialBookWrites(book);
+        }
+      }
+      await Future.delayed(Duration.zero);
+    }
+
+    debugPrint('🐢 פאס איטי הסתיים: ${recovered.length}/${books.length} נחלצו');
+    return recovered;
   }
 
   /// בונה את תוצאת הריצה מהדגלים שנצברו — משותף לכל מסלולי האינדוקס,
@@ -594,12 +663,15 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     Future<PdfExtraction>? preExtracted,
     void Function(IndexingFailure failure)? onPermanentFailure,
+    Duration? openTimeout,
   }) async {
     // preExtracted — חילוץ שהוזנק מראש (prefetch) בזמן שהספרים הקודמים
     // אונדקסו; בהיעדרו מחלצים כאן. שני המסלולים עוברים דרך העטיפה
     // ששומרת את השגיאה בתוצאה, כדי שסמנטיקת ה-sidecar/הפצת-שגיאה תישאר
     // זהה.
-    final extracted = await (preExtracted ?? extractPdfPagesGuarded(book));
+    final extracted =
+        await (preExtracted ??
+            extractPdfPagesGuarded(book, openTimeout: openTimeout));
     final pages = extracted.pages;
     final outline = extracted.outline;
     final openError = extracted.error;
@@ -782,14 +854,18 @@ class IndexingRepository {
   ///
   /// [onPartial] מדווח על ספר שאונדקס חלקית (עמודים נשמטו ב-timeout). ספר
   /// כזה נרשם כמאונדקס ולכן לא ידווח באף ערוץ אחר.
+  ///
+  /// [openTimeout] מאריך את מגבלת הפתיחה — הפאס האיטי שבסוף האינדוקס נותן
+  /// לקבצים הכבדים זמן נדיב במקום להיכשל שוב.
   @visibleForTesting
   Future<PdfExtraction> extractPdfPagesGuarded(
     PdfBook book, {
     void Function(IndexingFailure failure)? onPartial,
+    Duration? openTimeout,
   }) async {
     final stopwatch = Stopwatch()..start();
     try {
-      final extracted = await _extractPdfPages(book);
+      final extracted = await _extractPdfPages(book, openTimeout: openTimeout);
       if (extracted.droppedPages > 0) {
         onPartial?.call(
           IndexingFailure(
@@ -831,7 +907,7 @@ class IndexingRepository {
       int droppedPages,
     })
   >
-  _extractPdfPages(PdfBook book) async {
+  _extractPdfPages(PdfBook book, {Duration? openTimeout}) async {
     const empty = (
       pages: <({String reference, String text, int pageIndex})>[],
       outline: <PdfOutlineNode>[],
@@ -840,7 +916,7 @@ class IndexingRepository {
     final file = File(book.path);
     if (!await file.exists()) return empty;
 
-    final document = await _openPdfSerialized(book.path);
+    final document = await _openPdfSerialized(book.path, openTimeout);
     try {
       final outline = await document.loadOutline().timeout(
         const Duration(seconds: 15),
@@ -896,9 +972,14 @@ class IndexingRepository {
 
   static const Duration _pdfOpenTimeout = Duration(seconds: 60);
 
-  Future<PdfDocument> _openPdfSerialized(String path) => serializePdfOpen(
-    () => PdfDocument.openFile(path).timeout(_pdfOpenTimeout),
-  );
+  /// מגבלת הפתיחה בפאס האיטי שבסוף האינדוקס. נדיבה בכוונה: מוטב שקובץ
+  /// כבד יאנדקס בעשר דקות מאשר שיישאר מחוץ לחיפוש.
+  static const Duration slowPassOpenTimeout = Duration(minutes: 10);
+
+  Future<PdfDocument> _openPdfSerialized(String path, [Duration? timeout]) =>
+      serializePdfOpen(
+        () => PdfDocument.openFile(path).timeout(timeout ?? _pdfOpenTimeout),
+      );
 
   /// מריץ [open] בתור: הפתיחה הבאה מתחילה רק כשהקודמת הסתיימה. השחרור
   /// ב-finally — כשל בפתיחה אחת חייב לא לתקוע את התור לנצח.
