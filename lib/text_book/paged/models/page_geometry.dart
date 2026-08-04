@@ -40,7 +40,8 @@ class PageGeometry {
   /// המרווח בין הטורים (רק כשיש יותר מטור אחד).
   final double columnGap;
 
-  /// הגובה השמור בתחתית העמוד למספר העמוד.
+  /// הגובה השמור בראש העמוד לכותרת הרצה: שם הספר, מספר העמוד, הקו שמתחתיהם
+  /// והרווח עד הטקסט.
   final double headerHeight;
 
   /// המרווח האנכי בין סעיף לסעיף.
@@ -62,7 +63,7 @@ class PageGeometry {
     int columns = 2,
     double marginMm = 18,
     double columnGapMm = 7,
-    double headerMm = 8,
+    double headerMm = 12,
     double sectionGapMm = 1.5,
   }) {
     final margin = marginMm * kMmToLogicalPx;

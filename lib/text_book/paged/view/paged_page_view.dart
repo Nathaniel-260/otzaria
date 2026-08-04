@@ -6,6 +6,16 @@ import 'package:otzaria/text_book/paged/models/paginated_book.dart';
 import 'package:otzaria/text_book/paged/services/paged_text_measurer.dart';
 import 'package:otzaria/text_book/paged/view/paged_section_spans.dart';
 
+/// עובי הקווים בעמוד — הקו שמתחת לכותרת הרצה, והמפריד בין הטורים.
+const double _ruleThickness = 0.7;
+
+/// חלקו של הרווח שמתחת לקו מתוך גובה הכותרת הרצה. יחסי ולא מוחלט, אחרת
+/// גאומטריה עם כותרת נמוכה הייתה מקבלת רווח גדול מהמקום שיש לו.
+const double _headerRuleGapRatio = 1 / 3;
+
+/// הקו שבין הטורים אינו נוגע בקצות אזור התוכן.
+const double _columnRuleInset = 4;
+
 /// עמוד פיזי אחד.
 ///
 /// כל המידות מפורשות: רוחב הטור מגיע מ-[PageGeometry.columnWidth] ולא מ-`Expanded`,
@@ -101,7 +111,11 @@ class PagedPageView extends StatelessWidget {
                 ],
               ),
             ),
-            Container(height: 0.7, color: colorScheme.outlineVariant),
+            Container(
+              height: _ruleThickness,
+              color: colorScheme.outlineVariant,
+            ),
+            SizedBox(height: geometry.headerHeight * _headerRuleGapRatio),
           ],
         ),
       ),
@@ -125,14 +139,17 @@ class PagedPageView extends StatelessWidget {
     return children;
   }
 
-  /// קו מפריד באמצע המרווח שבין הטורים.
+  /// קו מפריד באמצע המרווח שבין הטורים. אינו נוגע בקצות אזור התוכן.
   Widget _columnDivider(ColorScheme colorScheme) => SizedBox(
     width: geometry.columnGap,
-    child: Center(
-      child: SizedBox(
-        width: 0.7,
-        height: double.infinity,
-        child: ColoredBox(color: colorScheme.outlineVariant),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: _columnRuleInset),
+      child: Center(
+        child: SizedBox(
+          width: _ruleThickness,
+          height: double.infinity,
+          child: ColoredBox(color: colorScheme.outlineVariant),
+        ),
       ),
     ),
   );
