@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show SelectionRegistrar;
+import 'package:otzaria/text_book/paged/models/page_geometry.dart';
 import 'package:otzaria/text_book/paged/models/paged_layout_signature.dart';
 
 /// תוצאת מדידה של פסקה אחת ברוחב טור נתון.
@@ -84,6 +86,48 @@ class PagedTextMeasurer {
     this.textDirection = TextDirection.rtl,
   });
 
+  /// המודד לגאומטריה נתונה. נוסחה אחת שגם העימוד וגם הציור נגזרים ממנה — שני
+  /// מקומות שמחשבים את רוחב הטור בנפרד היו יכולים להיפרד זה מזה.
+  factory PagedTextMeasurer.forGeometry({
+    required PageGeometry geometry,
+    required TextScaler textScaler,
+    required Locale locale,
+    required bool justifyText,
+  }) {
+    return PagedTextMeasurer(
+      width: geometry.columnWidth,
+      textScaler: textScaler,
+      locale: locale,
+      textAlign: justifyText ? TextAlign.justify : TextAlign.start,
+    );
+  }
+
+  /// בונה את הווידג'ט שמצייר [span] בדיוק כפי ש-[measure] מדד אותו.
+  ///
+  /// **חובה לצייר דרך כאן ולא דרך `Text`/`Text.rich`.** `Text` עוטף את הספאן
+  /// ב-`DefaultTextStyle` של העץ, ובתוך `Material` יש בו `letterSpacing: 0.25`
+  /// שהמדידה אינה רואה — השורות נשברות מוקדם יותר בציור, וכל טור מאבד שורה
+  /// בתחתיתו. `RichText` מקבל את הספאן כמו שהוא, בלי ירושה.
+  ///
+  /// [selectionRegistrar] ו-[selectionColor] הם מה ש-`Text` היה מחבר לבד; בלעדיהם
+  /// בחירת טקסט ב-`SelectionArea` לא עובדת.
+  Widget buildText(
+    InlineSpan span, {
+    SelectionRegistrar? selectionRegistrar,
+    Color? selectionColor,
+  }) {
+    return RichText(
+      text: span,
+      textAlign: textAlign,
+      textDirection: textDirection,
+      textScaler: textScaler,
+      locale: locale,
+      textWidthBasis: kPagedTextWidthBasis,
+      selectionRegistrar: selectionRegistrar,
+      selectionColor: selectionColor,
+    );
+  }
+
   /// מודד פסקה. מחזיר null כשלא ניתן למדוד אותה בבטחה — ראו
   /// [spanHasPlaceholder] ואת בדיקת העקביות בסוף.
   MeasuredParagraph? measure(InlineSpan span) {
@@ -119,12 +163,21 @@ class PagedTextMeasurer {
 
     while (cursor < length) {
       final range = painter.getLineBoundary(TextPosition(offset: cursor));
-      // הגנה מפני לופ אינסופי: גבול שלא מתקדם היה תוקע את העימוד.
-      final end = range.end > cursor ? range.end : cursor + 1;
+      // שורה חזותית ריקה (שתי שורות חדשות רצופות) מחזירה טווח באורך אפס, והיא
+      // אכן ריקה — קידום מלאכותי כאן היה מכניס את ה-`\n` לתוך סוף השורה,
+      // ופרוסה שנחתכת שם הייתה מציירת שורה ריקה נוספת.
+      final end = range.end > cursor ? range.end : cursor;
       starts.add(cursor);
       ends.add(end);
-      cursor = end;
-      if (cursor < length && text.codeUnitAt(cursor) == _newline) cursor++;
+
+      if (end < length && text.codeUnitAt(end) == _newline) {
+        cursor = end + 1;
+      } else if (end > cursor) {
+        cursor = end;
+      } else {
+        // הגבול אינו מתקדם ואין שורה חדשה לדלג עליה. עדיף לא למדוד מלמדוד שגוי.
+        return null;
+      }
     }
 
     // טקסט שמסתיים בשורה חדשה מייצר שורה חזותית ריקה נוספת.

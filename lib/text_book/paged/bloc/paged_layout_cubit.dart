@@ -78,9 +78,8 @@ class PagedLayoutCubit extends Cubit<PagedLayoutState> {
   PagedLayoutSignature? get signature => _signature;
 
   Future<void> request(PagedLayoutRequest request) async {
-    final generation = ++_generation;
-
     if (!request.contentIsComplete) {
+      _generation++;
       _signature = null;
       emit(const PagedLayoutWaitingForContent());
       return;
@@ -94,7 +93,16 @@ class PagedLayoutCubit extends Cubit<PagedLayoutState> {
       textScaler: request.textScaler,
       locale: request.locale,
     );
-    if (signature == _signature && state is PagedLayoutReady) return;
+    // בקשה זהה נבלמת גם כשהעימוד עוד רץ. התצוגה מבקשת בכל build, וכל state של
+    // ה-bloc או ההגדרות מרנדר מחדש — בלי החסימה כאן עימוד ארוך היה מתחיל
+    // מאפס בכל הודעה שמגיעה תוך כדי, ופס ההתקדמות לא היה מגיע לסוף.
+    // הבדיקה לפני קידום ה-generation, אחרת היא הורגת את הריצה שהיא בלמה.
+    if (signature == _signature &&
+        (state is PagedLayoutReady || state is PagedLayoutRunning)) {
+      return;
+    }
+
+    final generation = ++_generation;
     _signature = signature;
 
     // התצוגה הקיימת שייכת לחתימה אחרת ואינה תקפה יותר.
@@ -109,13 +117,11 @@ class PagedLayoutCubit extends Cubit<PagedLayoutState> {
 
     final engine = PaginationEngine(
       geometry: request.geometry,
-      measurer: PagedTextMeasurer(
-        width: request.geometry.columnWidth,
+      measurer: PagedTextMeasurer.forGeometry(
+        geometry: request.geometry,
         textScaler: request.textScaler,
         locale: request.locale,
-        textAlign: request.settings.justifyText
-            ? TextAlign.justify
-            : TextAlign.start,
+        justifyText: request.settings.justifyText,
       ),
       sectionCount: request.content.length,
       buildSpan: request.buildSpan,

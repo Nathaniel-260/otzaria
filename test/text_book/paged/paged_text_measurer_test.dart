@@ -100,6 +100,54 @@ void main() {
       expectBoundariesTile(result, text);
     });
 
+    test('שורות חדשות רצופות — סוף השורה הריקה אינו כולל את התו', () {
+      const text = 'אבג\n\nדהו';
+      final result = measurer.measure(
+        const TextSpan(text: text, style: style),
+      )!;
+
+      expect(result.lineCount, 3);
+      // השורה האמצעית ריקה: מתחילה ונגמרת באותו היסט, לפני תו השורה השני.
+      expect(result.lineStarts[1], 4);
+      expect(result.lineEnds[1], 4);
+      expect(result.lineStarts[2], 5);
+      expectBoundariesTile(result, text);
+    });
+
+    test('פרוסה שנחתכת בשורה ריקה אינה מוסיפה שורה', () {
+      const text = 'אבג\n\nדהו';
+      const span = TextSpan(text: text, style: style);
+      final full = measurer.measure(span)!;
+
+      final head = sliceInlineSpan(span, 0, full.lineEnds[1])!;
+
+      expect(
+        measurer.measure(head)!.totalHeight,
+        closeTo(full.heightOfFirst(2), 0.01),
+      );
+    });
+
+    test('טקסט שמתחיל בשורה חדשה — השורה הראשונה ריקה', () {
+      const text = '\nאבג';
+      final result = measurer.measure(
+        const TextSpan(text: text, style: style),
+      )!;
+
+      expect(result.lineCount, 2);
+      expect(result.lineStarts[0], 0);
+      expect(result.lineEnds[0], 0);
+      expect(result.lineStarts[1], 1);
+    });
+
+    test('טקסט שכולו שורות חדשות נמדד בלי להיתקע', () {
+      final result = measurer.measure(
+        const TextSpan(text: '\n\n\n', style: style),
+      )!;
+
+      expect(result.lineCount, 4);
+      expect(result.lineEnds.last, 3);
+    });
+
     test('שורה חדשה בסוף מייצרת שורה חזותית ריקה', () {
       final result = measurer.measure(
         const TextSpan(text: 'ראשון\n', style: style),

@@ -3,6 +3,9 @@
 // הטסט החשוב כאן הוא "תוכן הטור אינו עובר את הגובה שהוקצה": העימוד מדד את
 // הספאנים, והציור חייב להסתדר באותם גבהים. אם הוא לא — שורה נחתכת בתחתית
 // העמוד, וזה הכשל שהמשתמש רואה.
+//
+// הרינדור **חייב** להיות בתוך Scaffold: ב-Material יש DefaultTextStyle עם
+// letterSpacing, ורק כך הטסט חי באותה סביבה שבה האפליקציה מציירת.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,7 +36,23 @@ void main() {
   const settings = RenderSettings(fontSize: 10, lineHeight: 1);
   const style = TextStyle(fontSize: 10, height: 1);
 
+  /// גאומטריה זהה, עם מרווח בין־סעיפים — לבדיקת חריגה מגובה הטור.
+  final gapGeometry = geometry.copyWith(sectionGap: 6);
+
+  PagedTextMeasurer measurerFor(PageGeometry g) =>
+      PagedTextMeasurer.forGeometry(
+        geometry: g,
+        textScaler: TextScaler.noScaling,
+        locale: const Locale('he', 'IL'),
+        justifyText: true,
+      );
+
   String section(int lines) => List.filled(lines * 2, 'wwww').join(' ');
+
+  /// טקסט שמילותיו ממלאות שורה **במדויק** (10 תווים ברוחב טור 100, גופן 10).
+  /// כל תוספת מרווח בין אותיות דוחפת מילה לשורה הבאה, ולכן זה הקלט שחושף
+  /// אי-התאמה בין המדידה לציור.
+  String tightSection(int lines) => List.filled(lines, 'wwwwwwwwww').join(' ');
 
   PagedSectionSpanBuilder builderFor(List<String> content) =>
       PagedSectionSpanBuilder(
@@ -42,15 +61,16 @@ void main() {
         baseStyle: style,
       );
 
-  PaginatedBook paginate(List<String> content, {Set<int> headings = const {}}) {
+  PaginatedBook paginate(
+    List<String> content, {
+    Set<int> headings = const {},
+    PageGeometry? pageGeometry,
+  }) {
+    final g = pageGeometry ?? geometry;
     final spans = builderFor(content);
     final engine = PaginationEngine(
-      geometry: geometry,
-      measurer: const PagedTextMeasurer(
-        width: 100,
-        textScaler: TextScaler.noScaling,
-        locale: Locale('he', 'IL'),
-      ),
+      geometry: g,
+      measurer: measurerFor(g),
       sectionCount: content.length,
       buildSpan: spans.spanFor,
       isHeading: headings.contains,
@@ -69,15 +89,18 @@ void main() {
   }) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: Directionality(
-          textDirection: TextDirection.rtl,
-          child: Center(
-            child: PagedPageView(
-              page: page,
-              geometry: pageGeometry,
-              spans: builderFor(content),
-              selectedIndices: selected,
-              onLineTap: onLineTap,
+        home: Scaffold(
+          body: Directionality(
+            textDirection: TextDirection.rtl,
+            child: Center(
+              child: PagedPageView(
+                page: page,
+                geometry: pageGeometry,
+                spans: builderFor(content),
+                measurer: measurerFor(pageGeometry),
+                selectedIndices: selected,
+                onLineTap: onLineTap,
+              ),
             ),
           ),
         ),
@@ -134,6 +157,13 @@ void main() {
       for (final page in book.pages) {
         await pumpPage(tester, page: page, content: content);
 
+        // RenderFlex מהדק את גודלו לאילוץ, ולכן בדיקת גובה לבדה אינה מזהה
+        // חריגה — רק חריגת הפריסה עצמה מזהה.
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'עמוד ${page.number} חורג',
+        );
         for (final columnBox in tester.renderObjectList<RenderBox>(
           find.byType(Column),
         )) {
@@ -147,26 +177,58 @@ void main() {
       }
     });
 
+    testWidgets('מרווח בין־סעיפים אינו מוציא את הטור מגבולותיו', (
+      tester,
+    ) async {
+      // 12 סעיפים בני שתי שורות עם מרווח 6: בלי הכלל שהמרווח הוא מפריד ולא
+      // זנב, הטור היה מגיע ל-104 בתוך גובה 100.
+      final content = List.generate(12, (_) => section(2));
+      final book = paginate(content, pageGeometry: gapGeometry);
+
+      for (final page in book.pages) {
+        await pumpPage(
+          tester,
+          page: page,
+          content: content,
+          pageGeometry: gapGeometry,
+        );
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'עמוד ${page.number} חורג',
+        );
+      }
+    });
+
+    testWidgets('גובה הפרוסה בציור זהה לגובה שנמדד — גם בתוך Material', (
+      tester,
+    ) async {
+      // Material מגדיר DefaultTextStyle עם letterSpacing. ציור שיורש אותו שובר
+      // שורות מוקדם יותר מהמדידה, וכל טור מאבד שורה בתחתיתו.
+      final content = [tightSection(3)];
+      final book = paginate(content);
+      final measured = measurerFor(
+        geometry,
+      ).measure(builderFor(content).spanFor(0)!)!;
+      expect(measured.lineCount, 3);
+
+      await pumpPage(tester, page: book.pages.first, content: content);
+
+      final painted = tester
+          .renderObjectList<RenderBox>(find.byType(RichText))
+          .firstWhere((box) => box.size.width < geometry.columnWidth + 1);
+      expect(painted.size.height, closeTo(measured.totalHeight, 0.01));
+    });
+
     testWidgets('גאומטריה בת טור אחד מציירת טור אחד', (tester) async {
       final single = geometry.singleColumn;
       final content = [section(3)];
-      final spans = builderFor(content);
-      final engine = PaginationEngine(
-        geometry: single,
-        measurer: PagedTextMeasurer(
-          width: single.columnWidth,
-          textScaler: TextScaler.noScaling,
-          locale: const Locale('he', 'IL'),
-        ),
-        sectionCount: content.length,
-        buildSpan: spans.spanFor,
-        isHeading: (_) => false,
-      );
-      engine.run();
+      final book = paginate(content, pageGeometry: single);
 
       await pumpPage(
         tester,
-        page: engine.snapshot().pages.first,
+        page: book.pages.first,
         content: content,
         pageGeometry: single,
       );

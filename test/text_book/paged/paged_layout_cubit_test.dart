@@ -3,6 +3,8 @@
 // המטמון כאן הוא מטמון בזיכרון שמחליף את זה שב-cache.db, וההמתנה לפריים
 // מוחלפת ב-microtask — כך הטסטים בודקים את התזמון עצמו ולא את שכבת ה-DB.
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
@@ -163,6 +165,64 @@ void main() {
       expect(progress.length, greaterThan(2));
       expect(progress, orderedEquals(progress.toList()..sort()));
       expect(progress.last, lessThan(1.0));
+    });
+
+    test('בקשה זהה באמצע ריצה אינה מאתחלת את העימוד', () async {
+      // התצוגה מבקשת עימוד בכל build, וכל state של ה-bloc מרנדר מחדש. בקשה
+      // זהה שלא נבלמת הייתה מתחילה את הספר מאפס בכל הודעה שמגיעה תוך כדי.
+      var builds = 0;
+      final content = List.generate(30, (_) => section(3));
+      // שער ידני במקום המתנה לפריים: כך הבקשה השנייה מגיעה בוודאות בזמן
+      // שהעימוד עוד רץ, ולא אחרי שתור ה-microtasks כבר רוקן אותו.
+      final gate = <Completer<void>>[];
+      final cubit = cubitWith(
+        sliceBudget: Duration.zero,
+        yieldToFrame: () {
+          final completer = Completer<void>();
+          gate.add(completer);
+          return completer.future;
+        },
+      );
+      PagedLayoutRequest counted() => PagedLayoutRequest(
+        bookId: 'ספר בדיקה',
+        content: content,
+        contentIsComplete: true,
+        geometry: geometry,
+        settings: const RenderSettings(),
+        textScaler: TextScaler.noScaling,
+        locale: const Locale('he', 'IL'),
+        buildSpan: (index) {
+          builds++;
+          return TextSpan(text: content[index], style: style);
+        },
+        isHeading: (_) => false,
+      );
+      final progress = <double>[];
+      cubit.stream
+          .where((state) => state is PagedLayoutRunning)
+          .cast<PagedLayoutRunning>()
+          .listen((state) => progress.add(state.progress));
+
+      final first = cubit.request(counted());
+      await Future<void>.delayed(Duration.zero);
+      expect(gate, hasLength(1), reason: 'העימוד אמור להיות עצור על השער');
+      expect(builds, lessThan(content.length));
+
+      // לא await: בלי הבלימה הבקשה השנייה מתחילה עימוד משלה ונעצרת על השער,
+      // וההמתנה לה כאן הייתה תוקעת את הטסט במקום להכשיל אותו.
+      final second = cubit.request(counted());
+
+      while (gate.isNotEmpty) {
+        gate.removeAt(0).complete();
+        await Future<void>.delayed(Duration.zero);
+      }
+      await Future.wait([first, second]);
+
+      // כל סעיף נבנה פעם אחת בלבד — לא היה אתחול מחדש.
+      expect(builds, content.length);
+      // ו-Running(0) נשדר פעם אחת, לא שוב בכל בקשה.
+      expect(progress.where((value) => value == 0), hasLength(1));
+      expect(cubit.state, isA<PagedLayoutReady>());
     });
 
     test('בקשה חדשה באמצע ריצה נוטשת את הקודמת', () async {

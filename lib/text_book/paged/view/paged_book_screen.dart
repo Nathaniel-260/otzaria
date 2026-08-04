@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/paged/bloc/paged_layout_cubit.dart';
 import 'package:otzaria/text_book/paged/bloc/paged_layout_state.dart';
 import 'package:otzaria/text_book/paged/models/page_geometry.dart';
 import 'package:otzaria/text_book/paged/models/paginated_book.dart';
+import 'package:otzaria/text_book/paged/services/paged_text_measurer.dart';
 import 'package:otzaria/text_book/paged/view/paged_page_view.dart';
 import 'package:otzaria/text_book/paged/view/paged_section_spans.dart';
 import 'package:otzaria/text_book/utils/link_processing.dart'
@@ -128,6 +129,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
           book,
           geometry,
           bookState,
+          settings,
           constraints,
         ),
         PagedLayoutRunning(progress: final progress) => _buildProgress(
@@ -163,6 +165,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     PaginatedBook book,
     PageGeometry geometry,
     TextBookLoaded bookState,
+    RenderSettings settings,
     BoxConstraints constraints,
   ) {
     if (book.isEmpty) {
@@ -170,6 +173,12 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     }
 
     final spans = _spans!;
+    final measurer = PagedTextMeasurer.forGeometry(
+      geometry: geometry,
+      textScaler: MediaQuery.textScalerOf(context),
+      locale: Localizations.localeOf(context),
+      justifyText: settings.justifyText,
+    );
     final perRow = _pagesPerRow(geometry, constraints.maxWidth);
     final rowWidth = geometry.width * perRow + (perRow > 1 ? _spreadGap : 0);
     final scale = math.min(1.0, constraints.maxWidth / (rowWidth + 24));
@@ -194,7 +203,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
                 page: book.pages[pageIndex],
                 geometry: geometry,
                 spans: spans,
-                textAlign: TextAlign.justify,
+                measurer: measurer,
                 selectedIndices: bookState.selectedIndices,
                 onLineTap: _onLineTap,
               ),

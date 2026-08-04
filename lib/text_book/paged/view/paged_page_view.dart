@@ -13,7 +13,10 @@ class PagedPageView extends StatelessWidget {
   final BookPage page;
   final PageGeometry geometry;
   final PagedSectionSpanBuilder spans;
-  final TextAlign textAlign;
+
+  /// אותו מודד שהעימוד השתמש בו. הציור עובר דרכו כדי שפרמטרי הפריסה יהיו
+  /// זהים — ראו [PagedTextMeasurer.buildText].
+  final PagedTextMeasurer measurer;
 
   /// שורות מסומנות — מקבלות רקע. צבע רקע אינו משנה מטריקות, ולכן מותר להוסיף
   /// אותו רק בציור.
@@ -26,7 +29,7 @@ class PagedPageView extends StatelessWidget {
     required this.page,
     required this.geometry,
     required this.spans,
-    this.textAlign = TextAlign.justify,
+    required this.measurer,
     this.selectedIndices = const {},
     this.onLineTap,
   });
@@ -51,7 +54,7 @@ class PagedPageView extends StatelessWidget {
                 height: geometry.contentHeight,
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _columnsWithGaps(colorScheme),
+                  children: _columnsWithGaps(context, colorScheme),
                 ),
               ),
               SizedBox(
@@ -72,29 +75,45 @@ class PagedPageView extends StatelessWidget {
     );
   }
 
-  List<Widget> _columnsWithGaps(ColorScheme colorScheme) {
+  List<Widget> _columnsWithGaps(
+    BuildContext context,
+    ColorScheme colorScheme,
+  ) {
     final children = <Widget>[];
     for (var i = 0; i < page.columns.length; i++) {
       if (i > 0) children.add(SizedBox(width: geometry.columnGap));
       children.add(
         SizedBox(
           width: geometry.columnWidth,
-          child: _buildColumn(page.columns[i], colorScheme),
+          child: _buildColumn(context, page.columns[i], colorScheme),
         ),
       );
     }
     return children;
   }
 
-  Widget _buildColumn(PageColumn column, ColorScheme colorScheme) {
+  Widget _buildColumn(
+    BuildContext context,
+    PageColumn column,
+    ColorScheme colorScheme,
+  ) {
     final children = <Widget>[];
+    var previousEndedSection = false;
+
     for (final slice in column.slices) {
-      final widget = _buildSlice(slice, colorScheme);
-      if (widget != null) children.add(widget);
-      // המרווח מתווסף רק אחרי פרוסה שמסיימת סעיף — כך העימוד חישב אותו.
-      if (!slice.continuesNext && geometry.sectionGap > 0) {
-        children.add(SizedBox(height: geometry.sectionGap));
+      final widget = _buildSlice(context, slice, colorScheme);
+      if (widget != null) {
+        // המרווח הוא מפריד **בין** סעיפים ולא זנב אחרי האחרון: המנוע מרשה
+        // לעצמו לחרוג מגובה הטור במרווח הסופי (הסעיף הבא עובר לטור הבא),
+        // אבל בציור הטור חסום בגובה קבוע והזנב היה מוציא אותו מגבולותיו.
+        if (children.isNotEmpty &&
+            previousEndedSection &&
+            geometry.sectionGap > 0) {
+          children.add(SizedBox(height: geometry.sectionGap));
+        }
+        children.add(widget);
       }
+      previousEndedSection = !slice.continuesNext;
     }
 
     return Column(
@@ -104,7 +123,11 @@ class PagedPageView extends StatelessWidget {
     );
   }
 
-  Widget? _buildSlice(PageSlice slice, ColorScheme colorScheme) {
+  Widget? _buildSlice(
+    BuildContext context,
+    PageSlice slice,
+    ColorScheme colorScheme,
+  ) {
     if (slice.isEmpty) return null;
     final full = spans.spanFor(slice.sourceIndex);
     if (full == null) return null;
@@ -112,11 +135,14 @@ class PagedPageView extends StatelessWidget {
     final sliced = sliceInlineSpan(full, slice.charStart, slice.charEnd);
     if (sliced == null) return null;
 
-    final text = Text.rich(
+    final text = measurer.buildText(
       selectedIndices.contains(slice.sourceIndex)
           ? _withBackground(sliced, colorScheme.primaryContainer)
           : sliced,
-      textAlign: textAlign,
+      selectionRegistrar: SelectionContainer.maybeOf(context),
+      selectionColor:
+          DefaultSelectionStyle.of(context).selectionColor ??
+          colorScheme.primary.withValues(alpha: 0.4),
     );
 
     final onTap = onLineTap;
