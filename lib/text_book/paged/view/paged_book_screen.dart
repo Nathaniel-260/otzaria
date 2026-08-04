@@ -189,7 +189,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     }
 
     final spans = _spans!;
-    final measurer = PagedTextMeasurer.forGeometry(
+    final measurers = PagedMeasurers.forGeometry(
       geometry: geometry,
       textScaler: MediaQuery.textScalerOf(context),
       locale: Localizations.localeOf(context),
@@ -240,7 +240,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
                       page: book.pages[pageIndex],
                       geometry: geometry,
                       spans: spans,
-                      measurer: measurer,
+                      measurers: measurers,
                       bookTitle: bookState.book.title,
                       selectedIndices: bookState.selectedIndices,
                       onLineTap: _onLineTap,

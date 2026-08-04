@@ -26,9 +26,9 @@ class PagedPageView extends StatelessWidget {
   final PageGeometry geometry;
   final PagedSectionSpanBuilder spans;
 
-  /// אותו מודד שהעימוד השתמש בו. הציור עובר דרכו כדי שפרמטרי הפריסה יהיו
+  /// אותם מודדים שהעימוד השתמש בהם. הציור עובר דרכם כדי שפרמטרי הפריסה יהיו
   /// זהים — ראו [PagedTextMeasurer.buildText].
-  final PagedTextMeasurer measurer;
+  final PagedMeasurers measurers;
 
   /// שורות מסומנות — מקבלות רקע. צבע רקע אינו משנה מטריקות, ולכן מותר להוסיף
   /// אותו רק בציור.
@@ -44,7 +44,7 @@ class PagedPageView extends StatelessWidget {
     required this.page,
     required this.geometry,
     required this.spans,
-    required this.measurer,
+    required this.measurers,
     this.bookTitle = '',
     this.selectedIndices = const {},
     this.onLineTap,
@@ -67,11 +67,11 @@ class PagedPageView extends StatelessWidget {
           child: Column(
             children: [
               _buildHeader(context, colorScheme),
-              SizedBox(
-                height: geometry.contentHeight,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: _columnsWithGaps(context, colorScheme),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: _bandsWithGaps(context, colorScheme),
                 ),
               ),
             ],
@@ -122,37 +122,56 @@ class PagedPageView extends StatelessWidget {
     );
   }
 
-  List<Widget> _columnsWithGaps(
-    BuildContext context,
-    ColorScheme colorScheme,
-  ) {
+  List<Widget> _bandsWithGaps(BuildContext context, ColorScheme colorScheme) {
     final children = <Widget>[];
-    for (var i = 0; i < page.columns.length; i++) {
-      if (i > 0) children.add(_columnDivider(colorScheme));
-      children.add(
-        SizedBox(
-          width: geometry.columnWidth,
-          child: _buildColumn(context, page.columns[i], colorScheme),
+    PageBand? previous;
+    for (final band in page.bands) {
+      final gap = PageBand.gapBefore(band, previous, geometry);
+      if (gap > 0) children.add(SizedBox(height: gap));
+      children.add(switch (band) {
+        HeadingBand(slice: final slice) =>
+          _buildSlice(context, slice, colorScheme, measurers.heading) ??
+              const SizedBox.shrink(),
+        ColumnsBand(columns: final columns) => _buildColumnsBand(
+          context,
+          columns,
+          colorScheme,
         ),
-      );
+      });
+      previous = band;
     }
     return children;
   }
 
-  /// קו מפריד באמצע המרווח שבין הטורים. אינו נוגע בקצות אזור התוכן.
-  Widget _columnDivider(ColorScheme colorScheme) => SizedBox(
-    width: geometry.columnGap,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: _columnRuleInset),
-      child: Center(
-        child: SizedBox(
-          width: _ruleThickness,
-          height: double.infinity,
-          child: ColoredBox(color: colorScheme.outlineVariant),
+  /// רצועת גוף. הקווים בין הטורים מצוירים על גובה הרצועה בפועל, ולכן הם
+  /// נגמרים עם הטקסט ואינם נמשכים אל תוך שטח ריק.
+  Widget _buildColumnsBand(
+    BuildContext context,
+    List<PageColumn> columns,
+    ColorScheme colorScheme,
+  ) {
+    final children = <Widget>[];
+    for (var i = 0; i < columns.length; i++) {
+      if (i > 0) children.add(SizedBox(width: geometry.columnGap));
+      children.add(
+        SizedBox(
+          width: geometry.columnWidth,
+          child: _buildColumn(context, columns[i], colorScheme),
         ),
+      );
+    }
+
+    return CustomPaint(
+      painter: _ColumnRulesPainter(
+        geometry: geometry,
+        color: colorScheme.outlineVariant,
       ),
-    ),
-  );
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    );
+  }
 
   Widget _buildColumn(
     BuildContext context,
@@ -163,7 +182,7 @@ class PagedPageView extends StatelessWidget {
     var previousEndedSection = false;
 
     for (final slice in column.slices) {
-      final widget = _buildSlice(context, slice, colorScheme);
+      final widget = _buildSlice(context, slice, colorScheme, measurers.body);
       if (widget != null) {
         // המרווח הוא מפריד **בין** סעיפים ולא זנב אחרי האחרון: המנוע מרשה
         // לעצמו לחרוג מגובה הטור במרווח הסופי (הסעיף הבא עובר לטור הבא),
@@ -189,6 +208,7 @@ class PagedPageView extends StatelessWidget {
     BuildContext context,
     PageSlice slice,
     ColorScheme colorScheme,
+    PagedTextMeasurer measurer,
   ) {
     if (slice.isEmpty) return null;
     final full = spans.spanFor(slice.sourceIndex);
@@ -235,4 +255,37 @@ class PagedPageView extends StatelessWidget {
       spellOut: span.spellOut,
     );
   }
+}
+
+/// הקווים שבין הטורים, באמצע המרווח שביניהם. אינם נוגעים בקצות הרצועה.
+class _ColumnRulesPainter extends CustomPainter {
+  final PageGeometry geometry;
+  final Color color;
+
+  const _ColumnRulesPainter({required this.geometry, required this.color});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final top = _columnRuleInset;
+    final bottom = size.height - _columnRuleInset;
+    if (bottom <= top) return;
+
+    final paint = Paint()..color = color;
+    for (var i = 0; i < geometry.columns - 1; i++) {
+      final center = geometry.columnRuleCenter(i);
+      canvas.drawRect(
+        Rect.fromLTRB(
+          center - _ruleThickness / 2,
+          top,
+          center + _ruleThickness / 2,
+          bottom,
+        ),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ColumnRulesPainter oldDelegate) =>
+      oldDelegate.geometry != geometry || oldDelegate.color != color;
 }

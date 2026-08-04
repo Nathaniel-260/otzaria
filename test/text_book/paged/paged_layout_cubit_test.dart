@@ -27,6 +27,7 @@ void main() {
     columnGap: 20,
     headerHeight: 0,
     sectionGap: 0,
+    headingGap: 0,
   );
   const style = TextStyle(fontSize: 10, height: 1);
 
@@ -157,7 +158,9 @@ void main() {
           .cast<PagedLayoutRunning>()
           .listen((state) => progress.add(state.progress));
 
-      await cubit.request(requestFor(List.generate(8, (_) => section(3))));
+      // העימוד מתקדם ברצועות — רצועה מכניסה כמה סעיפים יחד, ולכן נדרש ספר
+      // ארוך מכמה עמודים כדי לקבל כמה שלבים.
+      await cubit.request(requestFor(List.generate(40, (_) => section(3))));
       await Future<void>.delayed(Duration.zero);
 
       expect(cubit.state, isA<PagedLayoutReady>());

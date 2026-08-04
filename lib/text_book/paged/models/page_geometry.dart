@@ -47,6 +47,10 @@ class PageGeometry {
   /// המרווח האנכי בין סעיף לסעיף.
   final double sectionGap;
 
+  /// המרווח שמעל כותרת שבאה אחרי גוף. מתחת לכותרת אין מרווח כלל — ראו
+  /// `PageBand.gapBefore`.
+  final double headingGap;
+
   const PageGeometry({
     required this.width,
     required this.height,
@@ -55,6 +59,7 @@ class PageGeometry {
     required this.columnGap,
     required this.headerHeight,
     required this.sectionGap,
+    required this.headingGap,
   }) : assert(columns == 1 || columns == 2, 'נתמכים טור אחד או שניים');
 
   /// עמוד לפי גודל נייר מוכן, עם שוליים ומרווחים במילימטרים.
@@ -65,6 +70,7 @@ class PageGeometry {
     double columnGapMm = 7,
     double headerMm = 12,
     double sectionGapMm = 1.5,
+    double headingGapMm = 4,
   }) {
     final margin = marginMm * kMmToLogicalPx;
     return PageGeometry(
@@ -75,6 +81,7 @@ class PageGeometry {
       columnGap: columnGapMm * kMmToLogicalPx,
       headerHeight: headerMm * kMmToLogicalPx,
       sectionGap: sectionGapMm * kMmToLogicalPx,
+      headingGap: headingGapMm * kMmToLogicalPx,
     );
   }
 
@@ -93,6 +100,11 @@ class PageGeometry {
     return result;
   }
 
+  /// מרכז המרווח שאחרי הטור ה-[index] (מאפס). שם מצויר הקו המפריד, ובשני
+  /// טורים שווים זה בדיוק אמצע אזור התוכן.
+  double columnRuleCenter(int index) =>
+      columnWidth * (index + 1) + columnGap * (index + 0.5);
+
   /// כמה טקסט נכנס בעמוד שלם: כל הטורים יחד.
   double get totalColumnHeight => contentHeight * columns;
 
@@ -108,6 +120,7 @@ class PageGeometry {
     double? columnGap,
     double? headerHeight,
     double? sectionGap,
+    double? headingGap,
   }) {
     return PageGeometry(
       width: width ?? this.width,
@@ -117,6 +130,7 @@ class PageGeometry {
       columnGap: columnGap ?? this.columnGap,
       headerHeight: headerHeight ?? this.headerHeight,
       sectionGap: sectionGap ?? this.sectionGap,
+      headingGap: headingGap ?? this.headingGap,
     );
   }
 
@@ -127,7 +141,8 @@ class PageGeometry {
     return 'w${n(width)},h${n(height)},'
         'm${n(margins.left)}/${n(margins.top)}/'
         '${n(margins.right)}/${n(margins.bottom)},'
-        'c$columns,g${n(columnGap)},f${n(headerHeight)},s${n(sectionGap)}';
+        'c$columns,g${n(columnGap)},f${n(headerHeight)},'
+        's${n(sectionGap)},hg${n(headingGap)}';
   }
 
   @override
@@ -139,7 +154,8 @@ class PageGeometry {
       other.columns == columns &&
       other.columnGap == columnGap &&
       other.headerHeight == headerHeight &&
-      other.sectionGap == sectionGap;
+      other.sectionGap == sectionGap &&
+      other.headingGap == headingGap;
 
   @override
   int get hashCode => Object.hash(
@@ -150,6 +166,7 @@ class PageGeometry {
     columnGap,
     headerHeight,
     sectionGap,
+    headingGap,
   );
 
   @override

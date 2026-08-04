@@ -16,17 +16,28 @@ void main() {
         sectionCount: sectionCount,
       );
 
+  /// עמוד בעל רצועת גוף אחת.
   BookPage page(
     int number,
     List<List<PageSlice>> columns, {
     required int first,
     required int last,
+    List<PageBand> extraBands = const [],
   }) => BookPage(
     number: number,
-    columns: columns.map(PageColumn.new).toList(),
+    bands: [
+      ...extraBands,
+      ColumnsBand(columns.map(PageColumn.new).toList()),
+    ],
     firstSourceIndex: first,
     lastSourceIndex: last,
   );
+
+  /// הטורים של העמוד מכל רצועות הגוף.
+  List<PageColumn> bodyColumns(BookPage page) => [
+    for (final band in page.bands)
+      if (band is ColumnsBand) ...band.columns,
+  ];
 
   group('הלוך וחזור', () {
     test('ספר ריק', () {
@@ -81,8 +92,8 @@ void main() {
         geometry,
       )!;
 
-      expect(decoded.pages.first.columns, hasLength(2));
-      expect(decoded.pages.first.columns[1].isEmpty, isTrue);
+      expect(bodyColumns(decoded.pages.first), hasLength(2));
+      expect(bodyColumns(decoded.pages.first)[1].isEmpty, isTrue);
     });
 
     test('דגלי המשך נשמרים לכל צירוף', () {
@@ -123,7 +134,7 @@ void main() {
         geometry,
       )!;
 
-      expect(decoded.pages.first.columns[0].slices, book.pages[0].slices);
+      expect(bodyColumns(decoded.pages.first)[0].slices, book.pages[0].slices);
     });
 
     test('מספרי העמודים והסעיפים בקצוות נשמרים', () {
@@ -184,7 +195,7 @@ void main() {
       final decoded = decodePaginatedBook(encoded, geometry)!;
 
       expect(decoded.pages, book.pages);
-      expect(decoded.pages.last.columns[0].slices.last.charEnd, 790);
+      expect(bodyColumns(decoded.pages.last)[0].slices.last.charEnd, 790);
     });
 
     test('הניווט עובד גם על עימוד שנקרא מהמטמון', () {
@@ -215,6 +226,60 @@ void main() {
       expect(decoded.pageNumberOfSource(1), 1);
       expect(decoded.pageNumberOfSource(5), 2);
     });
+
+    test('רצועת כותרת נשמרת כרצועה ולא כטור', () {
+      final book = bookOf([
+        page(
+          1,
+          [
+            const [PageSlice(sourceIndex: 2, charStart: 0, charEnd: 40)],
+            const [],
+          ],
+          first: 1,
+          last: 2,
+          extraBands: const [
+            HeadingBand(PageSlice(sourceIndex: 1, charStart: 0, charEnd: 7)),
+          ],
+        ),
+      ]);
+
+      final decoded = decodePaginatedBook(
+        encodePaginatedBook(book),
+        geometry,
+      )!;
+
+      expect(decoded.pages, book.pages);
+      expect(decoded.pages.first.bands.first, isA<HeadingBand>());
+      expect(bodyColumns(decoded.pages.first), hasLength(2));
+    });
+
+    test('סדר הרצועות נשמר', () {
+      final book = bookOf([
+        BookPage(
+          number: 1,
+          bands: const [
+            HeadingBand(PageSlice(sourceIndex: 0, charStart: 0, charEnd: 3)),
+            HeadingBand(PageSlice(sourceIndex: 1, charStart: 0, charEnd: 4)),
+            ColumnsBand([
+              PageColumn([PageSlice(sourceIndex: 2, charStart: 0, charEnd: 9)]),
+            ]),
+          ],
+          firstSourceIndex: 0,
+          lastSourceIndex: 2,
+        ),
+      ]);
+
+      final decoded = decodePaginatedBook(
+        encodePaginatedBook(book),
+        geometry,
+      )!;
+
+      expect(decoded.pages, book.pages);
+      expect(
+        decoded.pages.first.slices.map((slice) => slice.sourceIndex),
+        [0, 1, 2],
+      );
+    });
   });
 
   group('שדות מחוץ לטווח נדחים', () {
@@ -240,12 +305,13 @@ void main() {
       sectionCount: 3,
     );
 
-    /// מיקומי השלמים בזרם: version, sectionCount, pageCount, first, last, …
+    /// מיקומי השלמים בזרם: version, sectionCount, pageCount, first, last,
+    /// bandCount, bandKind, columnCount, sliceCount, ואז הפרוסה.
     const firstSourceAt = 3;
     const lastSourceAt = 4;
-    const sliceSourceAt = 7;
-    const charStartAt = 8;
-    const charEndAt = 9;
+    const sliceSourceAt = 9;
+    const charStartAt = 10;
+    const charEndAt = 11;
 
     test('הספר הבסיסי עצמו מפוענח — הכיול תקין', () {
       expect(
@@ -300,6 +366,15 @@ void main() {
     test('lastSourceIndex קטן מ-firstSourceIndex', () {
       expect(
         decodePaginatedBook(tamper(simple(), lastSourceAt, 0), geometry),
+        isNull,
+      );
+    });
+
+    test('סוג רצועה שאינו מוכר', () {
+      // כאן יתגלה קידוד מגרסה אחרת שנקרא בטעות — עדיף לעמד מחדש.
+      const bandKindAt = 6;
+      expect(
+        decodePaginatedBook(tamper(simple(), bandKindAt, 7), geometry),
         isNull,
       );
     });
@@ -384,14 +459,16 @@ void main() {
     });
 
     test('מונה פרוסות מופרך אינו מקצה זיכרון', () {
-      final data = ByteData(28)
+      final data = ByteData(36)
         ..setInt32(0, kPaginatedBookCodecVersion, Endian.little)
         ..setInt32(4, 10, Endian.little)
         ..setInt32(8, 1, Endian.little)
         ..setInt32(12, 0, Endian.little)
         ..setInt32(16, 0, Endian.little)
         ..setInt32(20, 1, Endian.little)
-        ..setInt32(24, 1 << 26, Endian.little);
+        ..setInt32(24, 0, Endian.little)
+        ..setInt32(28, 1, Endian.little)
+        ..setInt32(32, 1 << 26, Endian.little);
 
       expect(
         decodePaginatedBook(

@@ -55,15 +55,17 @@ void main() {
     pages: [
       BookPage(
         number: 1,
-        columns: const [
-          PageColumn([PageSlice(sourceIndex: 0, charStart: 0, charEnd: 10)]),
-          PageColumn([
-            PageSlice(
-              sourceIndex: 1,
-              charStart: 0,
-              charEnd: 8,
-              continuesNext: true,
-            ),
+        bands: const [
+          ColumnsBand([
+            PageColumn([PageSlice(sourceIndex: 0, charStart: 0, charEnd: 10)]),
+            PageColumn([
+              PageSlice(
+                sourceIndex: 1,
+                charStart: 0,
+                charEnd: 8,
+                continuesNext: true,
+              ),
+            ]),
           ]),
         ],
         firstSourceIndex: 0,
@@ -71,17 +73,19 @@ void main() {
       ),
       BookPage(
         number: 2,
-        columns: const [
-          PageColumn([
-            PageSlice(
-              sourceIndex: 1,
-              charStart: 8,
-              charEnd: 12,
-              continuesPrevious: true,
-            ),
-            PageSlice(sourceIndex: 2, charStart: 0, charEnd: 11),
+        bands: const [
+          ColumnsBand([
+            PageColumn([
+              PageSlice(
+                sourceIndex: 1,
+                charStart: 8,
+                charEnd: 12,
+                continuesPrevious: true,
+              ),
+              PageSlice(sourceIndex: 2, charStart: 0, charEnd: 11),
+            ]),
+            PageColumn([]),
           ]),
-          PageColumn([]),
         ],
         firstSourceIndex: 1,
         lastSourceIndex: 2,

@@ -6,13 +6,17 @@ import 'package:otzaria/text_book/paged/models/paginated_book.dart';
 
 /// גרסת פורמט הסדרוול. שינוי בפריסת הבייטים חייב להעלות אותה, כדי שרשומות
 /// ישנות ייפסלו במקום להיקרא שגוי.
-const int kPaginatedBookCodecVersion = 1;
+const int kPaginatedBookCodecVersion = 2;
 
 /// מספר השלמים לכל פרוסה: סעיף, התחלה, סוף, דגלים.
 const int _intsPerSlice = 4;
 
 const int _flagContinuesPrevious = 1;
 const int _flagContinuesNext = 2;
+
+/// סוג הרצועה, כשלם ראשון שלה.
+const int _bandKindColumns = 0;
+const int _bandKindHeading = 1;
 
 /// מסדרל ספר מעומד ל-base64 של שלמים בני 32 ביט.
 ///
@@ -23,8 +27,17 @@ String encodePaginatedBook(PaginatedBook book) {
   var intCount = 3;
   for (final page in book.pages) {
     intCount += 3;
-    for (final column in page.columns) {
-      intCount += 1 + column.slices.length * _intsPerSlice;
+    for (final band in page.bands) {
+      intCount += 1;
+      switch (band) {
+        case HeadingBand():
+          intCount += _intsPerSlice;
+        case ColumnsBand(columns: final columns):
+          intCount += 1;
+          for (final column in columns) {
+            intCount += 1 + column.slices.length * _intsPerSlice;
+          }
+      }
     }
   }
 
@@ -40,6 +53,16 @@ String encodePaginatedBook(PaginatedBook book) {
     offset += 4;
   }
 
+  void putSlice(PageSlice slice) {
+    put(slice.sourceIndex);
+    put(slice.charStart);
+    put(slice.charEnd);
+    put(
+      (slice.continuesPrevious ? _flagContinuesPrevious : 0) |
+          (slice.continuesNext ? _flagContinuesNext : 0),
+    );
+  }
+
   put(kPaginatedBookCodecVersion);
   put(book.sectionCount);
   put(book.pages.length);
@@ -53,17 +76,19 @@ String encodePaginatedBook(PaginatedBook book) {
     );
     put(page.firstSourceIndex);
     put(page.lastSourceIndex);
-    put(page.columns.length);
-    for (final column in page.columns) {
-      put(column.slices.length);
-      for (final slice in column.slices) {
-        put(slice.sourceIndex);
-        put(slice.charStart);
-        put(slice.charEnd);
-        put(
-          (slice.continuesPrevious ? _flagContinuesPrevious : 0) |
-              (slice.continuesNext ? _flagContinuesNext : 0),
-        );
+    put(page.bands.length);
+    for (final band in page.bands) {
+      switch (band) {
+        case HeadingBand(slice: final slice):
+          put(_bandKindHeading);
+          putSlice(slice);
+        case ColumnsBand(columns: final columns):
+          put(_bandKindColumns);
+          put(columns.length);
+          for (final column in columns) {
+            put(column.slices.length);
+            column.slices.forEach(putSlice);
+          }
       }
     }
   }
@@ -84,6 +109,26 @@ PaginatedBook? decodePaginatedBook(String encoded, PageGeometry geometry) {
     final pageCount = reader.count(intsEach: 3);
     if (sectionCount < 0) return null;
 
+    PageSlice readSlice() {
+      final sourceIndex = reader.next();
+      final charStart = reader.next();
+      final charEnd = reader.next();
+      final flags = reader.next();
+      if (sourceIndex < 0 ||
+          sourceIndex >= sectionCount ||
+          charStart < 0 ||
+          charEnd < charStart) {
+        throw const _MalformedLayout();
+      }
+      return PageSlice(
+        sourceIndex: sourceIndex,
+        charStart: charStart,
+        charEnd: charEnd,
+        continuesPrevious: flags & _flagContinuesPrevious != 0,
+        continuesNext: flags & _flagContinuesNext != 0,
+      );
+    }
+
     final pages = <BookPage>[];
     for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
       final first = reader.next();
@@ -91,40 +136,37 @@ PaginatedBook? decodePaginatedBook(String encoded, PageGeometry geometry) {
       // אינדקסים מחוץ לטווח היו מפוענחים לספר "תקין" שבו הניווט מגיע לעמוד
       // שרירותי ופרוסות נעלמות בשקט. עדיף לעמד מחדש מלהציג עימוד שגוי.
       if (first < 0 || last < first || last >= sectionCount) return null;
-      final columnCount = reader.count();
+      // כל רצועה תופסת לפחות שני שלמים: הסוג ומונה אחד.
+      final bandCount = reader.count(intsEach: 2);
 
-      final columns = <PageColumn>[];
-      for (var c = 0; c < columnCount; c++) {
-        final sliceCount = reader.count(intsEach: _intsPerSlice);
-        final slices = <PageSlice>[];
-        for (var s = 0; s < sliceCount; s++) {
-          final sourceIndex = reader.next();
-          final charStart = reader.next();
-          final charEnd = reader.next();
-          final flags = reader.next();
-          if (sourceIndex < 0 ||
-              sourceIndex >= sectionCount ||
-              charStart < 0 ||
-              charEnd < charStart) {
-            return null;
-          }
-          slices.add(
-            PageSlice(
-              sourceIndex: sourceIndex,
-              charStart: charStart,
-              charEnd: charEnd,
-              continuesPrevious: flags & _flagContinuesPrevious != 0,
-              continuesNext: flags & _flagContinuesNext != 0,
+      final bands = <PageBand>[];
+      for (var b = 0; b < bandCount; b++) {
+        final kind = reader.next();
+        if (kind == _bandKindHeading) {
+          bands.add(HeadingBand(readSlice()));
+          continue;
+        }
+        if (kind != _bandKindColumns) return null;
+
+        final columnCount = reader.count();
+        final columns = <PageColumn>[];
+        for (var c = 0; c < columnCount; c++) {
+          final sliceCount = reader.count(intsEach: _intsPerSlice);
+          columns.add(
+            PageColumn(
+              List.unmodifiable([
+                for (var s = 0; s < sliceCount; s++) readSlice(),
+              ]),
             ),
           );
         }
-        columns.add(PageColumn(List.unmodifiable(slices)));
+        bands.add(ColumnsBand(List.unmodifiable(columns)));
       }
 
       pages.add(
         BookPage(
           number: pageIndex + 1,
-          columns: List.unmodifiable(columns),
+          bands: List.unmodifiable(bands),
           firstSourceIndex: first,
           lastSourceIndex: last,
         ),

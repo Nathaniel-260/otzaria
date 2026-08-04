@@ -90,17 +90,22 @@ class PagedTextMeasurer {
 
   /// המודד לגאומטריה נתונה. נוסחה אחת שגם העימוד וגם הציור נגזרים ממנה — שני
   /// מקומות שמחשבים את רוחב הטור בנפרד היו יכולים להיפרד זה מזה.
+  /// [spanning] — מודד שפורש על כל רוחב העמוד ולא על רוחב טור, לכותרת שאין בה
+  /// חלוקה לטורים. כותרת כזו ממורכזת.
   factory PagedTextMeasurer.forGeometry({
     required PageGeometry geometry,
     required TextScaler textScaler,
     required Locale locale,
     required bool justifyText,
+    bool spanning = false,
   }) {
     return PagedTextMeasurer(
-      width: geometry.columnWidth,
+      width: spanning ? geometry.contentWidth : geometry.columnWidth,
       textScaler: textScaler,
       locale: locale,
-      textAlign: justifyText ? TextAlign.justify : TextAlign.start,
+      textAlign: spanning
+          ? TextAlign.center
+          : (justifyText ? TextAlign.justify : TextAlign.start),
     );
   }
 
@@ -205,6 +210,41 @@ class PagedTextMeasurer {
       lineOffsets: offsets,
       lineStarts: starts,
       lineEnds: ends,
+    );
+  }
+}
+
+/// שני המודדים של העמוד: הגוף ברוחב טור, והכותרת על כל רוחבו.
+///
+/// נבנים יחד בכוונה — העימוד והציור חייבים לגזור את שניהם מאותה נוסחה, ושתי
+/// בנייה נפרדות היו יכולות להיפרד זו מזו ולחתוך שורה בתחתית העמוד.
+@immutable
+class PagedMeasurers {
+  final PagedTextMeasurer body;
+  final PagedTextMeasurer heading;
+
+  const PagedMeasurers({required this.body, required this.heading});
+
+  factory PagedMeasurers.forGeometry({
+    required PageGeometry geometry,
+    required TextScaler textScaler,
+    required Locale locale,
+    required bool justifyText,
+  }) {
+    return PagedMeasurers(
+      body: PagedTextMeasurer.forGeometry(
+        geometry: geometry,
+        textScaler: textScaler,
+        locale: locale,
+        justifyText: justifyText,
+      ),
+      heading: PagedTextMeasurer.forGeometry(
+        geometry: geometry,
+        textScaler: textScaler,
+        locale: locale,
+        justifyText: justifyText,
+        spanning: true,
+      ),
     );
   }
 }

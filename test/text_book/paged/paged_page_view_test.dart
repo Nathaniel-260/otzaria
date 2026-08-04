@@ -32,6 +32,7 @@ void main() {
     columnGap: 20,
     headerHeight: 10,
     sectionGap: 0,
+    headingGap: 0,
   );
   const settings = RenderSettings(fontSize: 10, lineHeight: 1);
   const style = TextStyle(fontSize: 10, height: 1);
@@ -39,13 +40,12 @@ void main() {
   /// גאומטריה זהה, עם מרווח בין־סעיפים — לבדיקת חריגה מגובה הטור.
   final gapGeometry = geometry.copyWith(sectionGap: 6);
 
-  PagedTextMeasurer measurerFor(PageGeometry g) =>
-      PagedTextMeasurer.forGeometry(
-        geometry: g,
-        textScaler: TextScaler.noScaling,
-        locale: const Locale('he', 'IL'),
-        justifyText: true,
-      );
+  PagedMeasurers measurerFor(PageGeometry g) => PagedMeasurers.forGeometry(
+    geometry: g,
+    textScaler: TextScaler.noScaling,
+    locale: const Locale('he', 'IL'),
+    justifyText: true,
+  );
 
   String section(int lines) => List.filled(lines * 2, 'wwww').join(' ');
 
@@ -73,7 +73,7 @@ void main() {
     final spans = builderFor(content, baseStyle: baseStyle);
     final engine = PaginationEngine(
       geometry: g,
-      measurer: measurerFor(g),
+      measurers: measurerFor(g),
       sectionCount: content.length,
       buildSpan: spans.spanFor,
       isHeading: headings.contains,
@@ -104,7 +104,7 @@ void main() {
                 page: page,
                 geometry: pageGeometry,
                 spans: builderFor(content, baseStyle: baseStyle),
-                measurer: measurerFor(pageGeometry),
+                measurers: measurerFor(pageGeometry),
                 bookTitle: bookTitle,
                 selectedIndices: selected,
                 onLineTap: onLineTap,
@@ -115,6 +115,101 @@ void main() {
       ),
     );
   }
+
+  Finder richTextWith(String needle) => find.byWidgetPredicate(
+    (widget) => widget is RichText && widget.text.toPlainText() == needle,
+  );
+
+  group('רצועת כותרת', () {
+    /// מרווח כותרת ממשי — בלעדיו כל בדיקת מרווח הייתה עוברת גם על אפס.
+    final spaced = geometry.copyWith(headingGap: 8);
+
+    testWidgets('הכותרת פורשת על כל רוחב העמוד, והגוף על רוחב טור', (
+      tester,
+    ) async {
+      final content = ['כותרת', 'aaaa aaaa'];
+      final book = paginate(content, headings: {0}, pageGeometry: spaced);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        pageGeometry: spaced,
+      );
+
+      expect(
+        tester.getSize(richTextWith('כותרת')).width,
+        spaced.contentWidth,
+      );
+      expect(
+        tester.getSize(richTextWith('aaaa aaaa')).width,
+        spaced.columnWidth,
+      );
+    });
+
+    testWidgets('המרווח הוא מעל הכותרת ולא מתחתיה', (tester) async {
+      final content = ['aaaa aaaa', 'כותרת', 'bbbb bbbb'];
+      final book = paginate(content, headings: {1}, pageGeometry: spaced);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        pageGeometry: spaced,
+      );
+
+      final above = tester.getRect(richTextWith('aaaa aaaa'));
+      final heading = tester.getRect(richTextWith('כותרת'));
+      final below = tester.getRect(richTextWith('bbbb bbbb'));
+
+      expect(heading.top - above.bottom, closeTo(spaced.headingGap, 0.01));
+      expect(below.top - heading.bottom, closeTo(0, 0.01));
+    });
+
+    testWidgets('הכותרת ממורכזת', (tester) async {
+      final content = ['כותרת', 'aaaa aaaa'];
+      final book = paginate(content, headings: {0}, pageGeometry: spaced);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        pageGeometry: spaced,
+      );
+
+      final page = tester.getRect(find.byType(PagedPageView));
+      final heading = tester.getRect(richTextWith('כותרת'));
+
+      expect(heading.center.dx, closeTo(page.center.dx, 0.01));
+    });
+
+    testWidgets('עמוד עם כותרות אינו חורג מגובהו', (tester) async {
+      final content = [
+        for (var i = 0; i < 14; i++)
+          if (i.isEven) 'כותרת $i' else section(3),
+      ];
+      final book = paginate(
+        content,
+        headings: {for (var i = 0; i < 14; i += 2) i},
+        pageGeometry: spaced,
+      );
+
+      for (final page in book.pages) {
+        await pumpPage(
+          tester,
+          page: page,
+          content: content,
+          pageGeometry: spaced,
+        );
+
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'עמוד ${page.number} חרג מגובהו',
+        );
+      }
+    });
+  });
 
   group('פריסת העמוד', () {
     testWidgets('גודל העמוד הוא בדיוק הגאומטריה', (tester) async {
@@ -208,7 +303,7 @@ void main() {
                       page: book.pages.first,
                       geometry: geometry,
                       spans: builderFor(content),
-                      measurer: measurerFor(geometry),
+                      measurers: measurerFor(geometry),
                     ),
                   ),
                 ),
@@ -291,7 +386,7 @@ void main() {
       final book = paginate(content);
       final measured = measurerFor(
         geometry,
-      ).measure(builderFor(content).spanFor(0)!)!;
+      ).body.measure(builderFor(content).spanFor(0)!)!;
       expect(measured.lineCount, 3);
 
       await pumpPage(tester, page: book.pages.first, content: content);

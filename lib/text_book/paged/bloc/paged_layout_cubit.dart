@@ -117,7 +117,7 @@ class PagedLayoutCubit extends Cubit<PagedLayoutState> {
 
     final engine = PaginationEngine(
       geometry: request.geometry,
-      measurer: PagedTextMeasurer.forGeometry(
+      measurers: PagedMeasurers.forGeometry(
         geometry: request.geometry,
         textScaler: request.textScaler,
         locale: request.locale,

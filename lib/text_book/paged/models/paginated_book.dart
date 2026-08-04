@@ -74,12 +74,79 @@ class PageColumn {
   int get hashCode => Object.hashAll(slices);
 }
 
+/// רצועה אופקית בעמוד.
+///
+/// העמוד אינו שני טורים מלמעלה למטה אלא רצועות זו מעל זו: כותרת פורשת על כל
+/// רוחב העמוד, ורצועת הגוף שאחריה מתחלקת לטורים מחדש.
+sealed class PageBand {
+  const PageBand();
+
+  Iterable<PageSlice> get slices;
+
+  bool get isEmpty;
+
+  /// המרווח האנכי שלפני [band]. **העימוד והציור חייבים לקרוא לכאן שניהם** —
+  /// שני חישובים נפרדים היו נפרדים זה מזה ודוחפים שורה מתחתית העמוד.
+  static double gapBefore(
+    PageBand band,
+    PageBand? previous,
+    PageGeometry geometry,
+  ) {
+    if (previous == null) return 0;
+    // אין רווח בין כותרת לגוף שמתחתיה — הם יחידה אחת.
+    if (band is! HeadingBand) return 0;
+    return previous is HeadingBand ? geometry.sectionGap : geometry.headingGap;
+  }
+}
+
+/// כותרת על כל רוחב העמוד. אינה נשברת בין עמודים.
+final class HeadingBand extends PageBand {
+  final PageSlice slice;
+
+  const HeadingBand(this.slice);
+
+  @override
+  Iterable<PageSlice> get slices => [slice];
+
+  @override
+  bool get isEmpty => slice.isEmpty;
+
+  @override
+  bool operator ==(Object other) =>
+      other is HeadingBand && other.slice == slice;
+
+  @override
+  int get hashCode => slice.hashCode;
+}
+
+/// גוף בטורים.
+final class ColumnsBand extends PageBand {
+  final List<PageColumn> columns;
+
+  const ColumnsBand(this.columns);
+
+  @override
+  Iterable<PageSlice> get slices => columns.expand((column) => column.slices);
+
+  @override
+  bool get isEmpty => columns.every((column) => column.isEmpty);
+
+  @override
+  bool operator ==(Object other) =>
+      other is ColumnsBand && listEquals(other.columns, columns);
+
+  @override
+  int get hashCode => Object.hashAll(columns);
+}
+
 /// עמוד פיזי אחד בספר.
 @immutable
 class BookPage {
   /// מספר העמוד למשתמש — רץ לכל הספר, מתחיל ב-1.
   final int number;
-  final List<PageColumn> columns;
+
+  /// הרצועות, מלמעלה למטה.
+  final List<PageBand> bands;
 
   /// הסעיף הראשון שמופיע בעמוד.
   final int firstSourceIndex;
@@ -90,14 +157,14 @@ class BookPage {
 
   const BookPage({
     required this.number,
-    required this.columns,
+    required this.bands,
     required this.firstSourceIndex,
     required this.lastSourceIndex,
   });
 
-  bool get isEmpty => columns.every((column) => column.isEmpty);
+  bool get isEmpty => bands.every((band) => band.isEmpty);
 
-  Iterable<PageSlice> get slices => columns.expand((column) => column.slices);
+  Iterable<PageSlice> get slices => bands.expand((band) => band.slices);
 
   @override
   bool operator ==(Object other) =>
@@ -105,11 +172,11 @@ class BookPage {
       other.number == number &&
       other.firstSourceIndex == firstSourceIndex &&
       other.lastSourceIndex == lastSourceIndex &&
-      listEquals(other.columns, columns);
+      listEquals(other.bands, bands);
 
   @override
   int get hashCode =>
-      Object.hash(number, firstSourceIndex, lastSourceIndex, columns.length);
+      Object.hash(number, firstSourceIndex, lastSourceIndex, bands.length);
 }
 
 /// ספר מעומד: רשימת עמודים והגאומטריה שבה עומדו.

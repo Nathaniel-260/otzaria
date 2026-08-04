@@ -73,6 +73,13 @@ void main() {
       expect(identical(one.singleColumn, one), isTrue);
     });
 
+    test('הקו המפריד יושב באמצע אזור התוכן', () {
+      final two = PageGeometry.paper(PagePaperSize.a4, columns: 2);
+
+      // אמצע מדויק = שני הטורים שווים ברוחבם.
+      expect(two.columnRuleCenter(0), closeTo(two.contentWidth / 2, 0.001));
+    });
+
     test('גאומטריות זהות שוות ומייצרות אותו מפתח', () {
       final first = PageGeometry.paper(PagePaperSize.a4);
       final second = PageGeometry.paper(PagePaperSize.a4);
