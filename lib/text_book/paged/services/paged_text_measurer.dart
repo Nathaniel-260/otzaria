@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectionRegistrar;
 import 'package:otzaria/text_book/paged/models/page_geometry.dart';
@@ -163,25 +165,29 @@ class PagedTextMeasurer {
 
     while (cursor < length) {
       final range = painter.getLineBoundary(TextPosition(offset: cursor));
-      // שורה חזותית ריקה (שתי שורות חדשות רצופות) מחזירה טווח באורך אפס, והיא
-      // אכן ריקה — קידום מלאכותי כאן היה מכניס את ה-`\n` לתוך סוף השורה,
+      // שורה חזותית ריקה (שני שוברי שורה רצופים) מחזירה טווח באורך אפס, והיא
+      // אכן ריקה — קידום מלאכותי כאן היה מכניס את השובר לתוך סוף השורה,
       // ופרוסה שנחתכת שם הייתה מציירת שורה ריקה נוספת.
       final end = range.end > cursor ? range.end : cursor;
       starts.add(cursor);
-      ends.add(end);
+      // כשהשובר הוא התו האחרון בטקסט, getLineBoundary מכליל אותו בטווח.
+      // הקיצוץ מוגבל לאורך הטווח, אחרת שורה ריקה הייתה מקצצת את זו שלפניה.
+      final trailing = math.min(lineBreakLengthBefore(text, end), end - cursor);
+      ends.add(end - trailing);
 
-      if (end < length && text.codeUnitAt(end) == _newline) {
-        cursor = end + 1;
+      final following = lineBreakLengthAt(text, end);
+      if (following > 0) {
+        cursor = end + following;
       } else if (end > cursor) {
         cursor = end;
       } else {
-        // הגבול אינו מתקדם ואין שורה חדשה לדלג עליה. עדיף לא למדוד מלמדוד שגוי.
+        // הגבול אינו מתקדם ואין שובר שורה לדלג עליו. עדיף לא למדוד מלמדוד שגוי.
         return null;
       }
     }
 
-    // טקסט שמסתיים בשורה חדשה מייצר שורה חזותית ריקה נוספת.
-    if (text.endsWith('\n')) {
+    // טקסט שמסתיים בשובר שורה מייצר שורה חזותית ריקה נוספת.
+    if (lineBreakLengthBefore(text, length) > 0) {
       starts.add(length);
       ends.add(length);
     }
@@ -201,9 +207,43 @@ class PagedTextMeasurer {
       lineEnds: ends,
     );
   }
-
-  static const int _newline = 0x0A;
 }
+
+/// אורך שובר השורה שמתחיל ב-[index], או 0 אם אין שם שובר.
+///
+/// לא רק `\n`: מנוע הטקסט שובר שורה גם ב-CR, VT, FF, NEL, וב-U+2028/2029 —
+/// ואלה מגיעים מטקסט שמקורו ב-HTML או ב-JSON. התעלמות מהם החזירה מדידה כשלה,
+/// והסעיף כולו נדחס לפרוסה אחת שנחתכה בגובה הטור.
+int lineBreakLengthAt(String text, int index) {
+  if (index < 0 || index >= text.length) return 0;
+  final code = text.codeUnitAt(index);
+  if (code == 0x0D) {
+    final isCrLf =
+        index + 1 < text.length && text.codeUnitAt(index + 1) == 0x0A;
+    return isCrLf ? 2 : 1;
+  }
+  return _isSingleUnitLineBreak(code) ? 1 : 0;
+}
+
+/// אורך שובר השורה שנגמר ב-[index] (כלומר מסתיים בתו שלפניו), או 0.
+int lineBreakLengthBefore(String text, int index) {
+  if (index <= 0 || index > text.length) return 0;
+  final code = text.codeUnitAt(index - 1);
+  if (code == 0x0A) {
+    final isCrLf = index >= 2 && text.codeUnitAt(index - 2) == 0x0D;
+    return isCrLf ? 2 : 1;
+  }
+  if (code == 0x0D) return 1;
+  return _isSingleUnitLineBreak(code) ? 1 : 0;
+}
+
+bool _isSingleUnitLineBreak(int code) =>
+    code == 0x0A ||
+    code == 0x0B ||
+    code == 0x0C ||
+    code == 0x85 ||
+    code == 0x2028 ||
+    code == 0x2029;
 
 /// האם הספאן מכיל `WidgetSpan`/placeholder. פריסה של ספאן כזה דורשת
 /// `setPlaceholderDimensions` מראש, ולכן הוא אינו נמדד כטקסט.

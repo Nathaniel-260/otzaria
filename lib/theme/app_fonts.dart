@@ -41,12 +41,28 @@ class AppFonts {
   /// מאוכלס ב-[ensureFontLoaded]; נצרך ל-[boldFontVariations].
   static final Set<String> _variableSystemFonts = {};
 
-  static int _registryRevision = 0;
+  /// גופני מערכת שנטענו בהצלחה. עד הטעינה הטקסט מצויר בגופן חלופי, ומטריקותיו
+  /// שונות לגמרי — ולכן זה חלק מ-[fontMetricsTag].
+  static final Set<String> _loadedSystemFonts = {};
 
-  /// עולה בכל שינוי ברישום הגופנים: טעינת גופן מערכת, זיהוי ציר wght, או
-  /// טעינת קובץ בולד אחי. שלושתם משנים מטריקות של טקסט שכבר נמדד — עימוד
-  /// שנשמר לפני השינוי חייב להיפסל, ולכן החתימה שלו נושאת את המספר הזה.
-  static int get fontRegistryRevision => _registryRevision;
+  /// תג שמתאר את מצב הרישום של [fontFamily] מבחינת **מטריקות**.
+  ///
+  /// נכנס לחתימת מטמון העימוד. יציב בין הרצות בכוונה: מונה רץ היה מתאפס בכל
+  /// הפעלה, וכל עימוד שנשמר אחרי טעינת גופן לא היה נמצא שוב לעולם.
+  static String fontMetricsTag(String? fontFamily) {
+    if (fontFamily == null || fontFamily.isEmpty) return 'default';
+    if (fontPaths.containsKey(fontFamily)) {
+      return _separateBoldFaceFonts.contains(fontFamily)
+          ? 'asset+bold2'
+          : 'asset';
+    }
+    if (!_loadedSystemFonts.contains(fontFamily)) return 'fallback';
+    return [
+      'sys',
+      if (_variableSystemFonts.contains(fontFamily)) 'var',
+      if (_separateBoldSystemFonts.contains(fontFamily)) 'bold2',
+    ].join('+');
+  }
 
   /// מחזיר את ה-[FontVariation] הנדרש כדי לקבל בולד אמיתי בגופן משתנה,
   /// או null כשאין צורך (גופן לא-משתנה, או משקל לא-מודגש — אז בחירת ה-face
@@ -575,7 +591,7 @@ class AppFonts {
     return _loadingSystemFonts.putIfAbsent(fontFamily, () async {
       try {
         await SystemFonts().loadFont(fontFamily);
-        _registryRevision++;
+        _loadedSystemFonts.add(fontFamily);
       } catch (_) {
         // אם הטעינה נכשלה, מסירים מהקאש כדי לאפשר ניסיון חוזר בעתיד.
         _loadingSystemFonts.remove(fontFamily);
@@ -601,7 +617,7 @@ class AppFonts {
 
       // גופן משתנה: אין קובץ בולד נפרד — הבולד מגיע דרך FontVariation('wght').
       if (selfInfo.hasWeightAxis) {
-        if (_variableSystemFonts.add(fontFamily)) _registryRevision++;
+        _variableSystemFonts.add(fontFamily);
         return;
       }
 
@@ -615,7 +631,7 @@ class AppFonts {
         await (FontLoader(
           fontFamily,
         )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
-        if (_separateBoldSystemFonts.add(fontFamily)) _registryRevision++;
+        _separateBoldSystemFonts.add(fontFamily);
         return;
       }
     } catch (_) {
@@ -803,17 +819,16 @@ class AppFonts {
   /// מדמה גופן מערכת שנטען לו קובץ בולד אחי, בלי תלות בגופנים מותקנים.
   @visibleForTesting
   static void debugMarkSeparateBoldSystemFont(String fontFamily) {
-    if (_separateBoldSystemFonts.add(fontFamily)) _registryRevision++;
+    // בפועל הסימון נעשה רק אחרי טעינה מוצלחת, ולכן גם כאן.
+    _loadedSystemFonts.add(fontFamily);
+    _separateBoldSystemFonts.add(fontFamily);
   }
 
   @visibleForTesting
   static void debugResetSystemFontsCache() {
     _systemFontsHebrewCache = null;
     _warmUpFuture = null;
-    if (_variableSystemFonts.isNotEmpty ||
-        _separateBoldSystemFonts.isNotEmpty) {
-      _registryRevision++;
-    }
+    _loadedSystemFonts.clear();
     _variableSystemFonts.clear();
     _separateBoldSystemFonts.clear();
   }

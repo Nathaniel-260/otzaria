@@ -127,6 +127,50 @@ void main() {
       );
     });
 
+    test('סעיף שמסתיים בשורה חדשה — סוף השורה האחרונה אינו כולל את התו', () {
+      // בלי הקיצוץ הפרוסה הייתה נגמרת אחרי ה-`\n` ומציירת שורה ריקה נוספת,
+      // כלומר שורה עודפת בתחתית הטור.
+      const text = 'אבג\n';
+      const span = TextSpan(text: text, style: style);
+      final result = measurer.measure(span)!;
+
+      expect(result.lineEnds[0], 3);
+
+      final head = sliceInlineSpan(span, 0, result.lineEnds[0])!;
+      expect(
+        measurer.measure(head)!.totalHeight,
+        closeTo(result.heightOfFirst(1), 0.01),
+      );
+    });
+
+    test('שוברי שורה שאינם \\n נמדדים ואינם מפילים את המדידה', () {
+      // מנוע הטקסט שובר שורה גם ב-U+2028/2029, VT ו-FF; טקסט כזה מגיע ממקור
+      // HTML או JSON. מדידה שכשלה שלחה את הסעיף כולו לפרוסה אחת שנחתכה בטור.
+      for (final code in [0x2028, 0x2029, 0x0B, 0x0C]) {
+        final breaker = String.fromCharCode(code);
+        final text = ['אבג', 'דהו', 'זחט'].join(breaker);
+        final result = measurer.measure(TextSpan(text: text, style: style));
+        final label = 'שובר 0x${code.toRadixString(16)}';
+
+        expect(result, isNotNull, reason: label);
+        expect(result!.lineCount, 3, reason: label);
+        expect(result.lineEnds[0], 3, reason: label);
+        expect(result.lineStarts[1], 4, reason: label);
+        expectBoundariesTile(result, text);
+      }
+    });
+
+    test('CRLF נספר כשובר אחד', () {
+      const text = 'אבג\r\nדהו';
+      final result = measurer.measure(
+        const TextSpan(text: text, style: style),
+      )!;
+
+      expect(result.lineCount, 2);
+      expect(result.lineEnds[0], 3);
+      expect(result.lineStarts[1], 5);
+    });
+
     test('טקסט שמתחיל בשורה חדשה — השורה הראשונה ריקה', () {
       const text = '\nאבג';
       final result = measurer.measure(

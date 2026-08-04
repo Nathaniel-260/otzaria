@@ -257,6 +257,75 @@ void main() {
       );
     });
 
+    test('כותרת אינה נשארת לבד כשקיצור-האלמנה יכרסם את השורות שמתחתיה', () {
+      // 7 שורות + כותרת → נשארות 2 שורות. הסעיף הבא בן 3 שורות, ולכן
+      // _withoutWidow יקצר ל-1 כדי לא להשאיר שורה בודדת — פחות מהמינימום
+      // שהכותרת דורשת.
+      final book = paginate(
+        [section(7), section(1), section(3)],
+        headings: {1},
+      );
+
+      expect(book.pages.first.columns[0].slices, hasLength(1));
+      expect(
+        book.pages.first.columns[1].slices.map((s) => s.sourceIndex),
+        [1, 2],
+      );
+    });
+
+    test('כותרת אינה נשארת לבד כש-minLinesToStart גדול מהמקום שנשאר', () {
+      // 8 שורות + כותרת → נשארת שורה אחת, אבל סעיף חייב להתחיל ב-3 שורות
+      // לפחות, ולכן הוא כולו יידחה והכותרת תישאר לבדה.
+      final book = paginate(
+        [section(8), section(1), section(5)],
+        headings: {1},
+        rules: const PaginationRules(
+          minLinesToStart: 3,
+          minLinesToCarry: 1,
+          minLinesAfterHeading: 1,
+        ),
+      );
+
+      expect(book.pages.first.columns[0].slices, hasLength(1));
+      expect(
+        book.pages.first.columns[1].slices.map((s) => s.sourceIndex),
+        [1, 2],
+      );
+    });
+
+    test('סעיף ריק אחרי כותרת אינו נחשב כמצטרף אליה', () {
+      final book = paginate(
+        [section(9), section(1), '', section(5)],
+        headings: {1},
+      );
+
+      expect(book.pages.first.columns[0].slices, hasLength(1));
+      expect(
+        book.pages.first.columns[1].slices.map((s) => s.sourceIndex),
+        [1, 3],
+      );
+    });
+
+    test('סעיף בלתי נמדד אחרי כותרת מזיז את הכותרת', () {
+      // סעיף בלתי נמדד פותח טור לעצמו, ולכן הכותרת הייתה נשארת לבדה.
+      final content = [section(9), section(1), section(2)];
+      final book = paginate(
+        content,
+        headings: {1},
+        spanOverride: (index) => index == 2
+            ? const TextSpan(
+                children: [WidgetSpan(child: SizedBox(width: 5, height: 5))],
+              )
+            : TextSpan(text: content[index], style: style),
+      );
+
+      expect(book.pages.first.columns[0].slices, hasLength(1));
+      expect(
+        book.pages.first.columns[1].slices.map((s) => s.sourceIndex),
+        contains(1),
+      );
+    });
+
     test('כותרת בסוף הספר אינה זזה — אין מה לשמור איתה', () {
       final book = paginate([section(9), section(1)], headings: {1});
 

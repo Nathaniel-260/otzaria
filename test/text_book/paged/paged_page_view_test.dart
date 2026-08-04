@@ -54,20 +54,23 @@ void main() {
   /// אי-התאמה בין המדידה לציור.
   String tightSection(int lines) => List.filled(lines, 'wwwwwwwwww').join(' ');
 
-  PagedSectionSpanBuilder builderFor(List<String> content) =>
-      PagedSectionSpanBuilder(
-        content: content,
-        settings: settings,
-        baseStyle: style,
-      );
+  PagedSectionSpanBuilder builderFor(
+    List<String> content, {
+    TextStyle? baseStyle,
+  }) => PagedSectionSpanBuilder(
+    content: content,
+    settings: settings,
+    baseStyle: baseStyle ?? style,
+  );
 
   PaginatedBook paginate(
     List<String> content, {
     Set<int> headings = const {},
     PageGeometry? pageGeometry,
+    TextStyle? baseStyle,
   }) {
     final g = pageGeometry ?? geometry;
-    final spans = builderFor(content);
+    final spans = builderFor(content, baseStyle: baseStyle);
     final engine = PaginationEngine(
       geometry: g,
       measurer: measurerFor(g),
@@ -86,9 +89,12 @@ void main() {
     Set<int> selected = const {},
     ValueChanged<int>? onLineTap,
     PageGeometry pageGeometry = geometry,
+    TextStyle? baseStyle,
+    ThemeData? theme,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
+        theme: theme,
         home: Scaffold(
           body: Directionality(
             textDirection: TextDirection.rtl,
@@ -96,7 +102,7 @@ void main() {
               child: PagedPageView(
                 page: page,
                 geometry: pageGeometry,
-                spans: builderFor(content),
+                spans: builderFor(content, baseStyle: baseStyle),
                 measurer: measurerFor(pageGeometry),
                 selectedIndices: selected,
                 onLineTap: onLineTap,
@@ -269,8 +275,8 @@ void main() {
         selected: const {0},
       );
 
-      // Text.rich עוטף את הספאן שלנו בספאן משלו, והרקע יושב על שורש הפרוסה —
-      // ספאן בלי טקסט משלו, ולכן visitChildren אינו מגיע אליו.
+      // הרקע יושב על שורש הפרוסה — ספאן בלי טקסט משלו, ולכן visitChildren
+      // אינו מגיע אליו.
       final root = tester
           .widgetList<RichText>(find.byType(RichText))
           .firstWhere((t) => t.text.toPlainText().contains('wwww'))
@@ -286,6 +292,63 @@ void main() {
       await pumpPage(tester, page: book.pages.first, content: content);
 
       expect(find.byType(GestureDetector), findsNothing);
+    });
+  });
+
+  group('צבע הטקסט', () {
+    testWidgets('הצבע מגיע מהערכה ואינו מתלכד עם רקע העמוד', (tester) async {
+      // RichText אינו יורש DefaultTextStyle, וספאן בלי צבע מצויר בלבן — על
+      // רקע העמוד הבהיר זה טקסט בלתי נראה.
+      final theme = ThemeData(colorScheme: const ColorScheme.light());
+      final baseStyle = PagedSectionSpanBuilder.baseStyleFor(
+        settings,
+        theme.colorScheme,
+      );
+      final content = [section(2)];
+      final book = paginate(content, baseStyle: baseStyle);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        baseStyle: baseStyle,
+        theme: theme,
+      );
+
+      final root = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere((text) => text.text.toPlainText().contains('wwww'))
+          .text;
+
+      expect(root.style?.color, isNotNull);
+      expect(root.style!.color, isNot(theme.colorScheme.surface));
+      expect(root.style!.color, theme.colorScheme.onSurface);
+    });
+
+    testWidgets('הצבע עוקב אחרי ערכה כהה', (tester) async {
+      final theme = ThemeData(colorScheme: const ColorScheme.dark());
+      final baseStyle = PagedSectionSpanBuilder.baseStyleFor(
+        settings,
+        theme.colorScheme,
+      );
+      final content = [section(2)];
+      final book = paginate(content, baseStyle: baseStyle);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        baseStyle: baseStyle,
+        theme: theme,
+      );
+
+      final root = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere((text) => text.text.toPlainText().contains('wwww'))
+          .text;
+
+      expect(root.style!.color, theme.colorScheme.onSurface);
+      expect(root.style!.color, isNot(theme.colorScheme.surface));
     });
   });
 

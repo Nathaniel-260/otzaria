@@ -40,8 +40,9 @@ class PagedLayoutSignature {
   final int? fontWeight;
   final double lineHeight;
 
-  /// `TextScaler.scale(1.0)` — זום הטקסט של מערכת ההפעלה. סקיילר לא-לינארי
-  /// נגזר גם הוא מערך מערכת בודד, ולכן הערך הזה מזהה אותו בפועל.
+  /// הסקיילר של מערכת ההפעלה, נמדד **על גודל הגופן שבשימוש**. סקיילר לא-לינארי
+  /// מחזיר 1.0 עבור 1.0 ובכל זאת מגדיל גדלים אמיתיים, ולכן מדידה על 1.0 לא
+  /// הייתה מבדילה בינו לבין סקיילר מנוטרל.
   final double textScale;
 
   /// תגית ה-locale שבה הטקסט עובר shaping.
@@ -58,8 +59,8 @@ class PagedLayoutSignature {
   /// קישורי inline מזריקים סמני-אות לטקסט, ולכן משנים את רוחב השורה.
   final bool enableInlineLinks;
 
-  /// [AppFonts.fontRegistryRevision] בזמן המדידה.
-  final int fontRegistryRevision;
+  /// [AppFonts.fontMetricsTag] של הגופן — מצב הרישום שלו בזמן המדידה.
+  final String fontMetricsTag;
 
   final int engineVersion;
 
@@ -82,7 +83,7 @@ class PagedLayoutSignature {
     required this.formatParentheses,
     required this.justifyText,
     required this.enableInlineLinks,
-    required this.fontRegistryRevision,
+    required this.fontMetricsTag,
     this.engineVersion = kPagedLayoutEngineVersion,
   });
 
@@ -113,7 +114,7 @@ class PagedLayoutSignature {
       fontFamily: settings.fontFamily,
       fontWeight: settings.fontWeight?.value,
       lineHeight: settings.lineHeight,
-      textScale: textScaler.scale(1.0),
+      textScale: textScaler.scale(settings.fontSize),
       localeTag: locale.toLanguageTag(),
       removeNikud: settings.removeNikud,
       removeTeamim: settings.removeTeamim,
@@ -122,7 +123,7 @@ class PagedLayoutSignature {
       formatParentheses: settings.formatParentheses,
       justifyText: settings.justifyText,
       enableInlineLinks: settings.enableInlineLinks,
-      fontRegistryRevision: AppFonts.fontRegistryRevision,
+      fontMetricsTag: AppFonts.fontMetricsTag(settings.fontFamily),
     );
   }
 
@@ -149,7 +150,7 @@ class PagedLayoutSignature {
       'ts${textScale.toStringAsFixed(3)},'
       'lc$localeTag|'
       '$_flags|'
-      'fr$fontRegistryRevision';
+      'fm$fontMetricsTag';
 
   @override
   bool operator ==(Object other) =>

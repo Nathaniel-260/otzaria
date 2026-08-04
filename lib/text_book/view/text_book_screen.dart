@@ -31,6 +31,7 @@ import 'package:otzaria/tabs/bloc/tabs_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/models/text_book_view_mode.dart';
 import 'package:otzaria/text_book/utils/per_book_display_settings.dart';
+import 'package:otzaria/text_book/utils/reader_zoom_actions.dart';
 import 'package:otzaria/text_book/utils/text_book_export_utils.dart';
 import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -948,9 +949,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         if (settings.fontSize != null) {
           textBookBloc.add(UpdateFontSize(settings.fontSize!));
         }
-        // בצורת הדף אין מפרשים בצד/מתחת — ההעדפה תחול כשהמשתמש יבחר תצוגה.
+        // ההעדפה תחול כשהמשתמש יבחר תצוגה שיש בה מפרשים בצד או מתחת.
         if (settings.commentatorsBelow != null &&
-            state.viewMode != TextBookViewMode.pageShape) {
+            state.viewMode.usesCommentaryLayoutPreference) {
           textBookBloc.add(
             SetViewMode(
               settings.commentatorsBelow!
@@ -1704,24 +1705,16 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       ActionButtonData(
         widget: _buildZoomInButton(context, state),
         icon: FluentIcons.zoom_in_24_regular,
-        tooltip: 'הגדל את גודל הטקסט',
-        onPressed: () async {
-          final newSize = min(50.0, state.fontSize + 3);
-          context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-          await savePerBookDisplaySettings(context, state, fontSize: newSize);
-        },
+        tooltip: readerZoomInLabel(state.viewMode),
+        onPressed: () => readerZoomIn(context, state),
       ),
 
       // 6) Zoom Out Button
       ActionButtonData(
         widget: _buildZoomOutButton(context, state),
         icon: FluentIcons.zoom_out_24_regular,
-        tooltip: 'הקטן את גודל הטקסט',
-        onPressed: () async {
-          final newSize = max(15.0, state.fontSize - 3);
-          context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-          await savePerBookDisplaySettings(context, state, fontSize: newSize);
-        },
+        tooltip: readerZoomOutLabel(state.viewMode),
+        onPressed: () => readerZoomOut(context, state),
       ),
     ];
   }
@@ -1968,7 +1961,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
     bloc.add(SetViewMode(mode));
 
-    if (mode != TextBookViewMode.pageShape) {
+    if (mode.usesCommentaryLayoutPreference) {
       await savePerBookDisplaySettings(
         context,
         state,
@@ -2146,14 +2139,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return BarButton.icon(
       tooltip:
-          'הגדל את גודל הטקסט (${ShortcutHelper.formatShortcutForDisplay('ctrl++')})',
+          '${readerZoomInLabel(state.viewMode)} '
+          '(${ShortcutHelper.formatShortcutForDisplay('ctrl++')})',
       icon: FluentIcons.zoom_in_24_regular,
       compact: isCompact,
-      onPressed: () async {
-        final newSize = min(50.0, state.fontSize + 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        await savePerBookDisplaySettings(context, state, fontSize: newSize);
-      },
+      onPressed: () => readerZoomIn(context, state),
     );
   }
 
@@ -2161,14 +2151,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
     return BarButton.icon(
       tooltip:
-          'הקטן את גודל הטקסט (${ShortcutHelper.formatShortcutForDisplay('ctrl+-')})',
+          '${readerZoomOutLabel(state.viewMode)} '
+          '(${ShortcutHelper.formatShortcutForDisplay('ctrl+-')})',
       icon: FluentIcons.zoom_out_24_regular,
       compact: isCompact,
-      onPressed: () async {
-        final newSize = max(15.0, state.fontSize - 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        await savePerBookDisplaySettings(context, state, fontSize: newSize);
-      },
+      onPressed: () => readerZoomOut(context, state),
     );
   }
 
@@ -3085,25 +3072,20 @@ bool _handleGlobalKeyEvent(
 
   if (event is KeyDownEvent && isCtrlOrCmd) {
     switch (event.logicalKey) {
-      // הגדל את גודל הטקסט (Ctrl++ או Ctrl+=)
+      // הגדלה (Ctrl++ או Ctrl+=)
       case LogicalKeyboardKey.equal:
       case LogicalKeyboardKey.add:
-        final newSize = min(50.0, state.fontSize + 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
+        readerZoomIn(context, state);
         return true;
 
-      // הקטן את גודל הטקסט (Ctrl+-)
+      // הקטנה (Ctrl+-)
       case LogicalKeyboardKey.minus:
-        final newSize = max(15.0, state.fontSize - 3);
-        context.read<TextBookBloc>().add(UpdateFontSize(newSize));
-        savePerBookDisplaySettings(context, state, fontSize: newSize);
+        readerZoomOut(context, state);
         return true;
 
-      // איפוס גודל טקסט (Ctrl+0)
+      // איפוס (Ctrl+0)
       case LogicalKeyboardKey.digit0:
-        context.read<TextBookBloc>().add(const UpdateFontSize(25.0));
-        savePerBookDisplaySettings(context, state, fontSize: 25.0);
+        resetReaderZoom(context, state);
         return true;
     }
   }

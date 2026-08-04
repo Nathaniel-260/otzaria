@@ -59,11 +59,15 @@ class PagedPageView extends StatelessWidget {
               ),
               SizedBox(
                 height: geometry.footerHeight,
-                child: Center(
-                  child: Text(
-                    '${page.number}',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
+                // מוחרג מהבחירה: בלי זה כל העתקה שמגיעה לתחתית עמוד גורפת את
+                // מספר העמוד אל תוך הטקסט המועתק.
+                child: SelectionContainer.disabled(
+                  child: Center(
+                    child: Text(
+                      '${page.number}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
                     ),
                   ),
                 ),

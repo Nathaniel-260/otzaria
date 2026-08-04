@@ -24,6 +24,21 @@ class PagedSectionSpanBuilder {
     required this.baseStyle,
   });
 
+  /// סגנון השורש של כל הספאנים בתצוגה.
+  ///
+  /// הצבע מפורש בכוונה: הציור עובר דרך `RichText`, שאינו יורש `DefaultTextStyle`
+  /// מהעץ, וספאן בלי צבע נצבע בלבן — ברירת המחדל של מנוע הטקסט.
+  static TextStyle baseStyleFor(
+    RenderSettings settings,
+    ColorScheme colorScheme,
+  ) => TextStyle(
+    color: colorScheme.onSurface,
+    fontSize: settings.fontSize,
+    fontFamily: settings.fontFamily,
+    fontWeight: settings.fontWeight,
+    height: settings.lineHeight,
+  );
+
   final Map<int, InlineSpan?> _cache = {};
 
   /// מספר הבניות שבוצעו בפועל — לאימות שהמטמון פוגע.

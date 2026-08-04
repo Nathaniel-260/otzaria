@@ -12,6 +12,7 @@ import 'package:otzaria/text_book/text_book_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/models/text_book_view_mode.dart';
+import 'package:otzaria/text_book/paged/models/paged_zoom.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -159,6 +160,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     on<LoadContent>(_onLoadContent);
     on<UpdateResolvedBookId>(_onUpdateResolvedBookId);
     on<UpdateFontSize>(_onUpdateFontSize);
+    on<UpdatePagedZoom>(_onUpdatePagedZoom);
     on<ToggleLeftPane>(_onToggleLeftPane);
     on<SetViewMode>(_onSetViewMode);
     on<UpdateCommentators>(_onUpdateCommentators);
@@ -1070,6 +1072,20 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     }
   }
 
+  void _onUpdatePagedZoom(
+    UpdatePagedZoom event,
+    Emitter<TextBookState> emit,
+  ) {
+    if (state is! TextBookLoaded) return;
+    final currentState = state as TextBookLoaded;
+    emit(
+      currentState.copyWith(
+        pagedZoom: clampPagedZoom(event.zoom),
+        selectedIndex: currentState.selectedIndex,
+      ),
+    );
+  }
+
   void _onToggleLeftPane(
     ToggleLeftPane event,
     Emitter<TextBookState> emit,
@@ -1112,8 +1128,7 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
     // ההעדפה הגלובלית "מפרשים בצד" נשמרת רק כשהיא הבחירה בפועל — מעבר לצורת
     // הדף או לתצוגת עמודים אינו אמור לדרוס את מה שהמשתמש בחר לשאר הספרים.
-    if (event.mode == TextBookViewMode.split ||
-        event.mode == TextBookViewMode.combined) {
+    if (event.mode.usesCommentaryLayoutPreference) {
       Settings.setValue<bool>(
         'key-splited-view',
         event.mode == TextBookViewMode.split,

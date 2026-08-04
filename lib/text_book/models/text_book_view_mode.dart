@@ -26,6 +26,14 @@ extension TextBookViewModeX on TextBookViewMode {
     TextBookViewMode.paged => 'עמודים',
   };
 
+  /// האם ההעדפה "מפרשים בצד / מתחת" חלה על התצוגה הזו.
+  ///
+  /// בצורת הדף ובתצוגת העמודים אין מפרשים בצד או מתחת, ולכן ההעדפה אינה נכתבת
+  /// ואינה נטענת עבורן — אחרת מעבר אליהן היה דורס אותה, וטעינתה הייתה מוציאה
+  /// את המשתמש מהתצוגה שבחר.
+  bool get usesCommentaryLayoutPreference =>
+      this == TextBookViewMode.split || this == TextBookViewMode.combined;
+
   /// המזהה שנשמר בהעדפות וב-JSON של הטאב. שינוי ערך כאן פוסל העדפות שמורות.
   String get storageKey => name;
 

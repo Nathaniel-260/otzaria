@@ -217,6 +217,102 @@ void main() {
     });
   });
 
+  group('שדות מחוץ לטווח נדחים', () {
+    /// מחליף שלם בודד במקום [intIndex] בזרם המקודד של [book].
+    String tamper(PaginatedBook book, int intIndex, int value) {
+      final bytes = base64Decode(encodePaginatedBook(book));
+      ByteData.sublistView(bytes).setInt32(intIndex * 4, value, Endian.little);
+      return base64Encode(bytes);
+    }
+
+    /// ספר בן עמוד אחד עם פרוסה אחת, 3 סעיפים.
+    PaginatedBook simple() => bookOf(
+      [
+        page(
+          1,
+          [
+            const [PageSlice(sourceIndex: 1, charStart: 0, charEnd: 5)],
+          ],
+          first: 1,
+          last: 1,
+        ),
+      ],
+      sectionCount: 3,
+    );
+
+    /// מיקומי השלמים בזרם: version, sectionCount, pageCount, first, last, …
+    const firstSourceAt = 3;
+    const lastSourceAt = 4;
+    const sliceSourceAt = 7;
+    const charStartAt = 8;
+    const charEndAt = 9;
+
+    test('הספר הבסיסי עצמו מפוענח — הכיול תקין', () {
+      expect(
+        decodePaginatedBook(encodePaginatedBook(simple()), geometry),
+        isNotNull,
+      );
+    });
+
+    test('sourceIndex של פרוסה מעל sectionCount', () {
+      // בלי האימות זה היה מפוענח לספר "תקין" שבו הניווט מגיע לעמוד שרירותי.
+      expect(
+        decodePaginatedBook(tamper(simple(), sliceSourceAt, 9999), geometry),
+        isNull,
+      );
+    });
+
+    test('sourceIndex שלילי', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), sliceSourceAt, -1), geometry),
+        isNull,
+      );
+    });
+
+    test('charStart שלילי', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), charStartAt, -500), geometry),
+        isNull,
+      );
+    });
+
+    test('charEnd קטן מ-charStart', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), charEndAt, -1), geometry),
+        isNull,
+      );
+    });
+
+    test('firstSourceIndex שלילי', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), firstSourceAt, -3), geometry),
+        isNull,
+      );
+    });
+
+    test('lastSourceIndex מעל sectionCount', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), lastSourceAt, 500), geometry),
+        isNull,
+      );
+    });
+
+    test('lastSourceIndex קטן מ-firstSourceIndex', () {
+      expect(
+        decodePaginatedBook(tamper(simple(), lastSourceAt, 0), geometry),
+        isNull,
+      );
+    });
+
+    test('זבל בזנב הזרם', () {
+      final bytes = base64Decode(encodePaginatedBook(simple()));
+      final withTail = Uint8List(bytes.length + 4)
+        ..setRange(0, bytes.length, bytes);
+
+      expect(decodePaginatedBook(base64Encode(withTail), geometry), isNull);
+    });
+  });
+
   group('קלט שאינו תקין מוחזר כ-null', () {
     test('מחרוזת שאינה base64', () {
       expect(decodePaginatedBook('לא base64 בכלל!!', geometry), isNull);

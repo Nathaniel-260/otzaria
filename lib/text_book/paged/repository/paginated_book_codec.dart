@@ -76,6 +76,9 @@ PaginatedBook? decodePaginatedBook(String encoded, PageGeometry geometry) {
     for (var pageIndex = 0; pageIndex < pageCount; pageIndex++) {
       final first = reader.next();
       final last = reader.next();
+      // אינדקסים מחוץ לטווח היו מפוענחים לספר "תקין" שבו הניווט מגיע לעמוד
+      // שרירותי ופרוסות נעלמות בשקט. עדיף לעמד מחדש מלהציג עימוד שגוי.
+      if (first < 0 || last < first || last >= sectionCount) return null;
       final columnCount = reader.count();
 
       final columns = <PageColumn>[];
@@ -87,6 +90,12 @@ PaginatedBook? decodePaginatedBook(String encoded, PageGeometry geometry) {
           final charStart = reader.next();
           final charEnd = reader.next();
           final flags = reader.next();
+          if (sourceIndex < 0 ||
+              sourceIndex >= sectionCount ||
+              charStart < 0 ||
+              charEnd < charStart) {
+            return null;
+          }
           slices.add(
             PageSlice(
               sourceIndex: sourceIndex,
@@ -109,6 +118,9 @@ PaginatedBook? decodePaginatedBook(String encoded, PageGeometry geometry) {
         ),
       );
     }
+
+    // זנב שלא נקרא מסמן שהקידוד אינו זה שהפענוח מצפה לו.
+    if (!reader.isAtEnd) return null;
 
     return PaginatedBook(
       pages: List.unmodifiable(pages),
@@ -143,6 +155,8 @@ class _Int32Reader {
   }
 
   int get _remainingInts => (_length - _offset) ~/ 4;
+
+  bool get isAtEnd => _offset >= _length;
 
   int next() {
     if (_offset + 4 > _length) throw const _MalformedLayout();

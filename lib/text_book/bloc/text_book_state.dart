@@ -5,6 +5,7 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/text_book/models/commentator_group.dart';
 import 'package:otzaria/text_book/models/text_book_view_mode.dart';
+import 'package:otzaria/text_book/paged/models/paged_zoom.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
 
@@ -165,6 +166,9 @@ class TextBookLoaded extends TextBookState {
   final double fontSize;
   final TextBookViewMode viewMode;
 
+  /// זום תצוגת העמודים. מגדיל את העמוד כולו ולא את הגופן, ולכן אינו מעמד מחדש.
+  final double pagedZoom;
+
   bool get showSplitView => viewMode == TextBookViewMode.split;
   bool get showPageShapeView => viewMode == TextBookViewMode.pageShape;
 
@@ -252,6 +256,7 @@ class TextBookLoaded extends TextBookState {
     this.contentVersion = 0,
     required this.fontSize,
     required this.viewMode,
+    this.pagedZoom = kDefaultPagedZoom,
     required this.activeCommentators,
     required this.commentatorGroups,
     required this.availableCommentators,
@@ -352,6 +357,7 @@ class TextBookLoaded extends TextBookState {
     double? fontSize,
     bool? showLeftPane,
     TextBookViewMode? viewMode,
+    double? pagedZoom,
     List<String>? activeCommentators,
     List<CommentatorGroup>? commentatorGroups,
     List<String>? availableCommentators,
@@ -412,6 +418,7 @@ class TextBookLoaded extends TextBookState {
       fontSize: fontSize ?? this.fontSize,
       showLeftPane: showLeftPane ?? this.showLeftPane,
       viewMode: viewMode ?? this.viewMode,
+      pagedZoom: pagedZoom ?? this.pagedZoom,
       activeCommentators: activeCommentators ?? this.activeCommentators,
       commentatorGroups: commentatorGroups ?? this.commentatorGroups,
       availableCommentators:
@@ -513,6 +520,7 @@ class TextBookLoaded extends TextBookState {
     fontSize,
     showLeftPane,
     viewMode,
+    pagedZoom,
     // השוואה לפי תוכן (לא רק אורך) — אחרת החלפת מפרש אחד באחר באותו אורך
     // נבלעת ע"י השוואת ה-state והבחירה לא מתעדכנת.
     activeCommentators,

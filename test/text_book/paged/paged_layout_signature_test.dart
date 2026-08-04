@@ -157,6 +157,15 @@ void main() {
       );
     });
 
+    test('סקיילר לא-לינארי משנה את המפתח', () {
+      // סקיילר לא-לינארי מחזיר 1.0 עבור 1.0 ובכל זאת מגדיל גדלים אמיתיים,
+      // ולכן מדידה על 1.0 בלבד לא הייתה מבדילה בינו לבין סקיילר מנוטרל.
+      expect(
+        sign(textScaler: const _NonLinearScaler()).cacheKey,
+        isNot(sign().cacheKey),
+      );
+    });
+
     test('locale אחר משנה את המפתח — הוא משפיע על shaping', () {
       expect(
         sign(textLocale: const Locale('en', 'US')).cacheKey,
@@ -171,17 +180,42 @@ void main() {
       );
     });
 
-    test('רישום גופן שהשתנה פוסל עימוד שנמדד לפניו', () {
-      final before = sign().cacheKey;
+    test('רישום הגופן שבשימוש כשהשתנה פוסל עימוד שנמדד לפניו', () {
+      const font = 'SomeSystemFontForTest';
+      const settings = RenderSettings(fontFamily: font);
+      final before = sign(settings: settings).cacheKey;
       addTearDown(AppFonts.debugResetSystemFontsCache);
 
-      AppFonts.debugMarkSeparateBoldSystemFont('SomeSystemFontForTest');
+      AppFonts.debugMarkSeparateBoldSystemFont(font);
 
-      expect(sign().cacheKey, isNot(before));
+      expect(sign(settings: settings).cacheKey, isNot(before));
+    });
+
+    test('רישום גופן אחר אינו פוסל את העימוד', () {
+      // התג הוא פר-גופן בכוונה: מונה גלובלי היה גורם לתצוגה מקדימה של גופן
+      // במסך ההגדרות לבטל את העימוד השמור של כל הספרים.
+      const settings = RenderSettings(fontFamily: 'FontInUse');
+      final before = sign(settings: settings).cacheKey;
+      addTearDown(AppFonts.debugResetSystemFontsCache);
+
+      AppFonts.debugMarkSeparateBoldSystemFont('AnUnrelatedFont');
+
+      expect(sign(settings: settings).cacheKey, before);
     });
   });
 
   test('גרסת המנוע נכללת במפתח', () {
     expect(sign().cacheKey, startsWith('v$kPagedLayoutEngineVersion|'));
   });
+}
+
+/// סקיילר שאינו מכפיל לינארית: 1.0 נשאר 1.0, וגדלים אמיתיים גדלים.
+class _NonLinearScaler extends TextScaler {
+  const _NonLinearScaler();
+
+  @override
+  double scale(double fontSize) => fontSize <= 1.0 ? fontSize : fontSize * 1.4;
+
+  @override
+  double get textScaleFactor => 1.0;
 }

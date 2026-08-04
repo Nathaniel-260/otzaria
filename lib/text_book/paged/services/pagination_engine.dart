@@ -175,10 +175,17 @@ class PaginationEngine {
       return _headingWouldBeOrphan(index, roomAfter);
     }
 
-    return line == 0 &&
-        fit < rules.minLinesToStart &&
-        paragraph.lineCount >= rules.minLinesToStart;
+    return _bodyWouldStartTooThin(paragraph, line, fit);
   }
+
+  bool _bodyWouldStartTooThin(
+    MeasuredParagraph paragraph,
+    int line,
+    int fit,
+  ) =>
+      line == 0 &&
+      fit < rules.minLinesToStart &&
+      paragraph.lineCount >= rules.minLinesToStart;
 
   /// מקצר את הפרוסה כדי שלא תישאר שורה בודדת לטור הבא.
   int _withoutWidow(MeasuredParagraph paragraph, int line, int fit) {
@@ -189,13 +196,39 @@ class PaginationEngine {
   }
 
   bool _headingWouldBeOrphan(int index, double roomAfter) {
-    if (index + 1 >= sectionCount) return false;
-    final next = _sectionAt(index + 1).paragraph;
-    if (next == null || next.isEmpty) return false;
-    final needed = next.lineCount < rules.minLinesAfterHeading
-        ? next.lineCount
-        : rules.minLinesAfterHeading;
-    return next.linesFittingFrom(0, roomAfter) < needed;
+    // סעיף ריק אינו מצטרף לכותרת, ולכן מדלגים עליו אל הסעיף שכן יצטרף.
+    var next = index + 1;
+    while (next < sectionCount) {
+      final section = _sectionAt(next);
+      if (section.span == null) {
+        next++;
+        continue;
+      }
+      final paragraph = section.paragraph;
+      // סעיף בלתי נמדד פותח טור לעצמו, כלומר הכותרת תישאר לבדה.
+      if (paragraph == null) return true;
+      if (paragraph.isEmpty) {
+        next++;
+        continue;
+      }
+      final needed = paragraph.lineCount < rules.minLinesAfterHeading
+          ? paragraph.lineCount
+          : rules.minLinesAfterHeading;
+      return _linesPlacedFor(paragraph, roomAfter) < needed;
+    }
+    // אין סעיף שיצטרף לכותרת — אין מה לשמור איתה.
+    return false;
+  }
+
+  /// כמה שורות מהסעיף יוצבו **בפועל** בטור שנשארו בו [room] פיקסלים.
+  ///
+  /// חייבת לעבור דרך אותה שרשרת שמשמשת בהצבה עצמה. חישוב נפרד היה נותן תשובה
+  /// אחרת מזו שתקרה, והכותרת הייתה נשארת יתומה בתחתית הטור.
+  int _linesPlacedFor(MeasuredParagraph paragraph, double room) {
+    final fit = paragraph.linesFittingFrom(0, room);
+    if (fit == 0) return 0;
+    if (_bodyWouldStartTooThin(paragraph, 0, fit)) return 0;
+    return _withoutWidow(paragraph, 0, fit);
   }
 
   /// סעיף שלא ניתן למדוד (למשל ספאן עם placeholder) מקבל טור לעצמו.

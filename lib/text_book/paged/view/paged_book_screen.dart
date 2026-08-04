@@ -28,6 +28,9 @@ double get _minWidthForTwoColumns => PagePaperSize.a4.widthPx;
 /// המרווח בין שני עמודים בתצוגת כרך פתוח.
 const double _spreadGap = 16;
 
+/// המרווח סביב העמוד. נכנס לחישוב ההתאמה לרוחב, כדי שהעמוד לא ייגע בקצה.
+const double _pageMargin = 12;
+
 /// תצוגת עמודים בגודל קבוע.
 ///
 /// התצוגה מחזיקה את תוכן הספר המלא בעצמה: העימוד חייב לרוץ על כל השורות, ותוכן
@@ -57,7 +60,16 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
   final ItemScrollController _pageScrollController = ItemScrollController();
   final ItemPositionsListener _pagePositions = ItemPositionsListener.create();
 
+  /// גלילה אופקית, לזום שמרחיב את העמוד מעל רוחב החלון.
+  final ScrollController _horizontalController = ScrollController();
+
   PagedSectionSpanBuilder? _spans;
+  List<String>? _spansContent;
+  RenderSettings? _spansSettings;
+  TextStyle? _spansStyle;
+
+  String? _requestedFont;
+
   List<String>? _fullContent;
   Future<void>? _loadingFullContent;
 
@@ -73,6 +85,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
   @override
   void dispose() {
     _pagePositions.itemPositions.removeListener(_onVisiblePagesChanged);
+    _horizontalController.dispose();
     if (widget.cubitOverride == null) _cubit.close();
     super.dispose();
   }
@@ -114,10 +127,13 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     final settings = _renderSettings(bookState, settingsState);
     final content = _fullContent ?? bookState.content;
 
-    _spans = PagedSectionSpanBuilder(
-      content: content,
-      settings: settings,
-      baseStyle: _baseStyle(settings),
+    _spans = _spanBuilderFor(
+      content,
+      settings,
+      PagedSectionSpanBuilder.baseStyleFor(
+        settings,
+        Theme.of(context).colorScheme,
+      ),
     );
 
     _ensureLayout(bookState, geometry, settings, content);
@@ -181,51 +197,125 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     );
     final perRow = _pagesPerRow(geometry, constraints.maxWidth);
     final rowWidth = geometry.width * perRow + (perRow > 1 ? _spreadGap : 0);
-    final scale = math.min(1.0, constraints.maxWidth / (rowWidth + 24));
+
+    // הזום מוכפל בהתאמה לרוחב: זום 1 הוא "עמוד מלא בחלון", והגדלה משם מרחיבה
+    // את העמוד ומפעילה גלילה אופקית — האותיות מוטבעות בעמוד ואינן גדלות לבדן.
+    final fitScale = math.min(
+      1.0,
+      constraints.maxWidth / (rowWidth + _pageMargin * 2),
+    );
+    final scale = fitScale * bookState.pagedZoom;
+    final scaledWidth = rowWidth * scale;
+    final scaledHeight = geometry.height * scale;
+    final viewportWidth = math.max(
+      constraints.maxWidth,
+      scaledWidth + _pageMargin * 2,
+    );
     final rowCount = (book.pageCount + perRow - 1) ~/ perRow;
 
     _scrollToSelectionAfterFrame(book, bookState, perRow);
 
     return SelectionArea(
-      child: ScrollablePositionedList.builder(
-        itemScrollController: _pageScrollController,
-        itemPositionsListener: _pagePositions,
-        itemCount: rowCount,
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        itemBuilder: (context, rowIndex) {
-          final pages = <Widget>[];
-          for (var offset = 0; offset < perRow; offset++) {
-            final pageIndex = rowIndex * perRow + offset;
-            if (pageIndex >= book.pageCount) break;
-            if (offset > 0) pages.add(const SizedBox(width: _spreadGap));
-            pages.add(
-              PagedPageView(
-                page: book.pages[pageIndex],
-                geometry: geometry,
-                spans: spans,
-                measurer: measurer,
-                selectedIndices: bookState.selectedIndices,
-                onLineTap: _onLineTap,
-              ),
-            );
-          }
+      child: Scrollbar(
+        controller: _horizontalController,
+        scrollbarOrientation: ScrollbarOrientation.bottom,
+        child: SingleChildScrollView(
+          controller: _horizontalController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: viewportWidth,
+            child: ScrollablePositionedList.builder(
+              itemScrollController: _pageScrollController,
+              itemPositionsListener: _pagePositions,
+              itemCount: rowCount,
+              padding: const EdgeInsets.symmetric(vertical: _pageMargin),
+              itemBuilder: (context, rowIndex) {
+                final pages = <Widget>[];
+                for (var offset = 0; offset < perRow; offset++) {
+                  final pageIndex = rowIndex * perRow + offset;
+                  if (pageIndex >= book.pageCount) break;
+                  if (offset > 0) pages.add(const SizedBox(width: _spreadGap));
+                  pages.add(
+                    PagedPageView(
+                      page: book.pages[pageIndex],
+                      geometry: geometry,
+                      spans: spans,
+                      measurer: measurer,
+                      selectedIndices: bookState.selectedIndices,
+                      onLineTap: _onLineTap,
+                    ),
+                  );
+                }
 
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: Center(
-              child: Transform.scale(
-                scale: scale,
-                alignment: Alignment.topCenter,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: pages,
-                ),
-              ),
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Center(
+                    // ה-Transform אינו משנה את גודל הפריסה, ולכן המידות
+                    // המוקטנות נקבעות כאן — אחרת העמוד תופס את גובהו המלא
+                    // ומשאיר רווח ריק מתחתיו.
+                    child: SizedBox(
+                      width: scaledWidth,
+                      height: scaledHeight,
+                      child: Transform.scale(
+                        scale: scale,
+                        alignment: Alignment.topLeft,
+                        child: SizedBox(
+                          width: rowWidth,
+                          height: geometry.height,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: pages,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
-          );
-        },
+          ),
+        ),
       ),
+    );
+  }
+
+  /// טוען גופן מערכת ומרנדר מחדש כשהוא מוכן.
+  ///
+  /// גופן שלא נטען עדיין נמדד בגופן חלופי, וכל העימוד יוצא שגוי. הטעינה
+  /// אסינכרונית ואינה משדרת שינוי, ולכן בלי ה-`setState` כאן העימוד היה נשאר
+  /// זה של הגופן החלופי עד שמשהו אחר במקרה יגרום ל-build.
+  void _ensureFontLoaded(String? family) {
+    if (family == null || family.isEmpty || family == _requestedFont) return;
+    _requestedFont = family;
+    AppFonts.ensureFontLoaded(family).then((_) {
+      if (mounted && _requestedFont == family) setState(() {});
+    });
+  }
+
+  /// בונה הספאנים ממוזכר: `_buildBody` רץ בכל state של ה-bloc, וגם בכל פריים
+  /// גלילה. בנייה מחדש הייתה מאבדת את מטמון הספאנים ומריצה עיבוד HTML מלא של
+  /// כל הסעיפים הגלויים בכל פריים.
+  PagedSectionSpanBuilder _spanBuilderFor(
+    List<String> content,
+    RenderSettings settings,
+    TextStyle baseStyle,
+  ) {
+    final existing = _spans;
+    if (existing != null &&
+        identical(_spansContent, content) &&
+        _spansSettings == settings &&
+        _spansStyle == baseStyle) {
+      return existing;
+    }
+
+    _spansContent = content;
+    _spansSettings = settings;
+    _spansStyle = baseStyle;
+    return PagedSectionSpanBuilder(
+      content: content,
+      settings: settings,
+      baseStyle: baseStyle,
     );
   }
 
@@ -233,13 +323,6 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     if (!widget.spread) return 1;
     return availableWidth >= geometry.width * 2 + _spreadGap ? 2 : 1;
   }
-
-  TextStyle _baseStyle(RenderSettings settings) => TextStyle(
-    fontSize: settings.fontSize,
-    fontFamily: settings.fontFamily,
-    fontWeight: settings.fontWeight,
-    height: settings.lineHeight,
-  );
 
   RenderSettings _renderSettings(
     TextBookLoaded bookState,
@@ -275,11 +358,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
     }
 
     final spans = _spans!;
-    final family = settings.fontFamily;
-    if (family != null && family.isNotEmpty) {
-      // גופן מערכת שלא נטען עדיין נמדד בגופן חלופי, וכל העימוד יוצא שגוי.
-      unawaited(AppFonts.ensureFontLoaded(family));
-    }
+    _ensureFontLoaded(settings.fontFamily);
 
     unawaited(
       _cubit.request(

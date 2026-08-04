@@ -129,15 +129,25 @@ class PagedLayoutCubit extends Cubit<PagedLayoutState> {
     );
 
     final budget = _sliceBudget.inMicroseconds;
-    while (true) {
-      final slice = Stopwatch()..start();
-      engine.run(shouldStop: () => slice.elapsedMicroseconds >= budget);
-      if (_stale(generation)) return;
-      if (engine.isDone) break;
+    try {
+      while (true) {
+        final slice = Stopwatch()..start();
+        engine.run(shouldStop: () => slice.elapsedMicroseconds >= budget);
+        if (_stale(generation)) return;
+        if (engine.isDone) break;
 
-      emit(PagedLayoutRunning(engine.progress));
-      await _yieldToFrame();
+        emit(PagedLayoutRunning(engine.progress));
+        await _yieldToFrame();
+        if (_stale(generation)) return;
+      }
+    } catch (e, stackTrace) {
+      // בלי זה החתימה נשארת רשומה והמצב נשאר Running, כך שהבלימה חוסמת כל
+      // ניסיון חוזר והתצוגה נתקעת על פס ההתקדמות לנצח.
+      debugPrint('⚠️ paged layout: pagination failed: $e\n$stackTrace');
       if (_stale(generation)) return;
+      _signature = null;
+      emit(const PagedLayoutIdle());
+      return;
     }
 
     final book = engine.snapshot();

@@ -80,6 +80,16 @@ class UpdateFontSize extends TextBookEvent {
   List<Object?> get props => [fontSize];
 }
 
+/// זום תצוגת העמודים. הערך נחסם לטווח המותר ב-bloc.
+class UpdatePagedZoom extends TextBookEvent {
+  final double zoom;
+
+  const UpdatePagedZoom(this.zoom);
+
+  @override
+  List<Object?> get props => [zoom];
+}
+
 class ToggleLeftPane extends TextBookEvent {
   final bool show;
 
