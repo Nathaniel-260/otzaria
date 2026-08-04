@@ -31,6 +31,11 @@ String encodePaginatedBook(PaginatedBook book) {
   final data = ByteData(intCount * 4);
   var offset = 0;
   void put(int value) {
+    // setInt32 קוטם בשקט מחוץ לטווח, וספר מקודד היה יוצא פגום בלי שנדע.
+    assert(
+      value >= -2147483648 && value <= 2147483647,
+      'ערך מחוץ לטווח int32: $value',
+    );
     data.setInt32(offset, value, Endian.little);
     offset += 4;
   }
@@ -38,7 +43,14 @@ String encodePaginatedBook(PaginatedBook book) {
   put(kPaginatedBookCodecVersion);
   put(book.sectionCount);
   put(book.pages.length);
-  for (final page in book.pages) {
+  for (var pageIndex = 0; pageIndex < book.pages.length; pageIndex++) {
+    final page = book.pages[pageIndex];
+    // מספר העמוד אינו מקודד — הפענוח גוזר אותו מהמקום ברשימה. מספור אחר
+    // (למשל לפי דפי הדפוס) יידרש להוסיף אותו לזרם.
+    assert(
+      page.number == pageIndex + 1,
+      'מספר העמוד אינו נגזר מהמקום ברשימה',
+    );
     put(page.firstSourceIndex);
     put(page.lastSourceIndex);
     put(page.columns.length);
