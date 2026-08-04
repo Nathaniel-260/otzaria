@@ -72,6 +72,7 @@ class AppThemeData {
       outlinedButtonTheme: _outlinedButtonTheme(cs),
       tabBarTheme: _tabBarTheme(cs),
       tooltipTheme: _tooltipTheme(cs),
+      textSelectionTheme: _textSelectionTheme(cs),
       dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
       menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
       popupMenuTheme: _popupMenuTheme(
@@ -118,6 +119,7 @@ class AppThemeData {
       outlinedButtonTheme: _outlinedButtonTheme(cs),
       tabBarTheme: _tabBarTheme(cs),
       tooltipTheme: _tooltipTheme(cs),
+      textSelectionTheme: _textSelectionTheme(cs),
       dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
       menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
       popupMenuTheme: _popupMenuTheme(
@@ -158,6 +160,14 @@ class AppThemeData {
         fontSize: metrics.fontSize,
         fontWeight: metrics.itemFontWeight,
       ),
+    );
+  }
+
+  /// צבע הדגשת הבחירה. יושב בתמה כדי שכל תצוגה תשאב אותו מכאן; `RichText`
+  /// אינו מקבל אותו לבד, ולכן התצוגות מעבירות אותו דרך `DefaultSelectionStyle`.
+  static TextSelectionThemeData _textSelectionTheme(ColorScheme cs) {
+    return TextSelectionThemeData(
+      selectionColor: cs.primary.withValues(alpha: 0.4),
     );
   }
 

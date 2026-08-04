@@ -177,24 +177,6 @@ void main() {
   });
 
   group('מחיקה', () {
-    test('invalidateBook מוחק את כל וריאנטי העימוד של הספר', () async {
-      final small = signature();
-      final large = signature(
-        settings: const RenderSettings(fontSize: 24),
-      );
-      final otherBook = signature(bookId: 'ספר אחר');
-
-      await cache.save(small, bookOf());
-      await cache.save(large, bookOf());
-      await cache.save(otherBook, bookOf());
-
-      await cache.invalidateBook('ספר בדיקה');
-
-      expect(await cache.load(small), isNull);
-      expect(await cache.load(large), isNull);
-      expect(await cache.load(otherBook), isNotNull);
-    });
-
     test('ניקוי לפי זמן גישה מוחק רשומות ישנות בלבד', () async {
       final key = signature();
       await cache.save(key, bookOf());
@@ -219,6 +201,5 @@ void main() {
     expect(await broken.load(signature()), isNull);
     // שמירה נכשלת בשקט — הקורא כבר קיבל את העימוד שחושב.
     await broken.save(signature(), bookOf());
-    await broken.invalidateBook('ספר בדיקה');
   });
 }

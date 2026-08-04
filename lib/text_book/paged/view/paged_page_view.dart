@@ -143,10 +143,12 @@ class PagedPageView extends StatelessWidget {
       selectedIndices.contains(slice.sourceIndex)
           ? _withBackground(sliced, colorScheme.primaryContainer)
           : sliced,
+      // RichText אינו שואב את צבע הבחירה לבד, ולכן הוא מגיע מכאן. הצבע עצמו
+      // מוגדר ב-lib/theme בלבד.
       selectionRegistrar: SelectionContainer.maybeOf(context),
       selectionColor:
           DefaultSelectionStyle.of(context).selectionColor ??
-          colorScheme.primary.withValues(alpha: 0.4),
+          Theme.of(context).textSelectionTheme.selectionColor,
     );
 
     final onTap = onLineTap;

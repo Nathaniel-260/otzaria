@@ -43,11 +43,6 @@ class PagedLayoutCacheDao {
     db.execute(_queries['updateAccessedAt']!, [accessedAt, layoutKey]);
   }
 
-  Future<void> deleteByBookTitle(String bookTitle) async {
-    final db = await database;
-    db.execute(_queries['deleteByBookTitle']!, [bookTitle]);
-  }
-
   Future<void> deleteAccessedBefore(int cutoffMillis) async {
     final db = await database;
     db.execute(_queries['deleteAccessedBefore']!, [cutoffMillis]);

@@ -156,6 +156,50 @@ void main() {
       }
     });
 
+    testWidgets('רוחב הטור אינו נגרר אחרי רוחב החלון', (tester) async {
+      // המידה חייבת להיות מפורשת ולא גמישה: טור שנמתח לפי המקום הפנוי היה
+      // שובר שורות במקום אחר מזה שהעימוד מדד, ושורה הייתה נחתכת בתחתית.
+      final content = List.generate(4, (_) => section(5));
+      final book = paginate(content);
+
+      for (final available in [geometry.width * 3, geometry.width * 0.6]) {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Directionality(
+                textDirection: TextDirection.rtl,
+                child: SizedBox(
+                  width: available,
+                  // כמו בתצוגה עצמה: העמוד שומר על גודלו והחלון נגלל אליו.
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: PagedPageView(
+                      page: book.pages.first,
+                      geometry: geometry,
+                      spans: builderFor(content),
+                      measurer: measurerFor(geometry),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final text = tester
+            .widgetList<RichText>(find.byType(RichText))
+            .firstWhere((t) => t.text.toPlainText().contains('wwww'));
+        final box =
+            find.byWidget(text).evaluate().first.renderObject as RenderBox;
+
+        expect(
+          box.size.width,
+          closeTo(geometry.columnWidth, 0.01),
+          reason: 'ברוחב חלון $available',
+        );
+      }
+    });
+
     testWidgets('תוכן הטור אינו עובר את הגובה שהוקצה לו', (tester) async {
       final content = List.generate(12, (i) => section(3 + i % 5));
       final book = paginate(content);
@@ -247,8 +291,10 @@ void main() {
   });
 
   group('אינטראקציה', () {
-    testWidgets('לחיצה על פרוסה מחזירה את אינדקס הסעיף', (tester) async {
-      final content = [section(2), section(2)];
+    testWidgets('לחיצה על פרוסה מחזירה את אינדקס הסעיף שנלחץ', (tester) async {
+      // שלושה סעיפים בעלי טקסט שונה, כדי שהטסט יבדיל בין מיפוי נכון למיפוי
+      // שמחזיר תמיד את הראשון.
+      final content = ['אאאא אאאא', 'בבבב בבבב', 'גגגג גגגג'];
       final book = paginate(content);
       final taps = <int>[];
 
@@ -258,10 +304,18 @@ void main() {
         content: content,
         onLineTap: taps.add,
       );
-      await tester.tap(find.byType(RichText).first);
 
-      expect(taps, isNotEmpty);
-      expect(taps.first, anyOf(0, 1));
+      for (final entry in {0: 'אאאא', 1: 'בבבב', 2: 'גגגג'}.entries) {
+        final target = find.byWidgetPredicate(
+          (widget) =>
+              widget is RichText &&
+              widget.text.toPlainText().contains(entry.value),
+        );
+        await tester.tap(target);
+        expect(taps.last, entry.key, reason: 'לחיצה על ${entry.value}');
+      }
+
+      expect(taps, [0, 1, 2]);
     });
 
     testWidgets('סעיף מסומן מקבל רקע', (tester) async {
@@ -283,6 +337,50 @@ void main() {
           .text;
 
       expect(_anySpanHasBackground(root), isTrue);
+    });
+
+    testWidgets('סעיף שאינו מסומן אינו מקבל רקע', (tester) async {
+      // המקרה השלילי: בלעדיו טסט הסימון היה עובר גם אם כל פרוסה נצבעת.
+      final content = [section(2), section(2)];
+      final book = paginate(content);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        selected: const {},
+      );
+
+      final painted = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .where((text) => text.text.toPlainText().contains('wwww'));
+
+      expect(painted, isNotEmpty);
+      for (final text in painted) {
+        expect(_anySpanHasBackground(text.text), isFalse);
+      }
+    });
+
+    testWidgets('סעיף אחר מסומן — רק הוא מקבל רקע', (tester) async {
+      final content = ['אאאא אאאא', 'בבבב בבבב'];
+      final book = paginate(content);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        selected: const {1},
+      );
+
+      final byText = {
+        for (final text in tester.widgetList<RichText>(find.byType(RichText)))
+          text.text.toPlainText(): text.text,
+      };
+      final first = byText.entries.firstWhere((e) => e.key.contains('אאאא'));
+      final second = byText.entries.firstWhere((e) => e.key.contains('בבבב'));
+
+      expect(_anySpanHasBackground(first.value), isFalse);
+      expect(_anySpanHasBackground(second.value), isTrue);
     });
 
     testWidgets('בלי מטפל לחיצה אין GestureDetector על הטקסט', (tester) async {

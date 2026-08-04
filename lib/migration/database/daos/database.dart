@@ -627,7 +627,6 @@ class MyDatabase {
         );
         ''',
       'CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_accessed_at ON paged_layout_cache(accessedAt);',
-      'CREATE INDEX IF NOT EXISTS idx_paged_layout_cache_book ON paged_layout_cache(bookTitle);',
 
       // Links table
       '''

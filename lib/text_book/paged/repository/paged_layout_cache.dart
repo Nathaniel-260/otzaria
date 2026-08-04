@@ -51,6 +51,15 @@ class PagedLayoutCache {
               .touchPagedLayoutCacheEntry(signature.cacheKey, now)
               .catchError((_) {}),
         );
+        // גם הניקוי כאן ולא רק בכתיבה: משתמש שהגדרותיו התייצבו קורא מהמטמון
+        // ואינו כותב אליו, ואז רשומות פג-תוקף לא היו נמחקות לעולם.
+        unawaited(
+          repository
+              .prunePagedLayoutCacheAccessedBefore(
+                now - _layoutTtl.inMilliseconds,
+              )
+              .catchError((_) {}),
+        );
       }
       return book;
     } catch (e) {
@@ -81,17 +90,6 @@ class PagedLayoutCache {
       );
     } catch (e) {
       debugPrint('⚠️ paged layout cache write failed: $e');
-    }
-  }
-
-  /// מוחק את כל וריאנטי העימוד של ספר. נדרש כשתוכן הספר נערך: החתימה תופס
-  /// ממילא, אבל הרשומות הישנות היו נשארות ותופסות מקום עד ה-TTL.
-  Future<void> invalidateBook(String bookTitle) async {
-    try {
-      final repository = await _repositoryProvider();
-      await repository.deletePagedLayoutCacheForBook(bookTitle);
-    } catch (e) {
-      debugPrint('⚠️ paged layout cache invalidate failed: $e');
     }
   }
 }

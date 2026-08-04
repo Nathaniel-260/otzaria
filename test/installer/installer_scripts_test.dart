@@ -70,7 +70,8 @@ void main() {
         expect(
           match,
           isNotNull,
-          reason: 'בלי מחיקה, מסמן מהתקנת מנהל קודמת שורד מעבר להתקנת משתמש '
+          reason:
+              'בלי מחיקה, מסמן מהתקנת מנהל קודמת שורד מעבר להתקנת משתמש '
               'ו-AppPaths.detectInstallMode ימשיך להחזיר systemWide',
         );
         expect(
@@ -131,7 +132,8 @@ void main() {
       expect(
         body,
         contains('GetCustomLibraryPath()'),
-        reason: 'בלי זה שינוי מצב ההתקנה מזיז את יעד החילוץ בעוד האפליקציה '
+        reason:
+            'בלי זה שינוי מצב ההתקנה מזיז את יעד החילוץ בעוד האפליקציה '
             'ממשיכה לקרוא מהנתיב הישן',
       );
       expect(

@@ -84,8 +84,13 @@ class PageGeometry {
   double get contentHeight => height - margins.vertical - footerHeight;
 
   /// רוחב טור בודד — היחידה שהמדידה והציור חייבים לחלוק.
-  double get columnWidth =>
-      (contentWidth - columnGap * (columns - 1)) / columns;
+  double get columnWidth {
+    final result = (contentWidth - columnGap * (columns - 1)) / columns;
+    // שוליים או מרווח גדולים מהעמוד נותנים רוחב שלילי, והמדידה הייתה נכשלת
+    // מאוחר יותר בלי לומר למה.
+    assert(result > 0, 'השוליים והמרווח גדולים מרוחב העמוד');
+    return result;
+  }
 
   /// כמה טקסט נכנס בעמוד שלם: כל הטורים יחד.
   double get totalColumnHeight => contentHeight * columns;

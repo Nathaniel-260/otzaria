@@ -32,10 +32,15 @@ void main() {
 
   group('applyBlockStyles כבוי — נועל את התנהגות המצב הרציף', () {
     test('כותרת h2 נשארת בגודל הטקסט ובלי הדגשה', () {
-      final style = _firstStyle(buildInlineHtmlSpans('<h2>כותרת</h2>', base));
+      final spans = buildInlineHtmlSpans('<h2>כותרת</h2>', base);
+      final style = _firstStyle(spans);
 
-      expect(style?.fontSize ?? base.fontSize, 20);
-      expect(style?.fontWeight, isNot(FontWeight.bold));
+      // בלי הבדיקות האלה שתי הטענות שלמטה היו עוברות ריקם על ספאן ריק:
+      // `?? base.fontSize` מחזיר 20, ו-`isNot(bold)` נכון גם ל-null.
+      expect(_plain(spans), 'כותרת');
+      expect(style, isNotNull);
+      expect(style!.fontSize, 20);
+      expect(style.fontWeight, isNot(FontWeight.bold));
     });
 
     test('תגי בלוק אינם שוברים שורה', () {

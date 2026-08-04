@@ -417,18 +417,20 @@ void main() {
   });
 
   group('התלכדות מדידה↔ציור', () {
+    /// הגובה שהתצוגה מקבלת בפועל — **דרך `buildText`**, בתוך `Scaffold`.
+    ///
+    /// שני התנאים חיוניים: ציור שאינו עובר דרך `buildText` אינו הנתיב שהתצוגה
+    /// משתמשת בו, וסביבה בלי `Scaffold` חסרה את ה-`DefaultTextStyle` של
+    /// Material — ובדיוק שם התגלה שהציור ירש `letterSpacing` שהמדידה לא ראתה.
     Future<double> paintedHeight(WidgetTester tester, InlineSpan span) async {
       await tester.pumpWidget(
-        Center(
-          child: SizedBox(
-            width: width,
-            child: RichText(
-              text: span,
-              locale: locale,
-              textAlign: TextAlign.justify,
-              textDirection: TextDirection.rtl,
-              textScaler: TextScaler.noScaling,
-              textWidthBasis: kPagedTextWidthBasis,
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                child: measurer.buildText(span),
+              ),
             ),
           ),
         ),
@@ -436,12 +438,62 @@ void main() {
       return tester.getSize(find.byType(RichText)).height;
     }
 
+    /// מילים שממלאות שורה **במדויק**: עשרה תווים בגופן 20 הם 200 פיקסלים,
+    /// שהם רוחב הטור. זה הקלט שחושף הפרש זעיר בין המדידה לציור — טקסט רחוק
+    /// מגבול השורה סופג אותו בלי להישבר במקום אחר.
+    TextSpan tight(int words) => TextSpan(
+      text: List.filled(words, 'אבגדהוזחטי').join(' '),
+      style: style,
+    );
+
     testWidgets('גובה פסקה שלמה זהה בציור ובמדידה', (tester) async {
       final span = wrapping(20);
 
       expect(
         await paintedHeight(tester, span),
         closeTo(measurer.measure(span)!.totalHeight, 0.01),
+      );
+    });
+
+    testWidgets('גובה זהה גם בטקסט שממלא שורה במדויק', (tester) async {
+      final span = tight(12);
+
+      expect(
+        await paintedHeight(tester, span),
+        closeTo(measurer.measure(span)!.totalHeight, 0.01),
+      );
+    });
+
+    testWidgets('Text.rich באותה סביבה אינו מתלכד — הצידוק ל-buildText', (
+      tester,
+    ) async {
+      // ההוכחה שהעטיפה נחוצה: אותו ספאן דרך Text.rich יורש letterSpacing
+      // מ-DefaultTextStyle של Material ונשבר במקום אחר.
+      final span = tight(12);
+      final measured = measurer.measure(span)!.totalHeight;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Center(
+              child: SizedBox(
+                width: width,
+                child: Text.rich(
+                  span,
+                  locale: locale,
+                  textAlign: TextAlign.justify,
+                  textScaler: TextScaler.noScaling,
+                  textWidthBasis: kPagedTextWidthBasis,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(
+        tester.getSize(find.byType(RichText)).height,
+        greaterThan(measured),
       );
     });
 

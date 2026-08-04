@@ -1404,10 +1404,6 @@ class SeforimRepository {
     await _database.pagedLayoutCacheDao.updateAccessedAt(layoutKey, accessedAt);
   }
 
-  Future<void> deletePagedLayoutCacheForBook(String bookTitle) async {
-    await _database.pagedLayoutCacheDao.deleteByBookTitle(bookTitle);
-  }
-
   Future<void> prunePagedLayoutCacheAccessedBefore(int cutoffMillis) async {
     await _database.pagedLayoutCacheDao.deleteAccessedBefore(cutoffMillis);
   }

@@ -319,9 +319,6 @@ class _NullCache extends PagedLayoutCache {
     PagedLayoutSignature signature,
     PaginatedBook book,
   ) async {}
-
-  @override
-  Future<void> invalidateBook(String bookTitle) async {}
 }
 
 /// מטמון בזיכרון, מפתוח בדיוק כמו האמיתי.

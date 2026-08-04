@@ -27,10 +27,6 @@ UPDATE paged_layout_cache
 SET accessedAt = ?
 WHERE layoutKey = ?;
 
-deleteByBookTitle:
-DELETE FROM paged_layout_cache
-WHERE bookTitle = ?;
-
 deleteAccessedBefore:
 DELETE FROM paged_layout_cache
 WHERE accessedAt < ?;

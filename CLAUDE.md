@@ -109,6 +109,7 @@ lib/
 ├── personal_notes/                    # User notes feature
 ├── pdf_book/                          # PDF viewer screens
 ├── text_book/                         # Text viewer screens
+│   └── paged/                         # תצוגת עמודי A4 (models/services/repository/bloc/view)
 └── utils/
     └── open_book.dart                 # Book opening logic
 ```
@@ -578,6 +579,21 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Commentary grouping | `test/text_book/commentary_grouping_test.dart` |
 | Book source dialog | `test/text_book/view/book_source_dialog_test.dart` |
 | Error report dialog | `test/text_book/view/error_report_dialog_test.dart` |
+
+**Paged View (עמודי A4 בשני טורים) — `lib/text_book/paged/`**
+| Area | Test File |
+|------|-----------|
+| גאומטריית העמוד (מידות, טור אחד/שניים, cacheKey) | `test/text_book/paged/page_geometry_test.dart` |
+| חתימת הפריסה (מה פוסל מטמון עימוד) | `test/text_book/paged/paged_layout_signature_test.dart` |
+| מודד גבהים, שוברי שורה, חיתוך ספאנים, **התלכדות מדידה↔ציור** | `test/text_book/paged/paged_text_measurer_test.dart` |
+| מנוע העימוד (כותרות, אלמנה/יתום, מקרי קצה) | `test/text_book/paged/pagination_engine_test.dart` |
+| קידוד/פענוח העימוד השמור | `test/text_book/paged/paginated_book_codec_test.dart` |
+| מטמון העימוד ב-cache.db | `test/text_book/paged/paged_layout_cache_test.dart` |
+| תזמון מדורג ומצבי מרוץ | `test/text_book/paged/paged_layout_cubit_test.dart` |
+| בונה הספאנים (מטמון, כותרות, סגנון בסיס) | `test/text_book/paged/paged_section_spans_test.dart` |
+| ציור עמוד בודד | `test/text_book/paged/paged_page_view_test.dart` |
+| זום העמוד (צעדים, טווח) | `test/text_book/paged/paged_zoom_test.dart` |
+| `applyBlockStyles` של `buildInlineHtmlSpans` | `test/text_book/view/widgets/continuous_reading_block_styles_test.dart` |
 
 **Text Book BLoC**
 | Area | Test File |
