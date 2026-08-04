@@ -37,7 +37,7 @@ void main() {
       final geometry = PageGeometry.paper(
         PagePaperSize.a4,
         marginMm: 18,
-        footerMm: 8,
+        headerMm: 8,
       );
 
       expect(
@@ -90,7 +90,7 @@ void main() {
         'margins': base.copyWith(margins: const EdgeInsets.all(4)),
         'columns': base.copyWith(columns: 1),
         'columnGap': base.copyWith(columnGap: base.columnGap + 1),
-        'footerHeight': base.copyWith(footerHeight: base.footerHeight + 1),
+        'headerHeight': base.copyWith(headerHeight: base.headerHeight + 1),
       };
 
       for (final entry in variants.entries) {

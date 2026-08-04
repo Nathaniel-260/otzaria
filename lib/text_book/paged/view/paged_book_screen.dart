@@ -241,6 +241,7 @@ class _PagedBookScreenState extends State<PagedBookScreen> {
                       geometry: geometry,
                       spans: spans,
                       measurer: measurer,
+                      bookTitle: bookState.book.title,
                       selectedIndices: bookState.selectedIndices,
                       onLineTap: _onLineTap,
                     ),

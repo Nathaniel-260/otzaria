@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:otzaria/text_book/paged/models/page_geometry.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart'
+    show numberToHebrewWithoutQuotes;
 import 'package:otzaria/text_book/paged/models/paginated_book.dart';
 import 'package:otzaria/text_book/paged/services/paged_text_measurer.dart';
 import 'package:otzaria/text_book/paged/view/paged_section_spans.dart';
@@ -24,12 +26,16 @@ class PagedPageView extends StatelessWidget {
 
   final ValueChanged<int>? onLineTap;
 
+  /// שם הספר, בכותרת הרצה שבראש העמוד.
+  final String bookTitle;
+
   const PagedPageView({
     super.key,
     required this.page,
     required this.geometry,
     required this.spans,
     required this.measurer,
+    this.bookTitle = '',
     this.selectedIndices = const {},
     this.onLineTap,
   });
@@ -50,6 +56,7 @@ class PagedPageView extends StatelessWidget {
           padding: geometry.margins,
           child: Column(
             children: [
+              _buildHeader(context, colorScheme),
               SizedBox(
                 height: geometry.contentHeight,
                 child: Row(
@@ -57,23 +64,45 @@ class PagedPageView extends StatelessWidget {
                   children: _columnsWithGaps(context, colorScheme),
                 ),
               ),
-              SizedBox(
-                height: geometry.footerHeight,
-                // מוחרג מהבחירה: בלי זה כל העתקה שמגיעה לתחתית עמוד גורפת את
-                // מספר העמוד אל תוך הטקסט המועתק.
-                child: SelectionContainer.disabled(
-                  child: Center(
-                    child: Text(
-                      '${page.number}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  /// הכותרת הרצה: שם הספר ומספר העמוד באותיות, מעל שני הטורים, ומתחתיה קו.
+  ///
+  /// מוחרגת מהבחירה — בלי זה כל העתקה שמגיעה לראש עמוד גורפת את שם הספר ואת
+  /// מספר העמוד אל תוך הטקסט המועתק.
+  Widget _buildHeader(BuildContext context, ColorScheme colorScheme) {
+    final style = Theme.of(context).textTheme.bodySmall?.copyWith(
+      color: colorScheme.onSurfaceVariant,
+    );
+
+    return SizedBox(
+      height: geometry.headerHeight,
+      child: SelectionContainer.disabled(
+        child: Column(
+          children: [
+            Expanded(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Text(
+                      bookTitle,
+                      style: style,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  Text(numberToHebrewWithoutQuotes(page.number), style: style),
+                ],
+              ),
+            ),
+            Container(height: 0.7, color: colorScheme.outlineVariant),
+          ],
         ),
       ),
     );
@@ -85,7 +114,7 @@ class PagedPageView extends StatelessWidget {
   ) {
     final children = <Widget>[];
     for (var i = 0; i < page.columns.length; i++) {
-      if (i > 0) children.add(SizedBox(width: geometry.columnGap));
+      if (i > 0) children.add(_columnDivider(colorScheme));
       children.add(
         SizedBox(
           width: geometry.columnWidth,
@@ -95,6 +124,18 @@ class PagedPageView extends StatelessWidget {
     }
     return children;
   }
+
+  /// קו מפריד באמצע המרווח שבין הטורים.
+  Widget _columnDivider(ColorScheme colorScheme) => SizedBox(
+    width: geometry.columnGap,
+    child: Center(
+      child: SizedBox(
+        width: 0.7,
+        height: double.infinity,
+        child: ColoredBox(color: colorScheme.outlineVariant),
+      ),
+    ),
+  );
 
   Widget _buildColumn(
     BuildContext context,

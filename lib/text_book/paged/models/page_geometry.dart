@@ -41,7 +41,7 @@ class PageGeometry {
   final double columnGap;
 
   /// הגובה השמור בתחתית העמוד למספר העמוד.
-  final double footerHeight;
+  final double headerHeight;
 
   /// המרווח האנכי בין סעיף לסעיף.
   final double sectionGap;
@@ -52,7 +52,7 @@ class PageGeometry {
     required this.margins,
     required this.columns,
     required this.columnGap,
-    required this.footerHeight,
+    required this.headerHeight,
     required this.sectionGap,
   }) : assert(columns == 1 || columns == 2, 'נתמכים טור אחד או שניים');
 
@@ -62,7 +62,7 @@ class PageGeometry {
     int columns = 2,
     double marginMm = 18,
     double columnGapMm = 7,
-    double footerMm = 8,
+    double headerMm = 8,
     double sectionGapMm = 1.5,
   }) {
     final margin = marginMm * kMmToLogicalPx;
@@ -72,7 +72,7 @@ class PageGeometry {
       margins: EdgeInsets.all(margin),
       columns: columns,
       columnGap: columnGapMm * kMmToLogicalPx,
-      footerHeight: footerMm * kMmToLogicalPx,
+      headerHeight: headerMm * kMmToLogicalPx,
       sectionGap: sectionGapMm * kMmToLogicalPx,
     );
   }
@@ -81,7 +81,7 @@ class PageGeometry {
   double get contentWidth => width - margins.horizontal;
 
   /// הגובה הפנוי לטקסט אחרי השוליים ואזור מספר העמוד.
-  double get contentHeight => height - margins.vertical - footerHeight;
+  double get contentHeight => height - margins.vertical - headerHeight;
 
   /// רוחב טור בודד — היחידה שהמדידה והציור חייבים לחלוק.
   double get columnWidth {
@@ -105,7 +105,7 @@ class PageGeometry {
     EdgeInsets? margins,
     int? columns,
     double? columnGap,
-    double? footerHeight,
+    double? headerHeight,
     double? sectionGap,
   }) {
     return PageGeometry(
@@ -114,7 +114,7 @@ class PageGeometry {
       margins: margins ?? this.margins,
       columns: columns ?? this.columns,
       columnGap: columnGap ?? this.columnGap,
-      footerHeight: footerHeight ?? this.footerHeight,
+      headerHeight: headerHeight ?? this.headerHeight,
       sectionGap: sectionGap ?? this.sectionGap,
     );
   }
@@ -126,7 +126,7 @@ class PageGeometry {
     return 'w${n(width)},h${n(height)},'
         'm${n(margins.left)}/${n(margins.top)}/'
         '${n(margins.right)}/${n(margins.bottom)},'
-        'c$columns,g${n(columnGap)},f${n(footerHeight)},s${n(sectionGap)}';
+        'c$columns,g${n(columnGap)},f${n(headerHeight)},s${n(sectionGap)}';
   }
 
   @override
@@ -137,7 +137,7 @@ class PageGeometry {
       other.margins == margins &&
       other.columns == columns &&
       other.columnGap == columnGap &&
-      other.footerHeight == footerHeight &&
+      other.headerHeight == headerHeight &&
       other.sectionGap == sectionGap;
 
   @override
@@ -147,7 +147,7 @@ class PageGeometry {
     margins,
     columns,
     columnGap,
-    footerHeight,
+    headerHeight,
     sectionGap,
   );
 

@@ -30,7 +30,7 @@ void main() {
     margins: EdgeInsets.all(10),
     columns: 2,
     columnGap: 20,
-    footerHeight: 10,
+    headerHeight: 10,
     sectionGap: 0,
   );
   const settings = RenderSettings(fontSize: 10, lineHeight: 1);
@@ -91,6 +91,7 @@ void main() {
     PageGeometry pageGeometry = geometry,
     TextStyle? baseStyle,
     ThemeData? theme,
+    String bookTitle = '',
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -104,6 +105,7 @@ void main() {
                 geometry: pageGeometry,
                 spans: builderFor(content, baseStyle: baseStyle),
                 measurer: measurerFor(pageGeometry),
+                bookTitle: bookTitle,
                 selectedIndices: selected,
                 onLineTap: onLineTap,
               ),
@@ -127,13 +129,42 @@ void main() {
       );
     });
 
-    testWidgets('מספר העמוד מוצג בתחתית', (tester) async {
+    testWidgets('הכותרת הרצה מציגה את שם הספר ומספר העמוד באותיות', (
+      tester,
+    ) async {
       final content = List.generate(6, (_) => section(10));
       final book = paginate(content);
 
-      await pumpPage(tester, page: book.pages[1], content: content);
+      await pumpPage(
+        tester,
+        page: book.pages[1],
+        content: content,
+        bookTitle: 'בראשית',
+      );
 
-      expect(find.text('2'), findsOneWidget);
+      expect(find.text('בראשית'), findsOneWidget);
+      expect(find.text('ב'), findsOneWidget);
+      expect(find.text('2'), findsNothing);
+    });
+
+    testWidgets('הכותרת הרצה אינה נכנסת לטקסט המועתק', (tester) async {
+      final content = [section(2)];
+      final book = paginate(content);
+
+      await pumpPage(
+        tester,
+        page: book.pages.first,
+        content: content,
+        bookTitle: 'בראשית',
+      );
+
+      expect(
+        find.ancestor(
+          of: find.text('בראשית'),
+          matching: find.byType(SelectionContainer),
+        ),
+        findsWidgets,
+      );
     });
 
     testWidgets('רוחב כל טור הוא רוחב הטור שהעימוד מדד בו', (tester) async {
@@ -265,9 +296,12 @@ void main() {
 
       await pumpPage(tester, page: book.pages.first, content: content);
 
-      final painted = tester
-          .renderObjectList<RenderBox>(find.byType(RichText))
-          .firstWhere((box) => box.size.width < geometry.columnWidth + 1);
+      // הסינון לפי התוכן ולא לפי הרוחב: הכותרת הרצה היא גם היא RichText צר.
+      final slice = tester
+          .widgetList<RichText>(find.byType(RichText))
+          .firstWhere((text) => text.text.toPlainText().contains('wwww'));
+      final painted =
+          find.byWidget(slice).evaluate().first.renderObject as RenderBox;
       expect(painted.size.height, closeTo(measured.totalHeight, 0.01));
     });
 

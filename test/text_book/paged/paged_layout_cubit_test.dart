@@ -25,7 +25,7 @@ void main() {
     margins: EdgeInsets.all(10),
     columns: 2,
     columnGap: 20,
-    footerHeight: 0,
+    headerHeight: 0,
     sectionGap: 0,
   );
   const style = TextStyle(fontSize: 10, height: 1);
