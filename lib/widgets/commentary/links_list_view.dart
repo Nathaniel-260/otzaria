@@ -74,7 +74,7 @@ String buildSelectedLinkInstanceKey(Link link) {
 String buildSelectedLinkTargetKey(Link link) {
   final target =
       '${link.targetIsUserBook ? 'u' : 'o'}_${link.targetCategoryId ?? ''}';
-  return '${link.path2}_${link.index2}_${link.index2End ?? ''}_${link.start}_${link.end}_${link.connectionType}_$target';
+  return '${link.path2}_${link.index2}_${link.index2End ?? ''}_${link.start}_${link.end}_${link.connectionType}_${link.targetFileType ?? ''}_$target';
 }
 
 /// מסיר קישורים כפולים לאותו קטע-יעד. הקטע המוצג פורש כמה שורות מקור, ואותו
@@ -735,6 +735,12 @@ class _LinksListViewState extends State<LinksListView> {
       initiallyExpanded: isExpanded,
       maintainState: true,
       showTrailingIcon: false,
+      // ברירת המחדל של ExpansionTile היא גבול עליון *וגם* תחתון בעובי 1.0
+      // לוגי — קו כפול בין שני פריטים פתוחים. תחתון בלבד בעובי 0 (hairline),
+      // כעובי ה-Divider שבפאנל המפרשים.
+      shape: Border(
+        bottom: BorderSide(color: Theme.of(context).dividerColor, width: 0),
+      ),
       leading: AnimatedRotation(
         turns: isExpanded ? 0 : 0.25,
         duration: const Duration(milliseconds: 200),

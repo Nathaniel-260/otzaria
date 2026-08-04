@@ -45,9 +45,11 @@ import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/printing/word_export_service.dart';
+import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/text_book/view/text_book_scaffold.dart';
 import 'package:otzaria/text_book/view/text_book_search_screen.dart';
 import 'package:otzaria/text_book/view/toc_navigator_screen.dart';
+import 'package:otzaria/text_book/view/widgets/nav_panel_tour_target.dart';
 import 'package:otzaria/text_book/view/alt_toc_sidebar_view.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/data/book_locator.dart';
@@ -180,9 +182,6 @@ String _createTextBookTextExport(_TextExportRequest request) {
 
 final GlobalKey textBookNavigationTourTargetKey = GlobalKey(
   debugLabel: 'text_book_navigation_tour_target',
-);
-final GlobalKey textBookNavPanelTourTargetKey = GlobalKey(
-  debugLabel: 'text_book_nav_panel_tour_target',
 );
 final GlobalKey textBookCommentatorsTourTargetKey = GlobalKey(
   debugLabel: 'text_book_commentators_tour_target',
@@ -1016,12 +1015,12 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   void _openPersonalNotesForCurrentView(TextBookLoaded state) {
     if (state.showPageShapeView) {
-      _pageShapeSidebarTabNotifier.value = 1;
+      _pageShapeSidebarTabNotifier.value = kNotesTabIndex;
       return;
     }
 
     setState(() {
-      _sidebarTabIndex = 2;
+      _sidebarTabIndex = kNotesTabIndex;
     });
     // Fire the notifier directly so SplitedViewScreen always opens the panel,
     // even when showSplitView is already true and the bloc won't emit a new state
@@ -2560,12 +2559,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       minMainContentWidth: 520,
       onClose: () =>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
-      paneContent: widget.enableTourTargets
-          ? KeyedSubtree(
-              key: textBookNavPanelTourTargetKey,
-              child: _buildLeftPaneContent(state),
-            )
-          : _buildLeftPaneContent(state),
+      paneContent: TextBookNavPanelTourTarget(
+        isActiveTab: widget.enableTourTargets,
+        child: _buildLeftPaneContent(state),
+      ),
       mainContent: _buildHTMLViewer(state),
       isResizable: true,
       minPaneWidth: 200,

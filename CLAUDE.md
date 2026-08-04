@@ -385,6 +385,57 @@ SegmentedSettingsTile<String>(
 - Multiple SwitchListTile for mutually exclusive options
 - Custom segmented button implementations
 
+### 9. Settings Screen Text — ALWAYS Through `settingsText`
+
+The settings screen has an English mode (`lib/settings/l10n/`). **Every new user-visible string under `lib/settings/` must be wrapped** — an unwrapped string silently stays Hebrew when the user picks English.
+
+```dart
+import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
+
+Text(context.settingsText('גודל גופן הספר'))
+
+// Placeholders — never string interpolation, so the translation can reorder them:
+context.settingsText('יש כרגע {count} דיווחים שמורים בתור', args: {'count': pendingCount})
+
+// Identical Hebrew with different translations — separate with a context:
+context.settingsText('ספריה', context: 'titleBar')   // → "Library"
+context.settingsText('ספריה')                        // → "Seforim Library"
+```
+
+**The Hebrew source string IS the translation key.** Never invent a key like `'settings.font.size'`: a maintainer looking for a screen greps the Hebrew text they see on it, and that has to keep working. The English text lives only in `lib/settings/l10n/settings_en.arb`.
+
+**After adding or changing a string, regenerate the catalog:**
+```bash
+dart run tool/generate_settings_l10n.dart
+```
+It reads the ARB and writes the `const` map in `lib/settings/l10n/settings_catalogs.g.dart`. It also runs on `flutter run` / `flutter build` / `flutter test` via the build hook — but **not on hot reload**, so an ARB edit needs a restart to appear.
+
+The generator validates the ARB itself (duplicate keys, placeholder mismatch). What catches a *missing* translation is `test/settings/l10n/settings_l10n_test.dart`, which scans the code for `settingsText` calls and fails on any key absent from the ARB — plus the reverse, an ARB entry no longer used. Run it after touching any settings string:
+```bash
+flutter test test/settings/l10n/
+```
+
+**Never do:**
+- A bare string literal on a settings widget's `title` / `subtitle` / `label` / `tooltip` / dialog text
+- String interpolation inside the key (`'שמור ${count} ספרים'`) — use `args:` instead
+- A non-Hebrew invented key
+- Editing `settings_catalogs.g.dart` by hand — it is generated, and your edit is lost on the next build
+- `textDirection` or `Directionality` to "fix" the English mode — the app stays RTL; only the settings screen switches locally
+
+**Two traps that make a string render Hebrew even though it looks wrapped:**
+
+1. **A string reaching `settingsText` through a variable is invisible to the scanner.** It reads literal arguments only, so `context.settingsText(item.label)` passes the coverage test with no translation existing. When the text arrives via a variable, field, or table, add an explicit case to `test/settings/l10n/settings_variable_labels_test.dart`.
+
+2. **A dialog builds in the Navigator's Overlay, outside the settings widget tree**, so it inherits neither the language nor the direction. Open it through `settingsDialogBuilder`:
+   ```dart
+   showDialog(context: context, builder: settingsDialogBuilder(context, (_) => const MyDialog()));
+   ```
+
+Strings outside `lib/settings/` are Hebrew-only by design — do **not** wrap them. Two areas are the exception and **do** go through the same catalog:
+
+- **`lib/navigation/`** — the fixed navigation rail and the title-bar screen names, because the settings screen is reached from them.
+- **`lib/tour/`** — the guided tour and the live tips. **Every new tour step title/body and every live-tip title/description needs an ARB entry**, same as a settings string; see `docs/guided_tour_developer_guide.md`. Two rules specific to the tour: a step's `body` must stay a plain string literal (a variable value goes in as a placeholder — a keyboard shortcut via `shortcut:` filling `{shortcut}`), and coverage is guarded by `test/settings/l10n/settings_variable_labels_test.dart`, which builds the steps for real, so a step with no translation fails there rather than rendering Hebrew.
+
 ## Code Guidelines
 
 ### RTL Support (Critical!)
@@ -562,14 +613,19 @@ dart format lib/file.dart    # Format ONLY files you modified
 | Area | Test File |
 |------|-----------|
 | Screen actions (overflow, layout) | `test/text_book/view/text_book_screen_actions_test.dart` |
+| שימור חלונית הניווט במעבר טאב | `test/text_book/view/text_book_nav_panel_preserved_test.dart` |
+| יעד סיור לחלונית הניווט (מפתח יציב) | `test/text_book/view/widgets/nav_panel_tour_target_test.dart` |
 | Search controller sync | `test/text_book/text_book_search_query_sync_test.dart` |
 | Search screen | `test/text_book/view/text_book_search_screen_test.dart` |
+| קאש שורות הספר לחיפוש (שחרור בטאב רקע) | `test/text_book/view/text_book_search_content_cache_test.dart` |
 | TOC navigator UI | `test/text_book/view/toc_navigator_screen_test.dart` |
 | TOC navigator internals | `test/text_book/view/toc_navigator_internals_test.dart` |
 | Combined view helpers (shouldShow…) | `test/text_book/view/combined_view/combined_book_screen_test.dart` |
 | TabbedCommentaryPanel tab switching / onTabChanged | `test/text_book/view/tabbed_commentary_panel_test.dart` |
 | Page shape commentary selection | `test/text_book/view/page_shape_commentary_selection_test.dart` |
-| LinksNotesSidebar (page shape) | `test/text_book/view/page_shape/links_notes_sidebar_test.dart` |
+| חלונית הצד של צורת הדף (3 לשוניות) | `test/text_book/view/page_shape/page_shape_sidebar_tabs_test.dart` |
+| תפריט הקשר בצורת הדף (מפרשים / קטע היעד) | `test/text_book/view/page_shape/simple_text_viewer_context_menu_test.dart` |
+| תת-תפריט "מפרשים" המשותף + מדיניות הצגה | `test/text_book/utils/commentators_context_menu_test.dart` |
 | SimpleTextViewer | `test/text_book/view/page_shape/simple_text_viewer_test.dart` |
 | Selected text copy/restore | `test/text_book/view/selection/selected_text_copy_test.dart`, `…selected_text_restore_test.dart` |
 | SelectionSyncController | `test/text_book/view/selection/selection_sync_controller_test.dart` |
@@ -784,6 +840,8 @@ if (Platform.isAndroid || Platform.isIOS) {
 14. **Cross-platform** - Code must work on all supported platforms
 15. **Pre-commit trinity** - `analyze` + `test` + `format` = mandatory
 16. **Minimal comments** - Few comments, max 2 lines each, for the first-time reader only (explain *why* / prevent regressions) — never document history. Fix violating comments you encounter
+17. **Settings screen text** - Every user-visible string under `lib/settings/` goes through `context.settingsText('<Hebrew>')`, with the Hebrew as the key and the English in `settings_en.arb`; run `dart run tool/generate_settings_l10n.dart` after any change
+18. **Guided tour text** - Same rule for `lib/tour/`: every step title/body and live-tip title/description needs a `settings_en.arb` entry, and a step's `body` stays a literal (variables go in as placeholders)
 
 ### Common Mistakes to Avoid
 - Fixing a bug by adding code instead of finding and removing the root cause
@@ -813,6 +871,11 @@ if (Platform.isAndroid || Platform.isIOS) {
 - Not testing on multiple platforms
 - Hardcoding platform-specific paths
 - Creating unnecessary MD files to document changes (CHANGES.md, SUMMARY.md, etc.)
+- Adding a bare Hebrew string to a settings widget instead of `context.settingsText(...)` — it stays Hebrew in English mode
+- Using string interpolation inside a `settingsText` key instead of `args:`
+- Editing `settings_catalogs.g.dart` by hand instead of `settings_en.arb` + the generator
+- Opening a dialog from settings without `settingsDialogBuilder` — it inherits neither language nor direction
+- Passing a variable to `settingsText` without a case in `settings_variable_labels_test.dart` — the validator only sees literals
 - Adding too many comments, long comments (over 2 lines), or comments that document history ("used to be X", "changed in commit Y") instead of explaining *why* for a first-time reader
 
 ---

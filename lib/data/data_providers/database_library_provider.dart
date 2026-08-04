@@ -12,7 +12,7 @@ import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
-import 'package:otzaria/migration/database/sql/sqlite3_utils.dart';
+import 'package:otzaria/migration/database/sqlite3_utils.dart';
 import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3;
 
 import 'package:otzaria/models/book_version.dart';
@@ -306,6 +306,9 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
   final hasLinkRanges = _hasLinkRangeTables(db);
   final anchorSelect = _anchorSelectColumns(hasLinkAnchor);
   final anchorJoin = _anchorJoinClause(hasLinkAnchor, displayedSide: 1);
+  final provenanceSelect = _hasLinkBaseProvenanceColumn(db)
+      ? 'l.baseProvenance as baseProvenance,'
+      : '0 as baseProvenance,';
   // בפאנל של תצוגת המקור מוצג צד ה-source של הקישור (side=0).
   final rangeEndSelect = _rangeEndSelectColumns(hasLinkRanges);
   final rangeEndJoin = _rangeEndJoinClause(hasLinkRanges, panelSide: 0);
@@ -349,6 +352,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
           NULL as targetFileType,
           $rangeEndSelect
           $anchorSelect
+          $provenanceSelect
           'SOURCE' as connectionTypeName
         FROM anchors a
         JOIN link l ON l.id = a.linkId
@@ -390,6 +394,7 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
         NULL as targetFileType,
         $rangeEndSelect
         $anchorSelect
+        $provenanceSelect
         'SOURCE' as connectionTypeName
       FROM anchors a
       JOIN link l ON l.id = a.linkId
@@ -412,6 +417,14 @@ List<Map<String, dynamic>> _loadInverseSourceRows(
 bool _hasLinkAnchorTable(sqlite3.Database db) => db
     .select(
       "SELECT 1 FROM sqlite_master WHERE type='table' AND name='link_anchor' LIMIT 1",
+    )
+    .isNotEmpty;
+
+/// `baseProvenance` — קיימת רק במסדים חדשים; במסד ישן כל הקישורים מקבלים 0
+/// והעדפת המקור נשארת כפי שהייתה.
+bool _hasLinkBaseProvenanceColumn(sqlite3.Database db) => db
+    .select(
+      "SELECT 1 FROM pragma_table_info('link') WHERE name = 'baseProvenance' LIMIT 1",
     )
     .isNotEmpty;
 
@@ -3131,6 +3144,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2End: row['targetRangeEndLineIndex'] != null
               ? (row['targetRangeEndLineIndex'] as int) + 1
               : null,
+          baseProvenance: row['baseProvenance'] as int? ?? 0,
         );
       }).toList();
 
@@ -3204,6 +3218,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
           index2End: row['targetRangeEndLineIndex'] != null
               ? (row['targetRangeEndLineIndex'] as int) + 1
               : null,
+          baseProvenance: row['baseProvenance'] as int? ?? 0,
         );
       }).toList();
       return links;

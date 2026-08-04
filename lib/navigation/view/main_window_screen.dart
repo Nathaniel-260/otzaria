@@ -35,6 +35,7 @@ import 'package:otzaria/search/view/search_dialog.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/tabs/reading_screen.dart';
 import 'package:otzaria/text_book/view/text_book_screen.dart';
+import 'package:otzaria/text_book/view/widgets/nav_panel_tour_target.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
@@ -76,6 +77,7 @@ import 'package:otzaria/widgets/dialogs/app_dialogs.dart';
 import 'package:otzaria/widgets/navigation/nav_rail_item.dart';
 import 'package:otzaria/plugins/services/plugin_page_launcher.dart';
 import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
+import 'package:otzaria/plugins/models/plugin_book_identity.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/services/windows_jump_list_service.dart';
@@ -257,8 +259,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   // GlobalKeys יציבים למסכי עיון והגדרות. במהלך slide חוצה (buildTransitionPages)
   // המסכים זזים בעץ דרך swap; ה-keys מאפשרים ל-Flutter לזהות שמדובר באותם מסכים
-  // ולהעביר (reparent) את ה-State במקום לפרק ולבנות מחדש. (מסך הכלים כבר מותג
-  // ב-moreScreenKey; מסך הספרייה ב-libraryBrowserKey.)
+  // ולהעביר (reparent) את ה-State במקום לפרק ולבנות מחדש. (מסך הספרייה מותג
+  // ב-libraryBrowserKey.)
   final GlobalKey _readingScreenKey = GlobalKey();
   final GlobalKey _settingsScreenKey = GlobalKey();
 
@@ -994,9 +996,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         unawaited(_processPendingExternalActivations());
       },
       onError: (error, stackTrace) {
-        debugPrint(
-          'External activation watch failed: $error\n$stackTrace',
-        );
+        debugPrint('External activation watch failed: $error\n$stackTrace');
       },
     );
 
@@ -1118,16 +1118,10 @@ class MainWindowScreenState extends State<MainWindowScreen>
         );
         return true;
       case OpenHistoryAction():
-        showDialog(
-          context: context,
-          builder: (_) => const HistoryDialog(),
-        );
+        showDialog(context: context, builder: (_) => const HistoryDialog());
         return true;
       case OpenBookmarksAction():
-        showDialog(
-          context: context,
-          builder: (_) => const BookmarksDialog(),
-        );
+        showDialog(context: context, builder: (_) => const BookmarksDialog());
         return true;
       case OpenSettingsTabAction(:final tab):
         context.read<NavigationBloc>().add(
@@ -1672,9 +1666,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       }
       _bringTourOverlayToFront();
       _tourOverlayEntry?.markNeedsBuild();
-      _scheduleBringTourOverlayToFront(
-        remainingFrames: remainingFrames - 1,
-      );
+      _scheduleBringTourOverlayToFront(remainingFrames: remainingFrames - 1);
     });
   }
 
@@ -1868,30 +1860,21 @@ class MainWindowScreenState extends State<MainWindowScreen>
     if (step.id == 'advanced_search') {
       final dialogRect = _rectForGlobalKey(tourSearchDialogTargetKey);
       final navSearchRect = _navItemTourRectForScreen(Screen.search);
-      return [
-        ?dialogRect,
-        ?navSearchRect,
-      ];
+      return [?dialogRect, ?navSearchRect];
     }
 
     if (step.id == 'find_ref') {
       final dialogRect = _findRefDialogTourRect();
       final navFindRefRect = _navItemTourRectForScreen(Screen.find);
-      return [
-        ?dialogRect,
-        ?navFindRefRect,
-      ];
+      return [?dialogRect, ?navFindRefRect];
     }
 
     if (step.id == 'toc') {
       final buttonRect =
           _rectForGlobalKey(textBookNavigationTourTargetKey) ??
           _rectForGlobalKey(pdfBookNavigationTourTargetKey);
-      final panelRect = _rectForGlobalKey(textBookNavPanelTourTargetKey);
-      return [
-        ?buttonRect,
-        ?panelRect,
-      ];
+      final panelRect = _rectForGlobalKey(activeTextBookNavPanelTourTargetKey);
+      return [?buttonRect, ?panelRect];
     }
 
     if (step.id == 'bookmark') {
@@ -1903,11 +1886,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       );
       final directRect = _directReadingTourTargetRect(step.area);
       if (directRect != null) {
-        return [
-          directRect,
-          ?titleBarHistoryRect,
-          ?titleBarBookmarkRect,
-        ];
+        return [directRect, ?titleBarHistoryRect, ?titleBarBookmarkRect];
       }
       final overflowRect =
           _rectForGlobalKey(textBookOverflowTourTargetKey) ??
@@ -1935,10 +1914,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
         _rectForGlobalKey(textBookOverflowTourTargetKey) ??
         _rectForGlobalKey(pdfBookOverflowTourTargetKey);
     final menuItemRect = _readingOverflowMenuItemRect(step.area);
-    return [
-      ?overflowRect,
-      ?menuItemRect,
-    ];
+    return [?overflowRect, ?menuItemRect];
   }
 
   Rect? _readingTourTargetRect(TourSpotlightArea area) {
@@ -2065,8 +2041,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     return _navData.indexWhere((item) => item.screen == screen);
   }
 
-  Rect? _rectForGlobalKey(GlobalKey key, {double inflate = 4}) {
-    final context = key.currentContext;
+  Rect? _rectForGlobalKey(GlobalKey? key, {double inflate = 4}) {
+    final context = key?.currentContext;
     if (context == null || !context.mounted) {
       return null;
     }
@@ -2176,9 +2152,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               PluginRuntimeDispatcher.instance.dispatchEvent(
                 'navigation.changed',
-                {
-                  'screen': state.currentScreen.name,
-                },
+                {'screen': state.currentScreen.name},
               );
               _handleNavigationChange(context, state);
             },
@@ -2190,9 +2164,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
             listener: (context, state) {
               PluginRuntimeDispatcher.instance.dispatchEvent(
                 'workspace.changed',
-                {
-                  'workspaceId': state.activeWorkspaceId,
-                },
+                {'workspaceId': state.activeWorkspaceId},
               );
               // עדכון שם שולחן העבודה הנוכחי ב-HistoryBloc
               final currentId = state.activeWorkspaceId;
@@ -2301,9 +2273,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                 (previous is IndexingInProgress) !=
                 (current is IndexingInProgress),
             listener: (context, state) {
-              _startupWorkGate.markIndexingRunning(
-                state is IndexingInProgress,
-              );
+              _startupWorkGate.markIndexingRunning(state is IndexingInProgress);
               _tryStartDeferredStartupWork();
             },
           ),
@@ -2563,15 +2533,25 @@ class MainWindowScreenState extends State<MainWindowScreen>
                     ),
                   );
                 }
-                // החלונית הקוראת ולא הטאב: הכותרת המשולבת אינה שם ספר וטאב
-                // כלי אינו ספר כלל, ותוסף שמקשיב לאירוע היה מקבל מזהה שאינו
-                // קיים בספרייה.
+                // החלונית הקוראת ולא הטאב: כותרת משולבת וטאב כלי אינם שם ספר,
+                // ותוסף שמקשיב לאירוע היה מקבל מזהה שאינו קיים בספרייה.
                 final pane = state.readingPane;
                 if (pane != null) {
+                  final paneBook = pane is TextBookTab
+                      ? pane.book
+                      : (pane is PdfBookTab ? pane.book : null);
                   PluginRuntimeDispatcher.instance.dispatchEvent(
                     'reader.current_book_changed',
                     {
                       'book': pane.title,
+                      'bookId': pane.title,
+                      'id': paneBook?.id,
+                      'type': paneBook != null
+                          ? PluginBookIdentity.typeOf(paneBook)
+                          : null,
+                      'source': paneBook != null
+                          ? PluginBookIdentity.sourceOf(paneBook)
+                          : null,
                       'index': pane is TextBookTab
                           ? pane.index
                           : (pane is PdfBookTab ? pane.pageNumber : tabIndex),
@@ -3156,9 +3136,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
                           preserveChildStateOnClose: true,
                           width: 400,
                           title: 'הגדרות תצוגת הספרים',
-                          child: const Expanded(
-                            child: ReadingSettingsPanel(),
-                          ),
+                          child: const Expanded(child: ReadingSettingsPanel()),
                         ),
                       ],
                     ),
@@ -3178,10 +3156,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
       children: [
         Opacity(
           opacity: _initialContentReady ? 1.0 : 0.0,
-          child: IgnorePointer(
-            ignoring: !_initialContentReady,
-            child: content,
-          ),
+          child: IgnorePointer(ignoring: !_initialContentReady, child: content),
         ),
         if (_splashOverlayVisible)
           const Positioned.fill(child: _StartupSplashOverlay()),
@@ -3191,9 +3166,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   void _openIndexingSettings() {
     _settingsScreenController.openTab(SettingsTab.library);
-    context.read<NavigationBloc>().add(
-      const NavigateToScreen(Screen.settings),
-    );
+    context.read<NavigationBloc>().add(const NavigateToScreen(Screen.settings));
   }
 
   int? _pageIndexForScreen(Screen screen) {
@@ -3246,10 +3219,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
-  void _handleFindRefOpen(
-    BuildContext context, {
-    bool closeIfOpen = true,
-  }) {
+  void _handleFindRefOpen(BuildContext context, {bool closeIfOpen = true}) {
     if (_isFindRefOpen) {
       if (closeIfOpen) {
         Navigator.of(context).pop();
@@ -3395,9 +3365,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     } else if (screen == Screen.find) {
       _handleFindRefOpen(context);
     } else {
-      context.read<NavigationBloc>().add(
-        NavigateToScreen(screen),
-      );
+      context.read<NavigationBloc>().add(NavigateToScreen(screen));
     }
 
     if (screen == Screen.library) {

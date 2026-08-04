@@ -21,8 +21,8 @@ import 'package:otzaria/tabs/models/text_tab.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
-import 'package:otzaria/text_book/view/page_shape/links_notes_sidebar.dart';
 import 'package:otzaria/text_book/view/page_shape/page_shape_screen.dart';
+import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/widgets/navigation/panel_tab_header.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -37,7 +37,7 @@ import '../../test_helpers/memory_cache_provider.dart';
 ///
 /// השימוש ב-[PanelOpenHandle] כאינדיקטור לסגירה: AdaptiveSidePane שומר את
 /// תוכן הפאנל ב-tree אחרי הפתיחה הראשונה (רק opacity/width=0), ולכן
-/// `find.byType(LinksNotesSidebar)` אינו מבחין בין פתוח לסגור. הידית הצדדית
+/// `find.byType(TabbedCommentaryPanel)` אינו מבחין בין פתוח לסגור. הידית הצדדית
 /// לעומת זאת מוצגת ב-build רק כש-`!_isLeftSidebarOpen`, ולכן היא אינדיקטור
 /// אמין למצב הסגור.
 void main() {
@@ -125,14 +125,14 @@ void main() {
     // מצב התחלתי: הסיידבר סגור, ולכן ידית הפתיחה הצדדית גלויה והפאנל
     // אינו ב-tree (לא נפתח אפילו פעם אחת).
     expect(find.byType(PanelOpenHandle), findsOneWidget);
-    expect(find.byType(LinksNotesSidebar), findsNothing);
+    expect(find.byType(TabbedCommentaryPanel), findsNothing);
 
     tab.toggleCommentatorsPaneNotifier.value++;
     await tester.pumpAndSettle();
 
     // היה צריך לפתוח את הסיידבר.
     expect(
-      find.byType(LinksNotesSidebar),
+      find.byType(TabbedCommentaryPanel),
       findsOneWidget,
       reason:
           'יריית ה-notifier הייתה צריכה לפתוח את חלונית הצד — '
@@ -163,7 +163,7 @@ void main() {
       find.byType(PanelOpenHandle),
       findsOneWidget,
       reason:
-          'יריית ה-notifier על סיידבר פתוח ("קישורים") אמורה לסגור — '
+          'יריית ה-notifier על סיידבר פתוח ("מפרשים") אמורה לסגור — '
           'ידית הפתיחה הצדדית חזרה לסימן שהסיידבר סגור',
     );
   });
