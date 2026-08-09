@@ -1,7 +1,11 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'dart:ui' show Tristate;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 
 void main() {
@@ -162,13 +166,16 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    Icon iconFor(WidgetTester tester, String tooltip) {
-      return tester.widget<Icon>(
+    /// הצבע שהאייקון נצבע בו בפועל — אחרי סגנון הכפתור ואחרי opacity שירש
+    /// מ-IconTheme (הערך שהועבר כ-color לא משקף את שניהם).
+    Color? glyphColor(WidgetTester tester, String tooltip) {
+      final glyph = tester.widget<RichText>(
         find.descendant(
           of: find.byTooltip(tooltip),
-          matching: find.byType(Icon),
+          matching: find.byType(RichText),
         ),
       );
+      return glyph.text.style?.color;
     }
 
     testWidgets('כל פעולות הניווט מוצגות ככפתורי אייקון עם tooltip', (
@@ -365,18 +372,7 @@ void main() {
       }
     });
 
-    testWidgets('צבע האייקון הוא onSurface — לא הגוון המושתק של הסרגל', (
-      tester,
-    ) async {
-      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
-      await openMenu(tester);
-
-      final icon = iconFor(tester, 'הקטע הבא');
-      expect(icon.color, theme.colorScheme.onSurface);
-      expect(icon.color, isNot(theme.colorScheme.onSurfaceVariant));
-    });
-
-    testWidgets('האייקון לא מעומעם — PopupMenuItem מושבת מוריד שקיפות ל-0.38', (
+    testWidgets('האייקון לא מעומעם ובאותו צבע כמו טקסט של פריט רגיל', (
       tester,
     ) async {
       await pumpBar(
@@ -386,22 +382,18 @@ void main() {
       );
       await openMenu(tester);
 
-      // הצבע האפקטיבי שנצבע בפועל (אחרי opacity של IconTheme), לא ה-color שהועבר
-      final glyph = tester.widget<RichText>(
-        find.descendant(
-          of: find.byTooltip('הקטע הבא'),
-          matching: find.byType(RichText),
-        ),
+      // הצבע שנצבע בפועל — כולל opacity של IconTheme, שפריט תפריט מושבת מחיל
+      expect(glyphColor(tester, 'הקטע הבא'), theme.colorScheme.onSurface);
+      expect(
+        glyphColor(tester, 'הקטע הבא'),
+        isNot(theme.colorScheme.onSurfaceVariant),
       );
-      expect(glyph.text.style?.color, theme.colorScheme.onSurface);
 
       // ואותו צבע כמו טקסט פריט תפריט רגיל
       final itemText = tester.widget<Text>(find.text('הדפסה'));
       final itemColor =
           itemText.style?.color ??
-          DefaultTextStyle.of(
-            tester.element(find.text('הדפסה')),
-          ).style.color;
+          DefaultTextStyle.of(tester.element(find.text('הדפסה'))).style.color;
       expect(itemColor, theme.colorScheme.onSurface);
     });
 
@@ -420,17 +412,111 @@ void main() {
       );
       await openMenu(tester);
 
-      expect(iconFor(tester, 'הקטע הבא').color, theme.disabledColor);
       expect(
-        iconFor(tester, 'הקטע הקודם').color,
-        theme.colorScheme.onSurface,
+        glyphColor(tester, 'הקטע הבא'),
+        isNot(glyphColor(tester, 'הקטע הקודם')),
       );
+      expect(glyphColor(tester, 'הקטע הקודם'), theme.colorScheme.onSurface);
 
       await tester.tap(find.byTooltip('הקטע הבא'));
       await tester.pumpAndSettle();
 
       expect(pressed, isEmpty);
       expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+    });
+
+    testWidgets('כל כפתור הוא צומת סמנטי נפרד, מאופשר ולחיץ', (tester) async {
+      final handle = tester.ensureSemantics();
+      await pumpBar(
+        tester,
+        alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      final seen = <int>{};
+      for (final tooltip in navIcons.keys) {
+        final node = tester.getSemantics(find.byTooltip(tooltip));
+        final data = node.getSemanticsData();
+        expect('${data.label}${data.tooltip}', contains(tooltip));
+        expect(
+          data.flagsCollection.isButton,
+          isTrue,
+          reason: 'הכפתור $tooltip לא מוכרז ככפתור',
+        );
+        expect(
+          data.flagsCollection.isEnabled,
+          Tristate.isTrue,
+          reason: 'הכפתור $tooltip הוכרז כמושבת',
+        );
+        expect(
+          data.hasAction(SemanticsAction.tap),
+          isTrue,
+          reason: 'הכפתור $tooltip אינו לחיץ מקורא מסך',
+        );
+        // צומת נפרד לכל כפתור — לא מוזגו לפריט תפריט אחד
+        expect(seen.add(node.id), isTrue);
+      }
+      handle.dispose();
+    });
+
+    testWidgets('גובה השורה שנרנדר תואם לגובה שהתפריט מסתמך עליו', (
+      tester,
+    ) async {
+      await pumpBar(
+        tester,
+        alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      // showAnchoredAppMenu מחשב את גובה התפריט מסכום item.height — פער בין
+      // הגובה המדווח למרונדר שובר את בחירת כיוון הפתיחה
+      final rowFinder = find.byType(AppMenuRowEntry<ActionButtonData>);
+      final entry = tester.widget<AppMenuRowEntry<ActionButtonData>>(rowFinder);
+      expect(tester.getSize(rowFinder).height, entry.height);
+    });
+
+    testWidgets('אין גלישה במסך צר או בהגדלת טקסט', (tester) async {
+      tester.view.physicalSize = const Size(360, 640);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          localizationsDelegates: const [
+            GlobalCupertinoLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('he', 'IL')],
+          locale: const Locale('he', 'IL'),
+          builder: (context, child) => MediaQuery.withClampedTextScaling(
+            minScaleFactor: 2,
+            maxScaleFactor: 2,
+            child: child!,
+          ),
+          home: Scaffold(
+            appBar: AppBar(
+              actions: [
+                ResponsiveActionBar(
+                  actions: const [],
+                  alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+                  menuHeaderActions: navActions(onPressed: (_) {}),
+                  maxVisibleButtons: 0,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await openMenu(tester);
+
+      expect(tester.takeException(), isNull);
+      for (final tooltip in navIcons.keys) {
+        expect(find.byTooltip(tooltip), findsOneWidget);
+      }
     });
 
     testWidgets('כפתור ה-"..." מוצג גם כשהשורה היא התוכן היחיד', (

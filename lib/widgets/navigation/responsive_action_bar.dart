@@ -120,10 +120,11 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
     // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
     // עדיף פשוט להציג את כל הכפתורים.
-    // החרגה: כשיש alwaysInMenu, כפתור ה-overflow קיים ממילא, ולכן הצגת
-    // כל הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
+    // החרגה: כשהתפריט קיים ממילא (alwaysInMenu או שורת הניווט), הצגת כל
+    // הכפתורים תוסיף רוחב ותגרום לגלישה קלה ב-AppBar במסכים צרים.
     if (totalButtons - widget.maxVisibleButtons == 1 &&
-        widget.alwaysInMenu!.isEmpty) {
+        widget.alwaysInMenu!.isEmpty &&
+        _headerActions.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 
@@ -164,14 +165,15 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
     );
   }
 
-  /// מצב ישן: כפתורים נעלמים לפי עדיxxxxxxפריט רק אם צריך
+  /// מצב ישן: כפתורים נעלמים לפי עדיפות, ותפריט רק אם צריך
   Widget _buildOldMode(BuildContext context) {
     final totalButtons = widget.originalOrder!.length;
     int effectiveMaxVisible = widget.maxVisibleButtons;
 
-    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו.
-    // עדיף פשוט להציג את כל הכפתורים.
-    if (totalButtons - widget.maxVisibleButtons == 1) {
+    // אם צריך להסתיר רק כפתור אחד, אין טעם להציג תפריט שתופס מקום בעצמו —
+    // אלא אם התפריט קיים ממילא בשביל שורת הניווט.
+    if (totalButtons - widget.maxVisibleButtons == 1 &&
+        _headerActions.isEmpty) {
       effectiveMaxVisible = totalButtons;
     }
 
@@ -262,9 +264,7 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 
             if (headerActions.isNotEmpty) {
               items.add(
-                buildAppCustomPopupMenuItem<ActionButtonData>(
-                  context: context,
-                  metrics: menuMetrics,
+                AppMenuRowEntry<ActionButtonData>(
                   height: _MenuIconActionRow.rowHeight,
                   child: _MenuIconActionRow(actions: headerActions),
                 ),
@@ -348,18 +348,18 @@ class _ResponsiveActionBarState extends State<ResponsiveActionBar> {
 }
 
 /// שורת כפתורי ניווט אחת בראש תפריט ה-"..." — במקום שורת טקסט לכל פעולה.
-/// התפריט נשאר פתוח בלחיצה, ולכן ה-callbacks חייבים לקרוא מצב חי (controller /
-/// listener) ולא להסתמך על ערך שנקרא בזמן בניית התפריט.
+/// התפריט נשאר פתוח בלחיצה, ולכן ה-callbacks חייבים לקרוא מצב חי ולא ערך
+/// שנקרא בזמן בניית התפריט.
 class _MenuIconActionRow extends StatelessWidget {
   final List<ActionButtonData> actions;
 
   const _MenuIconActionRow({required this.actions});
 
-  static const double _buttonSize = 40;
+  static const double _buttonSize = 48;
   static const double _iconSize = 20;
 
-  /// גובה השורה בתפריט — נדרש ל-PopupMenuItem וגם לחישוב גובה התפריט
-  /// ב-showAnchoredAppMenu, שמסתמך על item.height כדי לבחור כיוון פתיחה.
+  /// גובה השורה בתפריט — [AppMenuRowEntry] מדווח עליו, ו-showAnchoredAppMenu
+  /// מסתמך על סכום הגבהים כדי לבחור כיוון פתיחה.
   static const double rowHeight = _buttonSize + 8;
 
   @override
@@ -368,41 +368,30 @@ class _MenuIconActionRow extends StatelessWidget {
       actions.every((action) => action.icon != null),
       'menuHeaderActions requires an icon for every action',
     );
-    final theme = Theme.of(context);
-    // ה-PopupMenuItem של השורה מושבת (כדי שלחיצה לא תסגור את התפריט), ו-Flutter
-    // מעמעם אייקונים בפריט מושבת ל-0.38 — כאן אלה כפתורים, לא פריט מעומעם.
-    return IconTheme.merge(
-      data: const IconThemeData(opacity: 1),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            for (final action in actions)
-              if (action.icon != null)
-                Tooltip(
-                  message: action.tooltip ?? '',
-                  child: InkWell(
-                    onTap: action.onPressed,
-                    customBorder: const CircleBorder(),
-                    child: SizedBox(
-                      width: _buttonSize,
-                      height: _buttonSize,
-                      child: Center(
-                        child: Icon(
-                          action.icon,
-                          size: _iconSize,
-                          // צבע פריט תפריט רגיל, לא הגוון המושתק של כפתור סרגל.
-                          color: action.onPressed == null
-                              ? theme.disabledColor
-                              : theme.colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-          ],
-        ),
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          for (final action in actions)
+            IconButton(
+              onPressed: action.onPressed,
+              tooltip: action.tooltip,
+              icon: Icon(action.icon, size: _iconSize),
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(
+                minWidth: _buttonSize,
+                minHeight: _buttonSize,
+              ),
+              style: IconButton.styleFrom(
+                // צבע פריט תפריט רגיל, לא הגוון המושתק של כפתור סרגל.
+                foregroundColor: colorScheme.onSurface,
+                shape: const CircleBorder(),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+        ],
       ),
     );
   }

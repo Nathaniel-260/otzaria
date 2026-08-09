@@ -1218,6 +1218,44 @@ PopupMenuEntry<T> buildAppCustomPopupMenuItem<T>({
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// AppMenuRowEntry — שורת תוכן בתפריט שאינה פריט בחירה
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// שורה בתפריט שאינה פריט בחירה — למשל שורת כפתורי אייקון.
+///
+/// לא [PopupMenuItem]: פריט מושבת עוטף את תוכנו ב-MergeSemantics ובסמנטיקה של
+/// פריט תפריט מושבת (ומעמעם אייקונים ל-0.38), וזה היה מסתיר את הכפתורים
+/// מקוראי מסך. הרקע בולע לחיצות כדי שלחיצה בין הכפתורים לא תסגור את התפריט.
+class AppMenuRowEntry<T> extends PopupMenuEntry<T> {
+  final Widget child;
+
+  @override
+  final double height;
+
+  const AppMenuRowEntry({
+    super.key,
+    required this.child,
+    required this.height,
+  });
+
+  @override
+  bool represents(T? value) => false;
+
+  @override
+  State<AppMenuRowEntry<T>> createState() => _AppMenuRowEntryState<T>();
+}
+
+class _AppMenuRowEntryState<T> extends State<AppMenuRowEntry<T>> {
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      child: SizedBox(height: widget.height, child: widget.child),
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // buildAppSubmenuItemStyle
 // ═══════════════════════════════════════════════════════════════════════════
 
