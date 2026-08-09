@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/widgets/navigation/responsive_action_bar.dart';
 
@@ -70,6 +71,416 @@ void main() {
       expect(find.byIcon(FluentIcons.settings_24_regular), findsNothing);
     },
   );
+
+  group('menuHeaderActions — שורת ניווט בראש תפריט ה-"..."', () {
+    const overflowIcon = FluentIcons.more_vertical_24_regular;
+
+    final navIcons = <String, IconData>{
+      'הדף/פרק הקודם': FluentIcons.arrow_previous_24_filled,
+      'הקטע הקודם': FluentIcons.chevron_left_24_regular,
+      'הקטע הבא': FluentIcons.chevron_right_24_regular,
+      'הדף/פרק הבא': FluentIcons.arrow_next_24_filled,
+    };
+
+    ActionButtonData action(
+      IconData icon,
+      String tooltip, {
+      VoidCallback? onPressed,
+      bool enabled = true,
+    }) {
+      return ActionButtonData(
+        widget: IconButton(
+          onPressed: () {},
+          icon: Icon(icon),
+          tooltip: tooltip,
+        ),
+        icon: icon,
+        tooltip: tooltip,
+        onPressed: enabled ? (onPressed ?? () {}) : null,
+      );
+    }
+
+    List<ActionButtonData> navActions({void Function(String)? onPressed}) {
+      return [
+        for (final entry in navIcons.entries)
+          action(
+            entry.value,
+            entry.key,
+            onPressed: onPressed == null ? null : () => onPressed(entry.key),
+          ),
+      ];
+    }
+
+    final theme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+    );
+
+    Future<void> pumpBar(
+      WidgetTester tester, {
+      List<ActionButtonData> actions = const [],
+      List<ActionButtonData> alwaysInMenu = const [],
+      List<ActionButtonData>? menuHeaderActions,
+      List<ActionButtonData>? originalOrder,
+      int maxVisibleButtons = 0,
+      Size surfaceSize = const Size(800, 600),
+    }) async {
+      tester.view.physicalSize = surfaceSize;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      // אותה הגדרת locale כמו ב-app.dart: ה-RTL חייב לחול גם על ה-Overlay
+      // שבו נפתח התפריט, לא רק על עץ המסך.
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme,
+          localizationsDelegates: const [
+            GlobalCupertinoLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+          ],
+          supportedLocales: const [Locale('he', 'IL')],
+          locale: const Locale('he', 'IL'),
+          home: Scaffold(
+            appBar: AppBar(
+              actions: [
+                ResponsiveActionBar(
+                  actions: actions,
+                  alwaysInMenu: originalOrder == null ? alwaysInMenu : null,
+                  originalOrder: originalOrder,
+                  menuHeaderActions: menuHeaderActions,
+                  maxVisibleButtons: maxVisibleButtons,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Future<void> openMenu(WidgetTester tester) async {
+      await tester.tap(find.byIcon(overflowIcon));
+      await tester.pumpAndSettle();
+    }
+
+    Icon iconFor(WidgetTester tester, String tooltip) {
+      return tester.widget<Icon>(
+        find.descendant(
+          of: find.byTooltip(tooltip),
+          matching: find.byType(Icon),
+        ),
+      );
+    }
+
+    testWidgets('כל פעולות הניווט מוצגות ככפתורי אייקון עם tooltip', (
+      tester,
+    ) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      for (final entry in navIcons.entries) {
+        expect(find.byTooltip(entry.key), findsOneWidget);
+        expect(find.byIcon(entry.value), findsOneWidget);
+        // לא שורת טקסט לכל פעולה — זו הבעיה שהשורה באה לפתור
+        expect(find.text(entry.key), findsNothing);
+      }
+    });
+
+    testWidgets('ארבעת הכפתורים באותה שורה — גובה של שורה אחת', (tester) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      final rects = navIcons.keys
+          .map((tooltip) => tester.getRect(find.byTooltip(tooltip)))
+          .toList();
+
+      for (final rect in rects) {
+        expect(rect.top, closeTo(rects.first.top, 0.5));
+        expect(rect.height, closeTo(rects.first.height, 0.5));
+        expect(rect.height, lessThanOrEqualTo(48));
+      }
+    });
+
+    testWidgets('סדר הכפתורים ב-RTL זהה לסדר בסרגל הרגיל', (tester) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      // "הדף/פרק הקודם" ימני ביותר, "הדף/פרק הבא" שמאלי ביותר
+      final centers = navIcons.keys
+          .map((tooltip) => tester.getCenter(find.byTooltip(tooltip)).dx)
+          .toList();
+      for (var i = 1; i < centers.length; i++) {
+        expect(centers[i], lessThan(centers[i - 1]));
+      }
+    });
+
+    testWidgets('השורה מופיעה מעל שאר פריטי התפריט', (tester) async {
+      await pumpBar(
+        tester,
+        alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      expect(
+        tester.getCenter(find.byTooltip('הקטע הבא')).dy,
+        lessThan(tester.getCenter(find.text('הדפסה')).dy),
+      );
+    });
+
+    testWidgets('מפריד בין השורה לשאר הפריטים', (tester) async {
+      await pumpBar(
+        tester,
+        alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      expect(find.byType(PopupMenuDivider), findsOneWidget);
+      final dividerY = tester.getCenter(find.byType(PopupMenuDivider)).dy;
+      expect(
+        tester.getCenter(find.byTooltip('הקטע הבא')).dy,
+        lessThan(dividerY),
+      );
+      expect(tester.getCenter(find.text('הדפסה')).dy, greaterThan(dividerY));
+    });
+
+    testWidgets('בלי פריטים נוספים אין מפריד מיותר', (tester) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      expect(find.byType(PopupMenuDivider), findsNothing);
+    });
+
+    testWidgets('התפריט נשאר פתוח בלחיצה — כדי לעבור כמה קטעים', (
+      tester,
+    ) async {
+      final pressed = <String>[];
+      await pumpBar(
+        tester,
+        menuHeaderActions: navActions(onPressed: pressed.add),
+      );
+      await openMenu(tester);
+
+      await tester.tap(find.byTooltip('הקטע הבא'));
+      await tester.pumpAndSettle();
+
+      expect(pressed, ['הקטע הבא']);
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+    });
+
+    testWidgets('לחיצות חוזרות מפעילות את הפעולה בכל פעם', (tester) async {
+      final pressed = <String>[];
+      await pumpBar(
+        tester,
+        menuHeaderActions: navActions(onPressed: pressed.add),
+      );
+      await openMenu(tester);
+
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.byTooltip('הקטע הבא'));
+        await tester.pumpAndSettle();
+      }
+      await tester.tap(find.byTooltip('הדף/פרק הקודם'));
+      await tester.pumpAndSettle();
+
+      expect(pressed, [
+        'הקטע הבא',
+        'הקטע הבא',
+        'הקטע הבא',
+        'הדף/פרק הקודם',
+      ]);
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+    });
+
+    testWidgets('לחיצה על פריט תפריט רגיל כן סוגרת את התפריט', (tester) async {
+      var printed = 0;
+      await pumpBar(
+        tester,
+        alwaysInMenu: [
+          action(
+            FluentIcons.print_24_regular,
+            'הדפסה',
+            onPressed: () => printed++,
+          ),
+        ],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      await tester.tap(find.text('הדפסה'));
+      await tester.pumpAndSettle();
+
+      expect(printed, 1);
+      expect(find.byTooltip('הקטע הבא'), findsNothing);
+    });
+
+    testWidgets('לחיצה על הרווח שבין הכפתורים לא סוגרת את התפריט', (
+      tester,
+    ) async {
+      final pressed = <String>[];
+      await pumpBar(
+        tester,
+        alwaysInMenu: [
+          action(FluentIcons.print_24_regular, 'הדפסה ארוכה במיוחד לרוחב'),
+        ],
+        menuHeaderActions: navActions(onPressed: pressed.add),
+      );
+      await openMenu(tester);
+
+      final first = tester.getRect(find.byTooltip('הקטע הבא'));
+      final second = tester.getRect(find.byTooltip('הקטע הקודם'));
+      final gapCenter = Offset(
+        (first.right + second.left) / 2,
+        first.center.dy,
+      );
+
+      await tester.tapAt(gapCenter);
+      await tester.pumpAndSettle();
+
+      expect(pressed, isEmpty);
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+    });
+
+    testWidgets('הכפתורים מרווחים על רוחב התפריט', (tester) async {
+      await pumpBar(
+        tester,
+        alwaysInMenu: [
+          action(FluentIcons.print_24_regular, 'הדפסה ארוכה במיוחד לרוחב'),
+        ],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      final menuWidth = tester.getRect(find.byType(PopupMenuDivider)).width;
+      final rects = navIcons.keys
+          .map((tooltip) => tester.getRect(find.byTooltip(tooltip)))
+          .toList();
+      final spread = (rects.first.center.dx - rects.last.center.dx).abs();
+
+      // לא צמודים במרכז — פרוסים על רוב רוחב התפריט, עם רווח בין כפתורים
+      expect(spread, greaterThan(menuWidth * 0.5));
+      for (var i = 1; i < rects.length; i++) {
+        final gap = (rects[i - 1].left - rects[i].right).abs();
+        expect(gap, greaterThan(0));
+      }
+    });
+
+    testWidgets('צבע האייקון הוא onSurface — לא הגוון המושתק של הסרגל', (
+      tester,
+    ) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+      await openMenu(tester);
+
+      final icon = iconFor(tester, 'הקטע הבא');
+      expect(icon.color, theme.colorScheme.onSurface);
+      expect(icon.color, isNot(theme.colorScheme.onSurfaceVariant));
+    });
+
+    testWidgets('האייקון לא מעומעם — PopupMenuItem מושבת מוריד שקיפות ל-0.38', (
+      tester,
+    ) async {
+      await pumpBar(
+        tester,
+        alwaysInMenu: [action(FluentIcons.print_24_regular, 'הדפסה')],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+      );
+      await openMenu(tester);
+
+      // הצבע האפקטיבי שנצבע בפועל (אחרי opacity של IconTheme), לא ה-color שהועבר
+      final glyph = tester.widget<RichText>(
+        find.descendant(
+          of: find.byTooltip('הקטע הבא'),
+          matching: find.byType(RichText),
+        ),
+      );
+      expect(glyph.text.style?.color, theme.colorScheme.onSurface);
+
+      // ואותו צבע כמו טקסט פריט תפריט רגיל
+      final itemText = tester.widget<Text>(find.text('הדפסה'));
+      final itemColor =
+          itemText.style?.color ??
+          DefaultTextStyle.of(
+            tester.element(find.text('הדפסה')),
+          ).style.color;
+      expect(itemColor, theme.colorScheme.onSurface);
+    });
+
+    testWidgets('פעולה מושבתת מוצגת מעומעמת ולא מגיבה ללחיצה', (tester) async {
+      final pressed = <String>[];
+      await pumpBar(
+        tester,
+        menuHeaderActions: [
+          action(FluentIcons.chevron_left_24_regular, 'הקטע הקודם'),
+          action(
+            FluentIcons.chevron_right_24_regular,
+            'הקטע הבא',
+            enabled: false,
+          ),
+        ],
+      );
+      await openMenu(tester);
+
+      expect(iconFor(tester, 'הקטע הבא').color, theme.disabledColor);
+      expect(
+        iconFor(tester, 'הקטע הקודם').color,
+        theme.colorScheme.onSurface,
+      );
+
+      await tester.tap(find.byTooltip('הקטע הבא'));
+      await tester.pumpAndSettle();
+
+      expect(pressed, isEmpty);
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+    });
+
+    testWidgets('כפתור ה-"..." מוצג גם כשהשורה היא התוכן היחיד', (
+      tester,
+    ) async {
+      await pumpBar(tester, menuHeaderActions: navActions(onPressed: (_) {}));
+
+      expect(find.byIcon(overflowIcon), findsOneWidget);
+    });
+
+    testWidgets('בלי פעולות בכלל לא מוצג כפתור "..."', (tester) async {
+      await pumpBar(tester, menuHeaderActions: const []);
+
+      expect(find.byIcon(overflowIcon), findsNothing);
+    });
+
+    testWidgets('השורה מוצגת גם במצב הישן (originalOrder)', (tester) async {
+      final visible = [action(FluentIcons.search_24_regular, 'חיפוש')];
+      await pumpBar(
+        tester,
+        actions: visible,
+        originalOrder: visible,
+        menuHeaderActions: navActions(onPressed: (_) {}),
+        maxVisibleButtons: 1,
+      );
+      await openMenu(tester);
+
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+      expect(find.byType(PopupMenuDivider), findsNothing);
+    });
+
+    testWidgets('כפתורי הסרגל הגלויים לא מושפעים מהשורה שבתפריט', (
+      tester,
+    ) async {
+      await pumpBar(
+        tester,
+        actions: [
+          action(FluentIcons.search_24_regular, 'חיפוש'),
+          action(FluentIcons.settings_24_regular, 'הגדרות'),
+        ],
+        menuHeaderActions: navActions(onPressed: (_) {}),
+        maxVisibleButtons: 2,
+      );
+
+      expect(find.byIcon(FluentIcons.search_24_regular), findsOneWidget);
+      expect(find.byIcon(FluentIcons.settings_24_regular), findsOneWidget);
+      // אייקוני הניווט מופיעים רק אחרי פתיחת התפריט
+      expect(find.byIcon(FluentIcons.chevron_right_24_regular), findsNothing);
+    });
+  });
 
   group('maxToolbarButtonsForWidth', () {
     test('מסך צר מאוד מחזיר 0 כפתורים (רק overflow)', () {

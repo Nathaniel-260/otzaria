@@ -4636,6 +4636,11 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             : null,
         actions: _buildDisplayOrderPdfActions(context),
         alwaysInMenu: _buildAlwaysInMenuPdfActions(context),
+        // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+        // כפתורים אחת בראש תפריט ה-"...", ולא לארבע שורות טקסט.
+        menuHeaderActions: widget.isInCombinedView
+            ? _buildNavigationActions(context)
+            : null,
         maxVisibleButtons: maxButtons,
       ),
     ];
@@ -4701,9 +4706,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
 
   List<ActionButtonData> _buildAlwaysInMenuPdfActions(BuildContext context) {
     final isCompact = context.read<SettingsBloc>().state.compactMenuMode;
-    final navigationActions = _buildNavigationActions(context);
     return [
-      if (widget.isInCombinedView) ...navigationActions,
       ActionButtonData(
         widget: BarButton.icon(
           tooltip: 'הצג הערות אישיות',

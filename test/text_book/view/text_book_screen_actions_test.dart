@@ -282,10 +282,129 @@ void main() {
       await tester.tap(overflowButton);
       await tester.pumpAndSettle();
 
-      expect(find.text('הדף/פרק הקודם'), findsOneWidget);
-      expect(find.text('הקטע הקודם'), findsOneWidget);
-      expect(find.text('הקטע הבא'), findsOneWidget);
-      expect(find.text('הדף/פרק הבא'), findsOneWidget);
+      // שורה אחת של כפתורי אייקון בראש התפריט — לא שורת טקסט לכל כיוון
+      expect(find.byTooltip('הדף/פרק הקודם'), findsOneWidget);
+      expect(find.byTooltip('הקטע הקודם'), findsOneWidget);
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+      expect(find.byTooltip('הדף/פרק הבא'), findsOneWidget);
+      expect(find.text('הקטע הבא'), findsNothing);
+
+      // ארבעת הכפתורים באותה שורה, מעל שאר פריטי התפריט
+      final navRects = [
+        tester.getRect(find.byTooltip('הדף/פרק הקודם')),
+        tester.getRect(find.byTooltip('הקטע הקודם')),
+        tester.getRect(find.byTooltip('הקטע הבא')),
+        tester.getRect(find.byTooltip('הדף/פרק הבא')),
+      ];
+      for (final rect in navRects) {
+        expect(rect.top, closeTo(navRects.first.top, 0.5));
+      }
+      expect(
+        navRects.first.center.dy,
+        lessThan(tester.getCenter(find.text('סימניות בספר זה')).dy),
+      );
+    });
+
+    testWidgets('במצב משולב לחיצה על "הקטע הבא" משאירה את התפריט פתוח', (
+      tester,
+    ) async {
+      final book = TextBook(title: 'ספר בדיקה');
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: true,
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+
+      // מעבר קטע נלחץ שוב ושוב — סגירת התפריט בכל לחיצה הייתה מחייבת
+      // פתיחה מחדש לכל קטע
+      for (var i = 0; i < 3; i++) {
+        await tester.tap(find.byTooltip('הקטע הבא'));
+        await tester.pumpAndSettle();
+        expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+      }
+    });
+
+    testWidgets('במצב רגיל אין שורת ניווט בתפריט ה-overflow', (tester) async {
+      final book = TextBook(title: 'ספר בדיקה');
+      final bloc = _TestTextBookBloc(_loadedState(book));
+      final tab = TextBookTab(
+        book: book,
+        index: 0,
+        blocOverride: bloc,
+      );
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [tab], currentTabIndex: 0),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.pump();
+        await bloc.close();
+        await tabsBloc.close();
+        await settingsBloc.close();
+        tab.dispose();
+      });
+
+      await _setSurfaceSize(tester, const Size(1600, 900));
+      await _pumpTextBookScreen(
+        tester,
+        tab: tab,
+        textBookBloc: bloc,
+        tabsBloc: tabsBloc,
+        settingsBloc: settingsBloc,
+        focusRepository: focusRepository,
+        shamorZachorDataProvider: shamorZachorDataProvider,
+        shamorZachorProgressProvider: shamorZachorProgressProvider,
+        bookmarkBloc: bookmarkBloc,
+        personalNotesBloc: personalNotesBloc,
+        tourCubit: tourCubit,
+        isInCombinedView: false,
+      );
+
+      await tester.tap(find.byIcon(FluentIcons.more_vertical_24_regular));
+      await tester.pumpAndSettle();
+
+      // הניווט במרכז הסרגל — הכפתור היחיד לכל כיוון הוא זה שבסרגל
+      expect(find.byTooltip('הקטע הבא'), findsOneWidget);
+      expect(find.byTooltip('הדף/פרק הבא'), findsOneWidget);
+      expect(
+        tester.getCenter(find.byTooltip('הקטע הבא')).dy,
+        lessThan(tester.getCenter(find.text('סימניות בספר זה')).dy),
+      );
     });
 
     testWidgets('במצב רגיל כפתורי הניווט גלויים ישירות במרכז הסרגל', (

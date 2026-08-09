@@ -1552,6 +1552,11 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
               : null,
           actions: _buildDisplayOrderActions(context, state),
           alwaysInMenu: _buildAlwaysInMenuActions(context, state),
+          // בתצוגה מפוצלת אין מקום לניווט במרכז הסרגל — הוא עובר לשורת
+          // כפתורים אחת בראש תפריט ה-"...", ולא לארבע שורות טקסט.
+          menuHeaderActions: widget.isInCombinedView
+              ? _buildNavigationActions(context, state)
+              : null,
           maxVisibleButtons: maxButtons,
         ),
       ),
@@ -1706,11 +1711,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     BuildContext context,
     TextBookLoaded state,
   ) {
-    final navigationActions = _buildNavigationActions(context, state);
     return [
-      // כפתורי ניווט - רק בתצוגה משולבת
-      if (widget.isInCombinedView) ...navigationActions,
-
       // הצגת סימניות הספר הנוכחי (הוספת סימניה עברה לתפריט ההקשר בטקסט)
       ActionButtonData(
         widget: KeyedSubtree(
