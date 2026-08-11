@@ -88,6 +88,26 @@ void main() {
     );
   });
 
+  testWidgets('AppCard transparent drops the card background', (tester) async {
+    final key = GlobalKey();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AppCard(
+            key: key,
+            transparent: true,
+            onTap: () {},
+            child: const SizedBox(),
+          ),
+        ),
+      ),
+    );
+    final material = tester.widget<Material>(
+      find.descendant(of: find.byKey(key), matching: find.byType(Material)),
+    );
+    expect(material.color, Colors.transparent);
+  });
+
   // --- AppCard.section ---
 
   testWidgets('AppCard.section renders all children', (tester) async {

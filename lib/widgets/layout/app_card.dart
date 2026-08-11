@@ -16,6 +16,7 @@ class AppCard extends StatelessWidget {
     this.margin,
     this.padding,
     this.selected = false,
+    this.transparent = false,
   }) : children = null;
 
   /// כרטיס מקטע עם מספר שורות — רווח 1.5px בין שורות.
@@ -27,7 +28,8 @@ class AppCard extends StatelessWidget {
     this.selected = false,
   }) : child = null,
        onTap = null,
-       focusNode = null;
+       focusNode = null,
+       transparent = false;
 
   /// הרווח הקבוע בין שורות במקטע כרטיס.
   static const double sectionSpacing = 1.5;
@@ -41,6 +43,10 @@ class AppCard extends StatelessWidget {
 
   /// מוסיף overlay של secondaryContainer מעל הכרטיס
   final bool selected;
+
+  /// רקע שקוף — הכרטיס נטמע במשטח שמאחוריו, ונשארים ממנו רק התוכן,
+  /// הריחוף וסימון הבחירה.
+  final bool transparent;
 
   /// Divider חיצוני בצבע עקבי עם המפריד הפנימי של [AppCard.section].
   ///
@@ -78,9 +84,13 @@ class AppCard extends StatelessWidget {
       content = _withSelected(context, content);
     }
 
+    final background = transparent
+        ? Colors.transparent
+        : AppSurfaces.card(context);
+
     if (onTap != null) {
       return Material(
-        color: AppSurfaces.card(context),
+        color: background,
         surfaceTintColor: Colors.transparent,
         borderRadius: resolvedRadius,
         clipBehavior: Clip.antiAlias,
@@ -95,7 +105,7 @@ class AppCard extends StatelessWidget {
     }
 
     return Material(
-      color: AppSurfaces.card(context),
+      color: background,
       borderRadius: resolvedRadius,
       clipBehavior: Clip.antiAlias,
       child: content,

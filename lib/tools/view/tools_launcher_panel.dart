@@ -1005,9 +1005,24 @@ class _ToolDragFeedback extends StatelessWidget {
 
 /// קובייה בודדת ברשת הכלים.
 class ToolTile extends StatelessWidget {
-  static const double iconBoxSize = 32;
-  static const double iconSize = 16;
+  static const double maxIconSize = 48;
+  static const double minIconSize = 20;
   static const double menuButtonSize = 26;
+
+  /// התווית קטנה ובשתי שורות, כדי שרוב הקובייה תישאר לאייקון.
+  static const double labelFontSize = 11;
+  static const double labelLineHeight = 1.2;
+  static const double labelBlockHeight = labelFontSize * labelLineHeight * 2;
+
+  /// גודל האייקון לגובה הפנוי בקובייה: כל מה שנשאר אחרי שתי שורות התווית.
+  /// כך פאנל מצומצם מקטין את האייקון במקום לחתוך את הכתב.
+  static double iconSizeFor(double availableHeight) {
+    if (!availableHeight.isFinite) return maxIconSize;
+    return (availableHeight - AppTokens.spaceXS - labelBlockHeight).clamp(
+      minIconSize,
+      maxIconSize,
+    );
+  }
 
   final ToolCatalogEntry entry;
   final bool isOpen;
@@ -1043,39 +1058,37 @@ class ToolTile extends StatelessWidget {
       child: AppCard(
         onTap: onTap,
         selected: isHighlighted,
+        // הקובייה יושבת ישירות על משטח הפאנל, כמו סמל תוכנה בשולחן העבודה.
+        transparent: true,
         child: Stack(
           children: [
             // האייקון והכותרת ממורכזים כגוש אחד.
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(AppTokens.spaceXS),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: iconBoxSize,
-                      height: iconBoxSize,
-                      decoration: BoxDecoration(
-                        color: cs.secondaryContainer,
-                        borderRadius: AppTokens.borderRadiusAll,
-                      ),
-                      child: Center(child: _buildIcon(cs)),
-                    ),
-                    const SizedBox(height: AppTokens.spaceXS),
-                    Flexible(
-                      child: Text(
-                        entry.label,
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: cs.onSurface,
+                child: LayoutBuilder(
+                  builder: (context, constraints) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      _buildIcon(cs, iconSizeFor(constraints.maxHeight)),
+                      const SizedBox(height: AppTokens.spaceXS),
+                      Flexible(
+                        child: Text(
+                          entry.label,
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            fontSize: labelFontSize,
+                            height: labelLineHeight,
+                            fontWeight: FontWeight.w600,
+                            color: cs.onSurface,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -1174,15 +1187,15 @@ class ToolTile extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(ColorScheme cs) {
+  Widget _buildIcon(ColorScheme cs, double iconSize) {
     if (entry.imageIcon != null) {
       return ImageIcon(
         AssetImage(entry.imageIcon!),
         size: iconSize,
-        color: cs.onSecondaryContainer,
+        color: cs.primary,
       );
     }
-    return Icon(entry.icon, size: iconSize, color: cs.onSecondaryContainer);
+    return Icon(entry.icon, size: iconSize, color: cs.primary);
   }
 }
 

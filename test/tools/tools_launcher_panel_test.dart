@@ -17,6 +17,7 @@ import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/tabs/bloc/tabs_bloc.dart';
 import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/bloc/tabs_state.dart';
+import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/built_in_tools_catalog.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
 import 'package:otzaria/tools/view/tools_launcher_panel.dart';
@@ -548,50 +549,70 @@ void main() {
       expect(find.text('לוח שנה'), findsOneWidget);
     });
 
-    testWidgets('בנוי מעל AppCard — אותו כרטיס כמו בספרייה', (tester) async {
+    // הקובייה יושבת ישירות על משטח הפאנל — בלי כרטיס לבן סביב האייקון והכתב.
+    testWidgets('בנויה מעל AppCard שקוף — בלי רקע כרטיס', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
       expect(find.byType(AppCard), findsOneWidget);
-    });
+      expect(tester.widget<AppCard>(find.byType(AppCard)).transparent, isTrue);
 
-    testWidgets('האייקון יושב בריבוע 32 והוא בגודל 16', (tester) async {
-      await tester.pumpWidget(_tileHost(buildTile()));
-
-      final iconBox = tester.getSize(
-        find.ancestor(
-          of: find.byIcon(FluentIcons.calendar_24_regular),
-          matching: find.byType(Container),
+      final material = tester.widget<Material>(
+        find.descendant(
+          of: find.byType(AppCard),
+          matching: find.byType(Material),
         ),
       );
-      expect(iconBox, const Size(ToolTile.iconBoxSize, ToolTile.iconBoxSize));
+      expect(material.color, Colors.transparent);
+    });
+
+    // סדר גודל של סמל תוכנה: האייקון תופס את המקום שנשאר אחרי התווית.
+    testWidgets('האייקון גדול ותופס את המקום שנשאר אחרי התווית', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_tileHost(buildTile()));
 
       final icon = tester.widget<Icon>(
         find.byIcon(FluentIcons.calendar_24_regular),
       );
-      expect(icon.size, ToolTile.iconSize);
+      expect(icon.size, ToolTile.iconSizeFor(100 - AppTokens.spaceXS * 2));
+      expect(icon.size, ToolTile.maxIconSize);
     });
 
-    testWidgets('צבעי הריבוע והאייקון נלקחים מ-secondaryContainer', (
-      tester,
-    ) async {
+    // בפאנל מצומצם האייקון מתכווץ, אחרת שתי שורות התווית נחתכות.
+    testWidgets('קובייה קטנה מקבלת אייקון קטן ללא חריגת פריסה', (tester) async {
+      await tester.pumpWidget(_tileHost(buildTile(), size: 70));
+      expect(tester.takeException(), isNull);
+
+      final icon = tester.widget<Icon>(
+        find.byIcon(FluentIcons.calendar_24_regular),
+      );
+      expect(icon.size, lessThan(ToolTile.maxIconSize));
+      expect(icon.size, greaterThanOrEqualTo(ToolTile.minIconSize));
+    });
+
+    // התווית קטנה מברירת המחדל של bodySmall, כדי לפנות מקום לאייקון.
+    testWidgets('תווית הקובייה בגודל 11', (tester) async {
+      await tester.pumpWidget(_tileHost(buildTile()));
+      final label = tester.widget<Text>(find.text('לוח שנה'));
+      expect(label.style?.fontSize, ToolTile.labelFontSize);
+    });
+
+    // האייקון עומד על רקע הכרטיס עצמו — בלי מעטפת מרובעת סביבו.
+    testWidgets('האייקון בצבע primary ובלי מעטפת מרובעת', (tester) async {
       await tester.pumpWidget(_tileHost(buildTile()));
       final context = tester.element(find.byType(ToolTile));
       final cs = Theme.of(context).colorScheme;
 
-      final container = tester.widget<Container>(
+      final icon = tester.widget<Icon>(
+        find.byIcon(FluentIcons.calendar_24_regular),
+      );
+      expect(icon.color, cs.primary);
+      expect(
         find.ancestor(
           of: find.byIcon(FluentIcons.calendar_24_regular),
           matching: find.byType(Container),
         ),
+        findsNothing,
       );
-      expect(
-        (container.decoration as BoxDecoration).color,
-        cs.secondaryContainer,
-      );
-
-      final icon = tester.widget<Icon>(
-        find.byIcon(FluentIcons.calendar_24_regular),
-      );
-      expect(icon.color, cs.onSecondaryContainer);
     });
 
     testWidgets('האייקון והטקסט ממורכזים אופקית בקובייה', (tester) async {
@@ -613,10 +634,7 @@ void main() {
 
       final tileCenter = tester.getCenter(find.byType(ToolTile));
       final iconBoxRect = tester.getRect(
-        find.ancestor(
-          of: find.byIcon(FluentIcons.calendar_24_regular),
-          matching: find.byType(Container),
-        ),
+        find.byIcon(FluentIcons.calendar_24_regular),
       );
       final textRect = tester.getRect(find.text('לוח שנה'));
 
@@ -651,7 +669,7 @@ void main() {
       );
       expect(find.byType(ImageIcon), findsOneWidget);
       final imageIcon = tester.widget<ImageIcon>(find.byType(ImageIcon));
-      expect(imageIcon.size, ToolTile.iconSize);
+      expect(imageIcon.size, ToolTile.iconSizeFor(100 - AppTokens.spaceXS * 2));
     });
 
     testWidgets('לחיצה מפעילה את onTap', (tester) async {
