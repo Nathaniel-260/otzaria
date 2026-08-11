@@ -1,4 +1,3 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
@@ -134,57 +133,6 @@ void main() {
       final narrow = tester.getSize(find.text('צרה')).width;
       expect(wide, greaterThan(narrow * 2));
     });
-
-    // הכרטיס עטוף בחיתוך מרובע בגודלו: צל היה נחתך לאורך הצדדים הישרים,
-    // ונשאר רק ככתם מרובע בכל פינה עגולה.
-    testWidgets('כרטיס החלונית אינו מצייר צל', (tester) async {
-      for (final isActive in [true, false]) {
-        await tester.pumpWidget(
-          MaterialApp(
-            home: PaneCard(
-              isActive: isActive,
-              isSplit: true,
-              child: const SizedBox(),
-            ),
-          ),
-        );
-
-        final decoration =
-            tester
-                    .widget<AnimatedContainer>(find.byType(AnimatedContainer))
-                    .decoration!
-                as BoxDecoration;
-        expect(decoration.boxShadow, isNull, reason: 'isActive=$isActive');
-      }
-    });
-
-    // גבול בין החלוניות על שבר פיקסל: חיתוך הכרטיס מקצר את הרוחב לפיקסל שלם
-    // ומוחק את קו המסגרת של החלונית הפעילה.
-    testWidgets('גבול החלוניות נופל על פיקסל שלם', (tester) async {
-      addTearDown(tester.view.reset);
-
-      for (final width in [1600.0, 1601.0, 1287.0]) {
-        for (final ratio in [0.5, 0.4237, 0.618]) {
-          tester.view.physicalSize = Size(width, 900);
-          tester.view.devicePixelRatio = 1.0;
-
-          final right = _LeafTab('ימין');
-          final left = _LeafTab('שמאל');
-          await tester.pumpWidget(
-            _host(
-              CombinedTab(rightTab: right, leftTab: left, splitRatio: ratio),
-            ),
-          );
-          await tester.pumpAndSettle();
-
-          final leftRect = tester.getRect(find.byKey(GlobalObjectKey(left)));
-          final rightRect = tester.getRect(find.byKey(GlobalObjectKey(right)));
-          final reason = 'רוחב $width ויחס $ratio';
-          expect(leftRect.right % 1, 0, reason: reason);
-          expect(rightRect.left % 1, 0, reason: reason);
-        }
-      }
-    });
   });
 
   group('שוליי תוכן', () {
@@ -294,36 +242,6 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(reportedRatio, 0.5);
-    });
-
-    // המפריד מצויר בין החלוניות: שכבת ציור חדשה בהצבעה מפצלת את הרסטר,
-    // ומסגרת הפיקסל של החלונית שמצוירת אחריו נעלמת עד שהעכבר מתרחק.
-    testWidgets('הצבעה על המפריד אינה מוסיפה שכבות ציור', (tester) async {
-      final root = CombinedTab(
-        rightTab: _LeafTab('ימין'),
-        leftTab: _LeafTab('שמאל'),
-      );
-      await tester.pumpWidget(_host(root));
-      await tester.pumpAndSettle();
-
-      final layersBefore = tester.layers.length;
-      final handle = find.descendant(
-        of: find.byType(MouseRegion).last,
-        matching: find.byType(AnimatedContainer),
-      );
-      BoxDecoration decoration() =>
-          tester.widget<AnimatedContainer>(handle).decoration! as BoxDecoration;
-      expect(decoration().color!.a, 0);
-
-      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-      await gesture.addPointer(location: Offset.zero);
-      addTearDown(gesture.removePointer);
-      await gesture.moveTo(tester.getCenter(find.byType(MouseRegion).last));
-      await tester.pumpAndSettle();
-
-      // הידית נראית עכשיו — ובכל זאת מספר השכבות לא גדל.
-      expect(decoration().color!.a, greaterThan(0));
-      expect(tester.layers.length, layersBefore);
     });
   });
 

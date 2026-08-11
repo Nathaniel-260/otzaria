@@ -24,6 +24,9 @@ const double _kDividerHandleLength = 40;
 /// עיגול פינות כרטיס החלונית.
 const double kPaneCardRadius = 10;
 
+/// סכום ה-flex בין שתי החלוניות.
+const int _kFlexResolution = 1000;
+
 /// כמה זז המפריד בכל הקשה על חץ.
 const double _kKeyboardNudge = 24;
 
@@ -118,6 +121,15 @@ class PaneCard extends StatelessWidget {
             ? Border.all(
                 color: AppSurfaces.paneCardBorder(cs, isActive: isActive),
               )
+            : null,
+        boxShadow: isSplit
+            ? [
+                BoxShadow(
+                  color: AppSurfaces.paneCardShadow(cs, isActive: isActive),
+                  blurRadius: isActive ? 10 : 6,
+                  offset: const Offset(0, 1),
+                ),
+              ]
             : null,
       ),
       child: ClipRRect(borderRadius: radius, child: child),
@@ -255,37 +267,30 @@ class _SplitNodeState extends State<_SplitNode> {
     return ValueListenableBuilder<double>(
       valueListenable: _ratioNotifier,
       builder: (context, ratio, _) {
-        return LayoutBuilder(
-          // גבול בין החלוניות על שבר פיקסל: חיתוך הכרטיס (hardEdge) מקצר את
-          // הרוחב לפיקסל שלם ומוחק את קו המסגרת של החלונית הפעילה.
-          builder: (context, constraints) {
-            final available = constraints.maxWidth - widget.thickness;
-            final firstWidth = available > 0
-                ? (available * ratio).roundToDouble().clamp(0.0, available)
-                : 0.0;
+        // חלוקה ב-flex נמנעת מבניית תת-העץ בזמן layout.
+        final firstFlex = (ratio * _kFlexResolution).round().clamp(
+          1,
+          _kFlexResolution - 1,
+        );
 
-            return Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // הילדים נבנים מחוץ ל-builder, ולכן פריסה מחדש אינה בונה
-                // מחדש את תצוגות הספרים.
-                SizedBox(width: firstWidth, child: firstChild),
-                _PaneDivider(
-                  thickness: widget.thickness,
-                  isTouch: widget.thickness == kPaneDividerThicknessTouch,
-                  ratio: ratio,
-                  increasedRatio: _ratioAfterNudge(towardFirst: false),
-                  decreasedRatio: _ratioAfterNudge(towardFirst: true),
-                  onDragStart: () => _dragging = true,
-                  onDragUpdate: _onDragUpdate,
-                  onDragEnd: _commit,
-                  onReset: _resetRatio,
-                  onNudge: (towardFirst) => _nudge(towardFirst: towardFirst),
-                ),
-                Expanded(child: secondChild),
-              ],
-            );
-          },
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(flex: firstFlex, child: firstChild),
+            _PaneDivider(
+              thickness: widget.thickness,
+              isTouch: widget.thickness == kPaneDividerThicknessTouch,
+              ratio: ratio,
+              increasedRatio: _ratioAfterNudge(towardFirst: false),
+              decreasedRatio: _ratioAfterNudge(towardFirst: true),
+              onDragStart: () => _dragging = true,
+              onDragUpdate: _onDragUpdate,
+              onDragEnd: _commit,
+              onReset: _resetRatio,
+              onNudge: (towardFirst) => _nudge(towardFirst: towardFirst),
+            ),
+            Expanded(flex: _kFlexResolution - firstFlex, child: secondChild),
+          ],
         );
       },
     );
@@ -428,20 +433,23 @@ class _PaneDividerState extends State<_PaneDivider> {
             child: SizedBox(
               width: widget.thickness,
               child: Center(
-                // דהייה בצבע ולא ב-AnimatedOpacity: אטימות חיה הופכת את המפריד
-                // ל-repaint boundary, ומסגרת החלונית שמצוירת אחריו נעלמת.
-                child: AnimatedContainer(
+                child: AnimatedOpacity(
                   duration: const Duration(milliseconds: 140),
                   curve: Curves.easeOut,
-                  width: _kDividerHandleThickness,
-                  height: _kDividerHandleLength,
-                  decoration: BoxDecoration(
-                    color: AppSurfaces.paneDividerHandle(
-                      colorScheme,
-                      isActive: active,
-                    ),
-                    borderRadius: BorderRadius.circular(
-                      _kDividerHandleThickness / 2,
+                  opacity: active ? 1 : 0,
+                  child: SizedBox(
+                    width: _kDividerHandleThickness,
+                    height: _kDividerHandleLength,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: AppSurfaces.paneDividerHandle(
+                          colorScheme,
+                          isActive: active,
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          _kDividerHandleThickness / 2,
+                        ),
+                      ),
                     ),
                   ),
                 ),

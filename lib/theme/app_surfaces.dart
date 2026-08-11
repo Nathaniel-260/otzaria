@@ -108,10 +108,13 @@ class AppSurfaces {
       ? cs.primary.withValues(alpha: 0.55)
       : cs.outlineVariant.withValues(alpha: 0.35);
 
+  /// צל כרטיס החלונית — מרים אותה מעל הרקע בלי קו מפריד.
+  static Color paneCardShadow(ColorScheme cs, {required bool isActive}) =>
+      cs.shadow.withValues(alpha: isActive ? 0.16 : 0.08);
+
   /// ידית המפריד בין חלוניות — נראית רק בהצבעה, בגרירה או בפוקוס.
-  /// ההיעלמות היא באלפא של אותו גוון, כדי שהדהייה תהיה שקיפות בלבד.
   static Color paneDividerHandle(ColorScheme cs, {required bool isActive}) =>
-      isActive ? cs.primary : cs.primary.withValues(alpha: 0);
+      isActive ? cs.primary : Colors.transparent;
 
   /// רקע רצועת [PanelOpenHandle] — מתפוגג מעט במצב רגיל, אטום יותר ב-hover.
   static Color panelOpenHandle(ColorScheme cs, {required bool isHovering}) =>
