@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -451,14 +452,14 @@ class AppReportService {
   }
 
   Future<_Attempt> _trySend(AppReport report) async {
-    final String body;
+    final Uint8List body;
     try {
-      body = jsonEncode(report.toApiPayload());
+      body = await _encodeBody(report);
     } catch (e) {
       debugPrint('App report payload invalid: $e');
       return const _Attempt(_AttemptKind.permanent);
     }
-    if (utf8.encode(body).length > AppReport.maxRequestBytes) {
+    if (body.length > AppReport.maxRequestBytes) {
       return const _Attempt(
         _AttemptKind.permanent,
         httpStatus: HttpStatus.requestEntityTooLarge,
@@ -466,15 +467,16 @@ class AppReportService {
     }
 
     try {
+      // לא דרך post(): הוא עוטף רשימה ב-cast ומעתיק את הגוף בית-בית.
+      final request = http.Request('POST', endpoint)
+        ..headers.addAll(const {
+          'Content-Type': 'application/json; charset=utf-8',
+          'Accept': 'application/json',
+        })
+        ..bodyBytes = body;
       final response = await _client
-          .post(
-            endpoint,
-            headers: const {
-              'Content-Type': 'application/json; charset=utf-8',
-              'Accept': 'application/json',
-            },
-            body: utf8.encode(body),
-          )
+          .send(request)
+          .then(http.Response.fromStream)
           .timeout(
             report.images.isEmpty && report.minidump == null
                 ? timeout
@@ -518,6 +520,10 @@ class AppReportService {
       return const _Attempt(_AttemptKind.transient);
     }
   }
+
+  // צילומי מסך מקפיאים את החלון בקידוד; סטטית כדי שהסגירה לא תלכוד את `this`.
+  static Future<Uint8List> _encodeBody(AppReport report) =>
+      Isolate.run(() => utf8.encode(jsonEncode(report.toApiPayload())));
 
   static Map<String, dynamic>? _decodeBody(List<int> bytes) {
     try {
