@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math' as math;
 
 import 'package:flutter/widgets.dart';
@@ -69,7 +70,36 @@ class SimpleInlineHtml {
   static final Paint _yellowPaint = Paint()..color = const Color(0xFFFFFF00);
 
   /// מנסה להמיר את [html]. מחזיר null אם נדרש HtmlWidget.
+  ///
+  /// התוצאה (גם null) ממוטמנת ב-LRU: כל שורה נראית מפורסרת מחדש בכל build.
   static TextSpan? tryParse(String html, TextStyle baseStyle) {
+    // גופן מערכת משתנה מזוהה ברקע ומשנה את fontVariations של הבולד.
+    final key = (
+      html,
+      baseStyle,
+      AppFonts.boldFontVariations(baseStyle.fontFamily) != null,
+    );
+    if (_cache.containsKey(key)) {
+      final cached = _cache.remove(key);
+      return _cache[key] = cached;
+    }
+    final result = _tryParseUncached(html, baseStyle);
+    _cache[key] = result;
+    _cacheChars += html.length;
+    while (_cacheChars > _cacheMaxChars && _cache.length > 1) {
+      final oldestKey = _cache.keys.first;
+      _cache.remove(oldestKey);
+      _cacheChars -= oldestKey.$1.length;
+    }
+    return result;
+  }
+
+  static final LinkedHashMap<(String, TextStyle, bool), TextSpan?> _cache =
+      LinkedHashMap();
+  static int _cacheChars = 0;
+  static const int _cacheMaxChars = 2 * 1024 * 1024;
+
+  static TextSpan? _tryParseUncached(String html, TextStyle baseStyle) {
     if (html.contains('&')) {
       html = html
           .replaceAll('&nbsp;', '\u00A0')
