@@ -5,24 +5,13 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
-/// מחזירה האם כותרת סימנייה תואמת לשאילתת החיפוש, עם נורמליזציה כמו באיתור
-/// (הסרת ניקוד וגרשיים) כך שכותרות עבריות יימצאו גם ללא תווים אלו.
-bool pdfOutlineTitleMatchesQuery(String title, String rawQuery) {
-  final normalizedQuery = normalizeFindText(rawQuery);
-  if (normalizedQuery.isEmpty) return true;
-  return findNormalizedTextMatches(
-    normalizedQuery: normalizedQuery,
-    normalizedPrimaryText: normalizeFindText(title),
-  );
-}
-
 typedef PdfOutlineSearchEntry = ({
   PdfOutlineNode node,
   int level,
   String normalizedTitle,
 });
 
-/// כל צמתי העץ בסדר התצוגה, עם הכותרת מנורמלת לחיפוש.
+/// כל צמתי העץ בסדר התצוגה, עם הכותרת מנורמלת כמו באיתור (בלי ניקוד וגרשיים).
 @visibleForTesting
 List<PdfOutlineSearchEntry> flattenPdfOutlineForSearch(
   List<PdfOutlineNode> outline,
@@ -48,7 +37,12 @@ List<PdfOutlineSearchEntry> filterPdfOutline(
   final normalizedQuery = normalizeFindText(rawQuery);
   if (normalizedQuery.isEmpty) return entries;
   return entries
-      .where((e) => e.normalizedTitle.contains(normalizedQuery))
+      .where(
+        (e) => findNormalizedTextMatches(
+          normalizedQuery: normalizedQuery,
+          normalizedPrimaryText: e.normalizedTitle,
+        ),
+      )
       .toList();
 }
 

@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/pdf_book/view/pdf_outlines_screen.dart';
+import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 PdfOutlineNode _node(String title, [List<PdfOutlineNode>? kids]) =>
@@ -26,8 +27,9 @@ void main() {
       'חולין קו',
       'זבחים',
     ]) {
+      final q = normalizeFindText(query);
       final expected = entries
-          .where((e) => pdfOutlineTitleMatchesQuery(e.node.title, query))
+          .where((e) => normalizeFindText(e.node.title).contains(q))
           .toList();
       expect(filterPdfOutline(entries, query), expected, reason: query);
     }
