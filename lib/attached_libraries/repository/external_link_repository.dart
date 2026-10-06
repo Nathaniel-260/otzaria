@@ -454,7 +454,10 @@ class ExternalLinkRepository {
 
   Future<Set<String>> _sync() async {
     final libraries = _registry.libraries;
-    if (libraries.isEmpty) tooLargeSlugs.value = const {};
+    if (libraries.isEmpty) {
+      tooLargeSlugs.value = const {};
+      incompleteSlugs.value = const {};
+    }
     // בלי מסדים מצורפים — ניקוי בלבד, ורק אם נבנה אי-פעם אינדקס.
     if (libraries.isEmpty && _indexKnownAbsent) return const {};
     final path = await _cacheDbPath();
@@ -485,6 +488,13 @@ class ExternalLinkRepository {
         ? await _targets()
         : const <ExternalTargetDb>[];
     try {
+      if (jobs.any((job) => job.status == _SyncStatus.build)) {
+        buildingSlugs.value = await _inIsolate(_pendingBuildSlugs, (
+          path,
+          jobs,
+          targets,
+        ));
+      }
       final result = await _inIsolate(_syncIndexEntry, (
         path,
         jobs,
@@ -494,12 +504,21 @@ class ExternalLinkRepository {
       ));
       _indexKnownAbsent = jobs.isEmpty && result.hadIndex == false;
       tooLargeSlugs.value = result.tooLarge;
+      incompleteSlugs.value = result.incomplete;
       if (result.rebuilt.isNotEmpty) _invalidateIndexCaches();
       return result.rebuilt;
     } catch (_) {
       _invalidateIndexCaches();
       rethrow;
+    } finally {
+      buildingSlugs.value = const {};
     }
+  }
+
+  /// בונה מחדש את אינדקס הקישורים של [slug] — לניסיון חוזר אחרי בנייה שנקטעה.
+  Future<void> rebuild(String slug) async {
+    await _inIsolate(_forgetIndexMeta, (await _cacheDbPath(), slug));
+    await sync();
   }
 
   /// תקרת השורות למסד אחד בבניית האינדקס — עוברת ל-isolate כארגומנט.
@@ -511,6 +530,14 @@ class ExternalLinkRepository {
 
   /// ה-slugs של מסדים שקישוריהם החיצוניים לא נטענו כי עברו את תקרת השורות.
   final ValueNotifier<Set<String>> tooLargeSlugs = ValueNotifier(const {});
+
+  /// ה-slugs של מסדים שאינדקס הקישורים שלהם נבנה כעת. עד הסיום המפרשים שלהם
+  /// אינם מוצגים על ספרים רשמיים.
+  final ValueNotifier<Set<String>> buildingSlugs = ValueNotifier(const {});
+
+  /// ה-slugs של מסדים שהבנייה שלהם נקטעה (הסימון `!building` נשאר). האינדקס
+  /// חלקי ואינו מוגש, והבנייה אינה מנוסה שוב עד ש-[rebuild] מוחק את הסימון.
+  final ValueNotifier<Set<String>> incompleteSlugs = ValueNotifier(const {});
 
   /// אחרי סנכרון שמצא cache.db בלי אינדקס ובלי מסדים — אין מה לנקות עוד.
   bool _indexKnownAbsent = false;
@@ -759,6 +786,7 @@ typedef _SyncResult = ({
   Set<String> rebuilt,
   bool hadIndex,
   Set<String> tooLarge,
+  Set<String> incomplete,
 });
 
 /// גודל מנת הכנסה — טרנזקציה קצרה, כדי שכותבים אחרים ל-cache.db לא יקבלו BUSY.
@@ -772,6 +800,76 @@ String _buildingMarker(String signature) => '!building:$signature';
 const _tooLargePrefix = '!toolarge:';
 String _tooLargeMarker(String signature) => '$_tooLargePrefix$signature';
 
+/// חתימת מסדי היעד שהאינדקס של [wireKey] נבנה מולם (בלי המסד עצמו).
+String _signatureFor(String wireKey, List<ExternalTargetDb> targets) => [
+  for (final t in targets)
+    if (t.wireKey != wireKey) '${t.wireKey}=${t.version}',
+].join(';');
+
+/// האם ה-meta הקיים מכסה את [fingerprint] וה-[signature]: אינדקס שנבנה, או
+/// סימון שמונע ניסיון חוזר (`!building` אחרי הפסקה, `!toolarge`).
+bool _isCurrentOrMarked(
+  (String, String)? previous,
+  String fingerprint,
+  String signature,
+) =>
+    previous != null &&
+    previous.$1 == fingerprint &&
+    (previous.$2 == signature ||
+        previous.$2 == _buildingMarker(signature) ||
+        previous.$2 == _tooLargeMarker(signature));
+
+/// ה-slugs שהסנכרון הקרוב יבנה להם אינדקס — לפני שהבנייה מתחילה.
+Set<String> _pendingBuildSlugs(
+  (String, List<_SyncJob>, List<ExternalTargetDb>) args,
+) {
+  final (path, jobs, targets) = args;
+  final stored = <String, (String, String)>{};
+  if (File(path).existsSync()) {
+    final db = _openCacheDb(path);
+    try {
+      if (_hasTable(db, _metaTable)) {
+        for (final row in db.select(
+          'SELECT sourceSlug, fingerprint, targetsSignature FROM $_metaTable',
+        )) {
+          stored[row['sourceSlug'] as String] = (
+            row['fingerprint'] as String,
+            row['targetsSignature'] as String,
+          );
+        }
+      }
+    } finally {
+      db.close();
+    }
+  }
+  return {
+    for (final job in jobs)
+      if (job.status == _SyncStatus.build &&
+          !_isCurrentOrMarked(
+            stored[job.slug],
+            job.fingerprint,
+            _signatureFor(
+              BookSource.attached(job.slug).wireKey,
+              targets,
+            ),
+          ))
+        job.slug,
+  };
+}
+
+/// מוחק את ה-meta של [slug], כך שהסנכרון הבא יבנה לו אינדקס מחדש.
+void _forgetIndexMeta((String, String) args) {
+  final (path, slug) = args;
+  if (!File(path).existsSync()) return;
+  final db = _openCacheDb(path);
+  try {
+    if (!_hasTable(db, _metaTable)) return;
+    db.execute('DELETE FROM $_metaTable WHERE sourceSlug = ?', [slug]);
+  } finally {
+    db.close();
+  }
+}
+
 _SyncResult _syncIndex(
   String path,
   List<_SyncJob> jobs,
@@ -784,7 +882,12 @@ _SyncResult _syncIndex(
     final hadIndex = _hasTable(db, _metaTable);
     // בלי מסדים מצורפים לא יוצרים טבלאות ב-cache.db של משתמש שלא צירף מעולם.
     if (jobs.isEmpty && !hadIndex) {
-      return (rebuilt: const {}, hadIndex: false, tooLarge: const {});
+      return (
+        rebuilt: const {},
+        hadIndex: false,
+        tooLarge: const {},
+        incomplete: const {},
+      );
     }
     _ensureSchema(db);
     final known = {for (final job in jobs) job.slug};
@@ -833,17 +936,9 @@ _SyncResult _syncIndex(
         for (final t in targets)
           if (t.wireKey != wireKey) t,
       ];
-      final signature = [
-        for (final t in jobTargets) '${t.wireKey}=${t.version}',
-      ].join(';');
+      final signature = _signatureFor(wireKey, targets);
       final previous = stored[job.slug];
-      if (previous != null &&
-          previous.$1 == job.fingerprint &&
-          (previous.$2 == signature ||
-              previous.$2 == _buildingMarker(signature) ||
-              previous.$2 == _tooLargeMarker(signature))) {
-        continue;
-      }
+      if (_isCurrentOrMarked(previous, job.fingerprint, signature)) continue;
       _transaction(
         db,
         () => writeMeta(job.slug, job.fingerprint, _buildingMarker(signature)),
@@ -921,7 +1016,19 @@ _SyncResult _syncIndex(
       ))
         row['sourceSlug'] as String,
     };
-    return (rebuilt: rebuilt, hadIndex: true, tooLarge: tooLarge);
+    final incomplete = {
+      for (final row in db.select(
+        'SELECT sourceSlug FROM $_metaTable WHERE targetsSignature LIKE ?',
+        ['!building:%'],
+      ))
+        row['sourceSlug'] as String,
+    };
+    return (
+      rebuilt: rebuilt,
+      hadIndex: true,
+      tooLarge: tooLarge,
+      incomplete: incomplete,
+    );
   } finally {
     db.close();
   }

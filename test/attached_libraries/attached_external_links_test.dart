@@ -645,6 +645,50 @@ void main() {
       expect(links.tooLargeSlugs.value, {library.slug});
     });
 
+    test(
+      'בנייה שנקטעה — מסומנת כלא שלמה, לא נבנית שוב, ו-rebuild מתקן',
+      () async {
+        final library = await attach(attachedDb('ext', rows: fiveRows()));
+        expect(await links.sync(), {library.slug});
+        expect(links.incompleteSlugs.value, isEmpty);
+
+        // הפסקה באמצע הבנייה: הסימון !building נשאר והאינדקס חלקי.
+        final db = sqlite3.sqlite3.open(cachePath());
+        db.execute(
+          "UPDATE attached_external_link_meta SET targetsSignature = "
+          "'!building:' || targetsSignature WHERE sourceSlug = ?",
+          [library.slug],
+        );
+        db.close();
+
+        expect(await links.sync(), isEmpty);
+        expect(links.incompleteSlugs.value, {library.slug});
+        expect(metaSignature(library.slug), startsWith('!building:'));
+
+        await links.rebuild(library.slug);
+        expect(links.incompleteSlugs.value, isEmpty);
+        expect(metaSignature(library.slug), isNot(startsWith('!')));
+        expect(indexRows(library.slug), 5);
+      },
+    );
+
+    test('buildingSlugs מציג את המסד בזמן הבנייה ונוקה בסיומה', () async {
+      final seen = <Set<String>>[];
+      void record() => seen.add(links.buildingSlugs.value);
+      links.buildingSlugs.addListener(record);
+      addTearDown(() => links.buildingSlugs.removeListener(record));
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+
+      expect(await links.sync(), {library.slug});
+      expect(seen.first, {library.slug});
+      expect(links.buildingSlugs.value, isEmpty);
+
+      // בלי שינוי — אין בנייה ולכן אין סימון.
+      seen.clear();
+      expect(await links.sync(), isEmpty);
+      expect(seen.where((slugs) => slugs.isNotEmpty), isEmpty);
+    });
+
     test('כותרת יעד ארוכה מדי אינה נפתרת', () async {
       final library = await attach(
         attachedDb(

@@ -170,6 +170,37 @@ void main() {
       await tester.pump();
       expect(find.text(message), findsOneWidget);
     });
+
+    testWidgets('אינדקס קישורים בבנייה או שנקטע מציג הודעה בשורת המסד', (
+      tester,
+    ) async {
+      final repository = _FakeRepository([_library('dbA'), _library('dbB')]);
+      AttachedLibrariesRepository.instance = repository;
+      await pumpPanel(tester, repository);
+      final links = ExternalLinkRepository.instance;
+      addTearDown(() {
+        links.buildingSlugs.value = const {};
+        links.incompleteSlugs.value = const {};
+      });
+      const building = 'בונה אינדקס קישורים — המפרשים של המסד יופיעו בסיום';
+      const incomplete =
+          'אינדקס הקישורים לא הושלם — המפרשים של המסד אינם מוצגים';
+      const retry = 'בנה אינדקס מחדש';
+      expect(find.text(building), findsNothing);
+      expect(find.text(incomplete), findsNothing);
+
+      links.incompleteSlugs.value = {'dbB'};
+      await tester.pump();
+      expect(find.text(incomplete), findsOneWidget);
+      expect(find.text(retry), findsOneWidget);
+
+      // בנייה פעילה גוברת: ההודעה הראשונה בלבד, בלי כפתור ניסיון חוזר.
+      links.buildingSlugs.value = {'dbB'};
+      await tester.pump();
+      expect(find.text(building), findsOneWidget);
+      expect(find.text(incomplete), findsNothing);
+      expect(find.text(retry), findsNothing);
+    });
   });
 
   testWidgets('בלי קישור (מובייל) — אין הוספת תיקייה', (tester) async {

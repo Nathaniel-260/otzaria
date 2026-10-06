@@ -43,12 +43,16 @@ class _AttachedLibrariesPanelState extends State<AttachedLibrariesPanel> {
     context.read<AttachedLibrariesBloc>().add(const LoadAttachedLibraries());
     _repository.loadingPaths.addListener(_rebuild);
     _links.tooLargeSlugs.addListener(_rebuild);
+    _links.buildingSlugs.addListener(_rebuild);
+    _links.incompleteSlugs.addListener(_rebuild);
   }
 
   @override
   void dispose() {
     _repository.loadingPaths.removeListener(_rebuild);
     _links.tooLargeSlugs.removeListener(_rebuild);
+    _links.buildingSlugs.removeListener(_rebuild);
+    _links.incompleteSlugs.removeListener(_rebuild);
     super.dispose();
   }
 
@@ -276,6 +280,13 @@ class _AttachedLibrariesPanelState extends State<AttachedLibrariesPanel> {
                 linksTooLarge: _links.tooLargeSlugs.value.contains(
                   libraries[i].slug,
                 ),
+                linksBuilding: _links.buildingSlugs.value.contains(
+                  libraries[i].slug,
+                ),
+                linksIncomplete: _links.incompleteSlugs.value.contains(
+                  libraries[i].slug,
+                ),
+                onRebuildLinks: () => _links.rebuild(libraries[i].slug),
                 enabled: !state.isBusy,
                 update: state.updateOf(libraries[i]),
                 onCheckUpdate: () => context.read<AttachedLibrariesBloc>().add(
@@ -355,6 +366,9 @@ class _AttachedLibraryTile extends StatelessWidget {
     required this.library,
     required this.isLoading,
     required this.linksTooLarge,
+    required this.linksBuilding,
+    required this.linksIncomplete,
+    required this.onRebuildLinks,
     required this.enabled,
     required this.update,
     required this.onCheckUpdate,
@@ -367,6 +381,13 @@ class _AttachedLibraryTile extends StatelessWidget {
   final AttachedLibrary library;
   final bool isLoading;
   final bool linksTooLarge;
+
+  /// אינדקס הקישורים נבנה כעת; עד הסיום המפרשים של המסד אינם מוצגים.
+  final bool linksBuilding;
+
+  /// הבנייה הקודמת נקטעה, והאינדקס החלקי אינו מוגש עד שבונים מחדש.
+  final bool linksIncomplete;
+  final VoidCallback onRebuildLinks;
   final bool enabled;
   final AttachedUpdateStatus update;
   final VoidCallback onCheckUpdate;
@@ -420,8 +441,27 @@ class _AttachedLibraryTile extends StatelessWidget {
                   background: cs.errorContainer,
                   foreground: cs.onErrorContainer,
                 ),
+              if (linksBuilding)
+                AttachedInfoChip(
+                  label: context.settingsText(
+                    'בונה אינדקס קישורים — המפרשים של המסד יופיעו בסיום',
+                  ),
+                ),
+              if (linksIncomplete && !linksBuilding)
+                AttachedInfoChip(
+                  label: context.settingsText(
+                    'אינדקס הקישורים לא הושלם — המפרשים של המסד אינם מוצגים',
+                  ),
+                  background: cs.errorContainer,
+                  foreground: cs.onErrorContainer,
+                ),
             ],
           ),
+          if (linksIncomplete && !linksBuilding)
+            TextButton(
+              onPressed: enabled ? onRebuildLinks : null,
+              child: Text(context.settingsText('בנה אינדקס מחדש')),
+            ),
           if (library.isOk &&
               library.updateSource != null &&
               !library.updateSourceMismatch) ...[
