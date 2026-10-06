@@ -273,6 +273,7 @@ class CategoryGridItem extends StatelessWidget {
   final VoidCallback onCategoryClickCallback;
   final FocusNode? focusNode;
   final bool isSelected;
+  final VoidCallback? onFocused;
 
   /// נתיב האב שמוצג מתחת לכותרת — בתוצאות חיפוש, כדי להבחין בין תיקיות באותו שם.
   final String? parentPath;
@@ -284,6 +285,7 @@ class CategoryGridItem extends StatelessWidget {
     this.focusNode,
     this.isSelected = false,
     this.parentPath,
+    this.onFocused,
   });
 
   @override
@@ -294,6 +296,10 @@ class CategoryGridItem extends StatelessWidget {
     return AppCard(
       onTap: onCategoryClickCallback,
       focusNode: focusNode,
+      requestFocusOnTap: true,
+      onFocusChange: (focused) {
+        if (focused) onFocused?.call();
+      },
       selected: isSelected,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -396,6 +402,7 @@ class BookGridItem extends StatelessWidget {
   final VoidCallback onBookClickCallback;
   final VoidCallback? onBookDeleted;
   final FocusNode? focusNode;
+  final VoidCallback? onFocused;
 
   const BookGridItem({
     super.key,
@@ -405,6 +412,7 @@ class BookGridItem extends StatelessWidget {
     this.isSelected = false,
     this.onBookDeleted,
     this.focusNode,
+    this.onFocused,
   });
 
   @override
@@ -412,6 +420,10 @@ class BookGridItem extends StatelessWidget {
     return AppCard(
       onTap: onBookClickCallback,
       focusNode: focusNode,
+      requestFocusOnTap: true,
+      onFocusChange: (focused) {
+        if (focused) onFocused?.call();
+      },
       selected: isSelected,
       child: SizedBox.expand(
         child: Padding(

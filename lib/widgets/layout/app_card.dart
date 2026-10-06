@@ -13,6 +13,8 @@ class AppCard extends StatelessWidget {
     required this.child,
     this.onTap,
     this.focusNode,
+    this.onFocusChange,
+    this.requestFocusOnTap = false,
     this.margin,
     this.padding,
     this.selected = false,
@@ -27,7 +29,9 @@ class AppCard extends StatelessWidget {
     this.selected = false,
   }) : child = null,
        onTap = null,
-       focusNode = null;
+       focusNode = null,
+       onFocusChange = null,
+       requestFocusOnTap = false;
 
   /// הרווח הקבוע בין שורות במקטע כרטיס.
   static const double sectionSpacing = 1.5;
@@ -36,6 +40,10 @@ class AppCard extends StatelessWidget {
   final List<Widget>? children;
   final VoidCallback? onTap;
   final FocusNode? focusNode;
+  final ValueChanged<bool>? onFocusChange;
+
+  /// לחיצת עכבר ממקדת את הכרטיס (כמו בסייר), כדי שהמקלדת תמשיך ממנו.
+  final bool requestFocusOnTap;
   final EdgeInsetsGeometry? margin;
   final EdgeInsetsGeometry? padding;
 
@@ -79,6 +87,16 @@ class AppCard extends StatelessWidget {
     }
 
     if (onTap != null) {
+      if (requestFocusOnTap) {
+        final tappable = content;
+        // ה-Builder יושב בתוך ה-InkWell, ולכן Focus.of מחזיר את צומת הכרטיס.
+        content = Builder(
+          builder: (cardContext) => Listener(
+            onPointerDown: (_) => Focus.of(cardContext).requestFocus(),
+            child: tappable,
+          ),
+        );
+      }
       return Material(
         color: AppSurfaces.card(context),
         surfaceTintColor: Colors.transparent,
@@ -87,6 +105,7 @@ class AppCard extends StatelessWidget {
         child: InkWell(
           onTap: onTap,
           focusNode: focusNode,
+          onFocusChange: onFocusChange,
           mouseCursor: SystemMouseCursors.click,
           hoverDuration: Durations.medium1,
           child: content,
