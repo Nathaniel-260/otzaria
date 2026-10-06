@@ -1157,6 +1157,7 @@ export interface ReaderSectionContentChangedEvent {
 }
 
 export type ContextMenuContext =
+  | 'reader-book'
   | 'reader-selection'
   | 'reader-page-shape-selection'
   /** Right-click on a plugin highlight, with or without an active selection.
