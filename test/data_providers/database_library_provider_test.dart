@@ -25,6 +25,7 @@ import 'package:otzaria/pdf_book/utils/pdf_links_window.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/text_book/utils/link_preview_utils.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
@@ -1821,6 +1822,83 @@ void main() {
               (12, 1, 'הלכות ב'),
             ],
           );
+        } finally {
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath,
+            previousLibraryPath ?? '',
+          );
+          await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath,
+            previousEffectiveDbPath ?? '',
+          );
+          await provider.sqliteProvider.dispose();
+          provider.clearCache();
+          database.close();
+          await tempDir.delete(recursive: true);
+        }
+      },
+    );
+
+    test(
+      'getLinkContent של קישור מוטמע בטקסט ("<כותרת>.txt" בלי תיקייה) מוצא את '
+      'הספר הרשמי (issue #1997)',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'otzaria_inline_link_content',
+        );
+        final dbPath = path.join(
+          tempDir.path,
+          DatabaseConstants.databaseFileName,
+        );
+        final database = MyDatabase.withPath(dbPath);
+        final repository = SeforimRepository(database);
+        final provider = DatabaseLibraryProvider.instance;
+        final previousLibraryPath = Settings.getValue<String>(
+          SettingsRepository.keyLibraryPath,
+        );
+        final previousEffectiveDbPath = Settings.getValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+        );
+
+        try {
+          await provider.sqliteProvider.dispose();
+          provider.clearCache();
+          await repository.ensureInitialized();
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath,
+            tempDir.path,
+          );
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryFolderName,
+            '',
+          );
+          await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath,
+            '',
+          );
+          final sourceId = await repository.insertSource('local', -10);
+          final catId = await repository.insertCategory(
+            const migration_models.Category(
+              title: 'כללי',
+              parentId: null,
+              level: 0,
+            ),
+          );
+          await provider.initialize();
+
+          final db = await database.database;
+          db.execute(
+            "INSERT INTO book (id, categoryId, sourceId, title, orderIndex, totalLines) VALUES (1, $catId, $sourceId, 'שמירת שבת כהלכתה - א', 1, 2)",
+          );
+          db.execute(
+            "INSERT INTO line (id, bookId, lineIndex, content) VALUES (10, 1, 0, 'סעיף א'), (11, 1, 1, 'סעיף ב')",
+          );
+
+          final link = inlineLinkFromPreviewUrl(
+            'otzaria://inline-link?path='
+            '${Uri.encodeComponent('שמירת שבת כהלכתה - א.txt')}&index=2',
+          )!;
+          expect(await provider.getLinkContent(link), 'סעיף ב');
         } finally {
           await Settings.setValue<String>(
             SettingsRepository.keyLibraryPath,
