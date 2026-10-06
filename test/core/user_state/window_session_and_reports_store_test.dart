@@ -49,6 +49,23 @@ void main() {
   });
 
   group('PendingReportStore', () {
+    test('הכנסה לפי מזהה שומרת תוכן ראשון ומפרידה בין סוגי דיווחים', () async {
+      final first = PendingReportStore(database: db);
+      final second = PendingReportStore(database: db);
+      final results = await Future.wait([
+        first.addIfAbsent('errors/pending', {'id': 'same', 'text': 'ראשון'}),
+        second.addIfAbsent('errors/pending', {'id': 'same', 'text': 'שני'}),
+      ]);
+      expect(results[0], results[1]);
+      expect(await first.countByKind('errors/pending'), 1);
+      final separate = await second.addIfAbsent('plugins/pending', {
+        'id': 'same',
+        'text': 'נפרד',
+      });
+      expect(separate['text'], 'נפרד');
+      expect(await first.countByKind('plugins/pending'), 1);
+    });
+
     test('הוספה פר-שורה, רשימה לפי סוג, מחיקה לפי מזהה, קיצוץ', () async {
       final store = PendingReportStore(database: db);
       final first = await store.add('errors/pending', {'m': 1});

@@ -41,6 +41,39 @@ class PendingReportStore {
     return db.lastInsertRowId;
   }
 
+  Future<Map<String, dynamic>> addIfAbsent(
+    String kind,
+    Map<String, dynamic> payload,
+  ) async {
+    final db = await _database.database;
+    final encoded = jsonEncode(payload);
+    db.execute('BEGIN IMMEDIATE');
+    try {
+      final rows = db.select(
+        "SELECT payload_json FROM pending_reports "
+        r"WHERE kind = ? AND json_extract(payload_json, '$.id') = ? LIMIT 1",
+        [kind, payload['id']],
+      );
+      if (rows.isNotEmpty) {
+        final stored =
+            jsonDecode(rows.single['payload_json'] as String)
+                as Map<String, dynamic>;
+        db.execute('COMMIT');
+        return stored;
+      }
+      db.execute(
+        'INSERT INTO pending_reports (kind, payload_json, created_at) '
+        'VALUES (?, ?, ?)',
+        [kind, encoded, DateTime.now().millisecondsSinceEpoch],
+      );
+      db.execute('COMMIT');
+      return payload;
+    } catch (_) {
+      db.execute('ROLLBACK');
+      rethrow;
+    }
+  }
+
   Future<List<PendingReport>> listByKind(String kind) async {
     final db = await _database.database;
     final rows = db.select(

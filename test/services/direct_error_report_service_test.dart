@@ -616,6 +616,96 @@ void main() {
       );
     });
 
+    for (final offline in [true, false]) {
+      test('מזהה בתור עם תוכן שונה נדחה במצב offline=$offline', () async {
+        await Settings.setValue<bool>(
+          SettingsRepository.keyOfflineMode,
+          offline,
+        );
+        addTearDown(
+          () =>
+              Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false),
+        );
+        final service = DirectErrorReportService(
+          reportStore: store,
+          client: MockClient((_) async => http.Response('unavailable', 503)),
+        );
+        addTearDown(service.closeHttpClient);
+        final original = buildCorrectionReport(id: 'stable-id');
+        expect((await service.submitReport(original)).isQueued, isTrue);
+        final changed = original.copyWith(errorDetails: 'תוכן שונה');
+        final result = await service.submitReport(changed);
+        expect(result.status, DirectReportDeliveryStatus.failed);
+        expect(result.isIdConflict, isTrue);
+        final pending = await service.getPendingReports();
+        expect(pending, hasLength(1));
+        expect(pending.single.contentDigest, original.contentDigest);
+        expect((await service.submitReport(original)).isQueued, isTrue);
+        expect(await service.getPendingReports(), hasLength(1));
+      });
+    }
+
+    test('בקשות מקבילות באותו מזהה אינן מאשרות תוכן שלא נשמר', () async {
+      final bothStarted = Completer<void>();
+      var requests = 0;
+      final service = DirectErrorReportService(
+        reportStore: store,
+        client: MockClient((_) async {
+          if (++requests == 2) bothStarted.complete();
+          await bothStarted.future;
+          return http.Response('unavailable', 503);
+        }),
+      );
+      addTearDown(service.closeHttpClient);
+      final original = buildCorrectionReport(id: 'parallel-id');
+      final changed = original.copyWith(errorDetails: 'תוכן אחר');
+      final results = await Future.wait([
+        service.submitReport(original),
+        service.submitReport(changed),
+      ]);
+      expect(results.where((result) => result.isQueued), hasLength(1));
+      expect(results.where((result) => result.isIdConflict), hasLength(1));
+      final pending = await service.getPendingReports();
+      expect(pending, hasLength(1));
+      final accepted = results.first.isQueued ? original : changed;
+      expect(pending.single.contentDigest, accepted.contentDigest);
+    });
+
+    test('allowQueue false אינו שומר כשל זמני בתור', () async {
+      final service = DirectErrorReportService(
+        reportStore: store,
+        client: MockClient((_) async => http.Response('offline', 503)),
+      );
+      final result = await service.submitReport(
+        _buildReport(id: 'no-queue-transient'),
+        allowQueue: false,
+      );
+      expect(result.status, DirectReportDeliveryStatus.failed);
+      expect(await service.getPendingReports(), isEmpty);
+    });
+
+    test('allowQueue false במצב מנותק אינו שולח ואינו שומר בתור', () async {
+      await Settings.setValue<bool>(SettingsRepository.keyOfflineMode, true);
+      addTearDown(
+        () => Settings.setValue<bool>(SettingsRepository.keyOfflineMode, false),
+      );
+      var requests = 0;
+      final service = DirectErrorReportService(
+        reportStore: store,
+        client: MockClient((_) async {
+          requests++;
+          return http.Response('', 200);
+        }),
+      );
+      final result = await service.submitReport(
+        _buildReport(id: 'no-queue-offline'),
+        allowQueue: false,
+      );
+      expect(result.status, DirectReportDeliveryStatus.failed);
+      expect(requests, 0);
+      expect(await service.getPendingReports(), isEmpty);
+    });
+
     test(
       'transient failure queue message uses sefaria label for sefaria source',
       () async {

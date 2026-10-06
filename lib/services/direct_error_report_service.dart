@@ -302,21 +302,31 @@ class DirectErrorReportService {
   }
 
   Future<DirectReportDeliveryResult> submitReport(
-    DirectErrorReport report,
-  ) async {
+    DirectErrorReport report, {
+    bool allowQueue = true,
+  }) async {
     final directReportTargetLabel = _resolveDirectReportTargetLabel(report);
+    final existing = await _rowOf(pendingKind, report.id);
+    if (existing != null &&
+        _digestOrNull(_decode(existing)) != _digestOrNull(report)) {
+      return DirectReportDeliveryResult.failed(
+        ReportMessages.reportIdConflict,
+        isIdConflict: true,
+      );
+    }
 
     if (_isOfflineMode) {
-      if (!queueWhenOfflineEnabled) {
+      if (!allowQueue || !queueWhenOfflineEnabled) {
         return DirectReportDeliveryResult.failed(
           ReportMessages.offlineQueueDisabled,
         );
       }
 
-      await _enqueueIfNeeded(
+      final conflict = await _enqueueIfNeeded(
         report,
         queueType: DirectErrorReportQueueType.automaticRetry,
       );
+      if (conflict != null) return conflict;
       return DirectReportDeliveryResult.queued(
         ReportMessages.queuedOffline(directReportTargetLabel),
       );
@@ -356,10 +366,14 @@ class DirectErrorReportService {
       );
     }
 
-    await _enqueueIfNeeded(
+    if (!allowQueue) {
+      return DirectReportDeliveryResult.failed(attemptResult.message);
+    }
+    final conflict = await _enqueueIfNeeded(
       report,
       queueType: DirectErrorReportQueueType.automaticRetry,
     );
+    if (conflict != null) return conflict;
     return DirectReportDeliveryResult.queued(
       ReportMessages.queuedAfterFailure(directReportTargetLabel),
     );
@@ -464,18 +478,22 @@ class DirectErrorReportService {
     return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(normalized);
   }
 
-  Future<void> _enqueueIfNeeded(
+  Future<DirectReportDeliveryResult?> _enqueueIfNeeded(
     DirectErrorReport report, {
     required DirectErrorReportQueueType queueType,
   }) async {
-    if ((await _rowIdsOf(pendingKind, report.id)).isNotEmpty) {
-      return;
-    }
-
-    await _reports.add(
+    final stored = await _reports.addIfAbsent(
       pendingKind,
       report.copyWith(queueType: queueType).toJson(),
     );
+    if (_digestOrNull(DirectErrorReport.fromJson(stored)) !=
+        _digestOrNull(report)) {
+      return DirectReportDeliveryResult.failed(
+        ReportMessages.reportIdConflict,
+        isIdConflict: true,
+      );
+    }
+    return null;
   }
 
   Future<void> _saveSentReport(
