@@ -230,6 +230,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     return BlocBuilder<NavigationBloc, NavigationState>(
       builder: (context, navState) {
         return BlocBuilder<SettingsBloc, SettingsState>(
+          // הכותרת מציגה רק אלה, וגרירת סליידר גופן לא תבנה מחדש כל כרטיסיה.
+          // הקיצורים נקראים מ-Settings ב-build, ולכן נבדקת זהות המפה.
+          buildWhen: (previous, current) =>
+              previous.readingTabsOnSide != current.readingTabsOnSide ||
+              previous.isFullscreen != current.isFullscreen ||
+              !identical(previous.shortcuts, current.shortcuts),
           builder: (context, settingsState) {
             final stackedTabs = _useStackedTabs(context, navState);
             // במסך עיון ללא טאבים פתוחים אין תוכן קריאה אמיתי, ולכן המסגרת
