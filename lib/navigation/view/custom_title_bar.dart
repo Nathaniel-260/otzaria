@@ -1003,6 +1003,12 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     final isSelected = index == state.currentTabIndex;
     final closeTabShortcut =
         Settings.getValue<String>('key-shortcut-close-tab') ?? 'ctrl+w';
+    final closeTabLabel = context.settingsText('סגור כרטיסיה');
+    // קיצור הסגירה פועל רק על הכרטיסיה הפעילה.
+    final closeTabTooltip = isSelected
+        ? '$closeTabLabel '
+              '(${ShortcutHelper.formatShortcutForDisplay(closeTabShortcut)})'
+        : closeTabLabel;
 
     final isTabHovered = identical(_hoveredTab, tab);
 
@@ -1188,10 +1194,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                 ),
                                 if (showClose)
                                   _tabCloseButton(
-                                    tooltip:
-                                        ShortcutHelper.formatShortcutForDisplay(
-                                          closeTabShortcut,
-                                        ),
+                                    tooltip: closeTabTooltip,
                                     width: closeExtent,
                                     onPressed: () => closeTab(tab, context),
                                   ),
