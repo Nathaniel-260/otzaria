@@ -425,6 +425,93 @@ void main() {
     );
   });
 
+  group('שינוי הגדרות', () {
+    late _TestSettingsBloc settingsBloc;
+
+    Future<void> pumpBar(WidgetTester tester) async {
+      final tabs = [for (var i = 0; i < 5; i++) _makeTextTab('ספר $i')];
+      final tabsBloc = _TestTabsBloc(TabsState(tabs: tabs, currentTabIndex: 0));
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      settingsBloc = _TestSettingsBloc(SettingsState.initial());
+      addTearDown(() async {
+        for (final tab in tabs) {
+          tab.dispose();
+        }
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> emitSettings(WidgetTester tester, SettingsState state) async {
+      settingsBloc.emitState(state);
+      await tester.pump();
+      await tester.pump();
+    }
+
+    ReadingTabStrip strip(WidgetTester tester) =>
+        tester.widget<ReadingTabStrip>(find.byType(ReadingTabStrip));
+
+    testWidgets('הגדרה שהכותרת אינה מציגה אינה בונה מחדש את הרצועה', (
+      tester,
+    ) async {
+      await pumpBar(tester);
+      final before = strip(tester);
+
+      await emitSettings(tester, settingsBloc.state.copyWith(fontSize: 30));
+
+      expect(identical(strip(tester), before), isTrue);
+    });
+
+    testWidgets('מיקום, מסך מלא וקיצורים עדיין מתעדכנים בכותרת', (
+      tester,
+    ) async {
+      ShortcutHelper.isMacForTesting = false;
+      addTearDown(() => ShortcutHelper.isMacForTesting = null);
+      await pumpBar(tester);
+      await emitSettings(
+        tester,
+        settingsBloc.state.copyWith(
+          readingTabsPlacement: SettingsRepository.readingTabsPlacementSide,
+        ),
+      );
+      expect(find.byType(ReadingTabStrip), findsNothing);
+      await emitSettings(
+        tester,
+        settingsBloc.state.copyWith(
+          readingTabsPlacement: SettingsRepository.readingTabsPlacementTop,
+        ),
+      );
+      expect(find.byType(ReadingTabStrip), findsOneWidget);
+      expect(find.byTooltip('מסך מלא'), findsOneWidget);
+
+      await emitSettings(
+        tester,
+        settingsBloc.state.copyWith(isFullscreen: true),
+      );
+      expect(find.byTooltip('צא ממסך מלא'), findsOneWidget);
+
+      await Settings.setValue<String>('key-shortcut-open-history', 'ctrl+j');
+      await emitSettings(
+        tester,
+        settingsBloc.state.copyWith(
+          shortcuts: const {'key-shortcut-open-history': 'ctrl+j'},
+        ),
+      );
+      expect(find.byTooltip('הצג היסטוריה (CTRL + J)'), findsOneWidget);
+    });
+  });
+
   testWidgets('כרטיסיות מקבלות רוחב קבוע שווה, חסום בתקרה (~140px)', (
     tester,
   ) async {
@@ -2624,6 +2711,8 @@ class _TestSettingsBloc extends Bloc<SettingsEvent, SettingsState>
   _TestSettingsBloc(super.initialState) {
     on<SettingsEvent>((event, emit) {});
   }
+
+  void emitState(SettingsState state) => emit(state);
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
