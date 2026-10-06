@@ -1558,15 +1558,24 @@ class IndexingRepository {
   static bool _hasExternalIdentity(Book book) =>
       book.externalLibraryId != null && book.externalLibraryId!.isNotEmpty;
 
-  static String catalogueOrderKey(Book book) => catalogueOrderKeyFromParts(
-    title: book.title,
-    externalLibraryId: book.externalLibraryId,
-    bookId: book.id,
-    source: book.source,
-    categoryKey: book.category?.path ?? book.categoryPath,
-    fileTypeKey: book.fileType ?? book.runtimeType.toString(),
-    pathKey: book is FileBook ? book.path : book.filePath,
-  );
+  static String catalogueOrderKey(Book book) {
+    // נתיב הקטגוריה נבנה בהליכה על העץ, ורק מפתח בלי id או מזהה חיצוני זקוק לו.
+    if (book.id != null || _hasExternalIdentity(book)) {
+      return catalogueOrderKeyFromParts(
+        title: book.title,
+        externalLibraryId: book.externalLibraryId,
+        bookId: book.id,
+        source: book.source,
+      );
+    }
+    return catalogueOrderKeyFromParts(
+      title: book.title,
+      source: book.source,
+      categoryKey: book.category?.path ?? book.categoryPath,
+      fileTypeKey: book.fileType ?? book.runtimeType.toString(),
+      pathKey: book is FileBook ? book.path : book.filePath,
+    );
+  }
 
   /// אותו מפתח מרכיבים גולמיים, למי שאין בידיו [Book] (נתיב ה-facet של
   /// החיפוש). מקור אמת יחיד — כל סטייה כאן מפצלת ספר לשתי זהויות.
