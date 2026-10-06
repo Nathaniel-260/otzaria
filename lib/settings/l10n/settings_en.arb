@@ -1259,6 +1259,7 @@
   "דואר אלקטרוני (לא חובה)": "Email (optional)",
   "המערכת מעתיקה את הקובץ שנבחר… זה עלול להימשך כמה דקות": "The system is copying the selected file… this may take a few minutes",
   "העתקת הקובץ שנבחר נכשלה — בדוק שיש די מקום פנוי באחסון הפנימי": "Copying the selected file failed — check that there is enough free space in internal storage",
+  "פתיחת חלון בחירת הקובץ נכשלה: {error}": "Opening the file picker failed: {error}",
   "@@comment_attached_libraries": "מסדי ספרים אישיים — lib/attached_libraries/view/attached_libraries_panel.dart",
   "בחר קובץ מסד ספרים": "Choose a Seforim Database File",
   "הסרת תיקיית מסדים": "Remove Database Folder",

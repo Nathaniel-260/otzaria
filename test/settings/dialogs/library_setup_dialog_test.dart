@@ -440,6 +440,30 @@ void main() {
       await tester.pumpAndSettle(const Duration(seconds: 4));
     });
 
+    testWidgets(
+      'בשולחן העבודה כשל בבורר מציג את השגיאה ולא הודעת מקום (#1898)',
+      (tester) async {
+        final picker = _CopyingFilePickerPlatform(
+          '${temp.path}/seforim.db',
+          fails: true,
+        );
+        FilePickerPlatform.instance = picker;
+        await tapPickFile(tester);
+        picker.finishCopy();
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.textContaining('פתיחת חלון בחירת הקובץ נכשלה'),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Failed to retrieve path'), findsOneWidget);
+        expect(find.textContaining('מקום פנוי'), findsNothing);
+        await tester.pumpAndSettle(const Duration(seconds: 4));
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+    );
+
     testWidgets('בזמן ההעתקה אי אפשר להחליף פעולה', (tester) async {
       final picker = _CopyingFilePickerPlatform('${temp.path}/seforim.db');
       FilePickerPlatform.instance = picker;

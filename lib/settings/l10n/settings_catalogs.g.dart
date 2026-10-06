@@ -1145,6 +1145,7 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'פתיחת גימטריה': 'Open Gematria',
     'פתיחת הערות אישיות': 'Open Personal Notes',
     'פתיחת הערות אישיות במצב סגור': 'Open Personal Notes collapsed',
+    'פתיחת חלון בחירת הקובץ נכשלה: {error}': 'Opening the file picker failed: {error}',
     'פתיחת כלים': 'Open Tools',
     'פתיחת לוח שנה': 'Open the Calendar',
     'פתיחת מדות ושיעורים': 'Open Midos U\'Shiurim',
