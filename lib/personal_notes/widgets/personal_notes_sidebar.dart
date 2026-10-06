@@ -401,6 +401,8 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
       showOnlyVisible: state.showOnlyVisible,
       visibleLineIndices: visibleLineIndices,
     );
+    // רשימה משותפת לכל הכרטיסים: העתקה לכל כרטיס ריבועית במספר ההערות.
+    final linkableNotes = [...state.locatedNotes, ...state.missingNotes];
     final items = <Widget>[];
 
     // עורך הערה חדשה — מוצג רק אם הטיוטה שייכת לספר של ה-sidebar הזה.
@@ -432,10 +434,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
                 : null,
             bookId: widget.bookId,
             categoryId: widget.categoryId,
-            linkableNotes: [
-              ...state.locatedNotes,
-              ...state.missingNotes,
-            ],
+            linkableNotes: linkableNotes,
             extraAction: IconButton(
               tooltip: 'שנה שיוך לשורה נבחרת',
               icon: const Icon(FluentIcons.pin_24_regular, size: 18),
@@ -479,10 +478,7 @@ class PersonalNotesSidebarState extends State<PersonalNotesSidebar>
             onLinkTap: (url) => _handleNoteLinkTap(context, url),
             defaultExpanded: defaultExpanded,
             bookId: widget.bookId,
-            linkableNotes: [
-              ...state.locatedNotes,
-              ...state.missingNotes,
-            ],
+            linkableNotes: linkableNotes,
             backgroundColor: Theme.of(
               context,
             ).colorScheme.surfaceTint.withValues(alpha: 0.05),
