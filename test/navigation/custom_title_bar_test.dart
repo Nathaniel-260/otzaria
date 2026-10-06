@@ -2012,6 +2012,58 @@ void main() {
         reason: 'הטאב שנסגר הוא הטאב שעל ה-X שלו נלחץ',
       );
     });
+
+    testWidgets('קיצור הסגירה מוצג רק ב-tooltip של ה-X בטאב הפעיל '
+        '(issue #2000)', (tester) async {
+      final first = _makeTextTab('ספר א');
+      final second = _makeTextTab('ספר ב');
+      final tabsBloc = _TestTabsBloc(
+        TabsState(tabs: [first, second], currentTabIndex: 0),
+      );
+      final navigationBloc = _TestNavigationBloc(
+        const NavigationState(currentScreen: Screen.reading),
+      );
+      final settingsBloc = _TestSettingsBloc(SettingsState.initial());
+
+      addTearDown(() async {
+        first.dispose();
+        second.dispose();
+        await tabsBloc.close();
+        await navigationBloc.close();
+        await settingsBloc.close();
+      });
+
+      await _setSurfaceSize(tester, const Size(1200, 800));
+      await _pumpTitleBar(
+        tester,
+        tabsBloc: tabsBloc,
+        navigationBloc: navigationBloc,
+        settingsBloc: settingsBloc,
+      );
+
+      String closeTooltipOf(String title) => tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.descendant(
+                of: find.ancestor(
+                  of: find.text(title),
+                  matching: find.byType(Tab),
+                ),
+                matching: find.byIcon(FluentIcons.dismiss_24_regular),
+              ),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .tooltip!;
+
+      final shortcut = ShortcutHelper.formatShortcutForDisplay('ctrl+w');
+      expect(closeTooltipOf('ספר א'), 'סגור כרטיסיה ($shortcut)');
+      expect(
+        closeTooltipOf('ספר ב'),
+        'סגור כרטיסיה',
+        reason: 'הקיצור סוגר רק את הטאב הפעיל',
+      );
+    });
   });
 
   testWidgets('סגירת טאב כשהעכבר בשורה שומרת על רוחב הטאבים (לא מתרחבים)', (
