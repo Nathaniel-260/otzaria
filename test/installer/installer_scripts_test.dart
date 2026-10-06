@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/plugins/services/bundled_plugin_seed_service.dart';
+import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:otzaria/semantic_search/models/semantic_import_layout.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 
@@ -1245,6 +1246,55 @@ void main() {
           reason:
               'רשומה שמצביעה על {app} (או בלי uninstaller) נמחקת '
               'מהרישום בלבד',
+        );
+      });
+    }
+  });
+
+  group('הסרה מוחקת את רישום הפרוטוקול otzaria://', () {
+    const scheme = PluginProtocolRegistrationService.scheme;
+    const classKey = 'Software\\Classes\\$scheme';
+
+    for (final name in _scripts) {
+      test('$name: מפתח הפרוטוקול של המתקין נמחק בהסרה', () {
+        final flags = [
+          for (final line in _section(_script(name), 'Registry').split('\n'))
+            if (line.startsWith('Root: HKA; Subkey: "$classKey";'))
+              ...RegExp(
+                r'Flags:([^;]*)',
+              ).firstMatch(line)!.group(1)!.trim().split(RegExp(r'\s+')),
+        ];
+        expect(
+          flags,
+          contains('uninsdeletekey'),
+          reason:
+              'ב-uninsdeletekeyifempty המפתח לעולם אינו ריק (ערך ברירת המחדל '
+              'נשאר), ו-otzaria:// נשאר מצביע על EXE שהוסר',
+        );
+      });
+
+      test('$name: המפתח שהאפליקציה רושמת ב-HKCU נמחק רק אם הוא שלנו', () {
+        final script = _script(name);
+        final body = _routine(
+          script,
+          'procedure RemoveUserProtocolKeyIfOurs();',
+        );
+        expect(body, contains("'$classKey\\DefaultIcon'"));
+        expect(
+          body,
+          contains("RegDeleteKeyIncludingSubkeys(HKCU, '$classKey')"),
+          reason: 'בהתקנת מנהל HKA הוא HKLM, והמפתח שהאפליקציה כתבה נשאר',
+        );
+        expect(
+          body,
+          contains(
+            "SameInstallDir(ExtractFileDir(ExePath), ExpandConstant('{app}'))",
+          ),
+          reason: 'מפתח שמצביע על התקנה אחרת שנשארת אסור למחוק',
+        );
+        expect(
+          _routine(script, 'procedure CurUninstallStepChanged('),
+          contains('RemoveUserProtocolKeyIfOurs();'),
         );
       });
     }

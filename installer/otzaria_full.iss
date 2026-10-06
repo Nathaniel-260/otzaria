@@ -113,7 +113,9 @@ Name: "{code:GetDataDir}\books"; Permissions: users-modify; Check: not IsPortabl
 Name: "{code:GetDataDir}\index"; Permissions: users-modify; Check: not IsPortableInstall
 
 [Registry]
-Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: ""; ValueData: "URL:Otzaria Protocol"; Flags: uninsdeletekeyifempty; Check: not IsPortableInstall
+; uninsdeletekey ולא ifempty: ערכי ברירת המחדל שכאן אינם נמחקים בהסרה, ולכן
+; המפתח אינו מתרוקן לעולם ונשאר מצביע על EXE שהוסר.
+Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: ""; ValueData: "URL:Otzaria Protocol"; Flags: uninsdeletekey; Check: not IsPortableInstall
 Root: HKA; Subkey: "Software\Classes\otzaria"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Flags: uninsdeletevalue; Check: not IsPortableInstall
 Root: HKA; Subkey: "Software\Classes\otzaria\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\{#MyAppExeName}"; Flags: uninsdeletekeyifempty; Check: not IsPortableInstall
 Root: HKA; Subkey: "Software\Classes\otzaria\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\{#MyAppExeName}"" ""%1"""; Flags: uninsdeletekeyifempty; Check: not IsPortableInstall
@@ -1642,6 +1644,17 @@ begin
   end;
 end;
 
+// אוצריא רושמת את otzaria:// גם ב-HKCU בכל הפעלה; בהתקנת מנהל המפתח הזה אינו
+// של המתקין, ולכן נמחק רק כשהוא מצביע על {app} ולא על התקנה אחרת שנשארת.
+procedure RemoveUserProtocolKeyIfOurs();
+var
+  ExePath: String;
+begin
+  if RegQueryStringValue(HKCU, 'Software\Classes\otzaria\DefaultIcon', '', ExePath) and
+     SameInstallDir(ExtractFileDir(ExePath), ExpandConstant('{app}')) then
+    RegDeleteKeyIncludingSubkeys(HKCU, 'Software\Classes\otzaria');
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usPostUninstall then
@@ -1651,6 +1664,7 @@ begin
     RemoveAppFromPathValue(HKCU, UserEnvironmentKey, ExpandConstant('{app}'));
     if IsAdminInstallMode then
       RemoveAppFromPathValue(HKLM, SystemEnvironmentKey, ExpandConstant('{app}'));
+    RemoveUserProtocolKeyIfOurs();
     if DeleteUserDataOnUninstall then
       DeleteAllUserData();
     // הסרה בהיקף אחד מסירה גם התקנה שנשארה בהיקף הנגדי (issue #1020).
