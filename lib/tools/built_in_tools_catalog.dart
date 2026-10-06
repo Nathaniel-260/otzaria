@@ -47,7 +47,7 @@ const List<BuiltInToolMeta> kBuiltInToolsCatalog = [
     toolId: 'builtin.shamor_zachor',
     label: 'שמור וזכור',
     order: 20,
-    imageIcon: 'assets/icon/שמור וזכור שחור ריק.png',
+    imageIcon: 'assets/icon/shamor_zachor.png',
   ),
   BuiltInToolMeta(
     toolId: 'builtin.measurements',

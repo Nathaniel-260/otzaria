@@ -211,6 +211,7 @@ Filename: "{app}\system_install.marker"; Section: "Install"; Key: "Mode"; String
 
 [Code]
 #include "bundled_plugins_network_check.iss"
+#include "install_dir_length_check.iss"
 const
   UninstallRegKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{EEC4F712-CD05-4D15-A753-509E840A51A5}_is1';
   SystemEnvironmentKey = 'SYSTEM\CurrentControlSet\Control\Session Manager\Environment';
@@ -900,6 +901,12 @@ var
   HasLibraryPayload: Boolean;
 begin
   Result := True;
+  // גם בהתקנה שקטה עם /DIR: False עוצר כאן, לפני שנכתב קובץ כלשהו.
+  if (CurPageID = wpSelectDir) and InstallDirTooLong() then
+  begin
+    Result := False;
+    exit;
+  end;
   if CurPageID = wpReady then
   begin
     HasLibraryPayload := DirExists(ExpandConstant('{src}\semantic-import'));
