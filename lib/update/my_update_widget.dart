@@ -29,7 +29,10 @@ import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'app_release_version.dart';
 import 'differential/differential_update_service.dart';
+import 'differential/swap_plan.dart' show kSwapBackupDirName;
 import 'differential/swap_recovery.dart';
+import 'differential/update_engine.dart'
+    show fullPackageSwapPlan, writeSwapPlanFile;
 import 'differential/installed_release.dart';
 import 'differential/zstd_runner.dart';
 import 'hebrew_update_widgets.dart';
@@ -895,17 +898,27 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   Future<void> _installNow() async {
     if (_installerFile == null && _differentialUpdate == null) return;
     final differential = _differentialUpdate;
+    final installer = _installerFile;
     final launched = await _launchInstaller(relaunchApp: true);
     if (shouldDestroyWindowAfterInstallNow(installerLaunched: launched)) {
       // איפוס המקורות מונע שיגור כפול כשאירוע הסגירה יגיע ל-hook.
       _installerFile = null;
       _differentialUpdate = null;
       if (mounted) setState(() => _awaitingCloseForUpdate = true);
-      if (differential != null) {
+      final portableZip =
+          Platform.isWindows &&
+          (installer?.path.toLowerCase().endsWith('.zip') ?? false);
+      final updaterWorkRoot =
+          differential?.staged.workRoot ??
+          (portableZip ? differentialWorkDirectory() : null);
+      if (updaterWorkRoot != null) {
         _updaterGiveUpWatch?.cancel();
         _updaterGiveUpWatch = watchForUpdaterGiveUp(
-          differential.staged.workRoot,
-          () => _restorePreparedUpdate(differential),
+          updaterWorkRoot,
+          () => _restorePreparedUpdate(
+            differential: differential,
+            installer: installer,
+          ),
         );
       }
       // ⚠️ המעדכן מחליף קבצים רק אחרי שהתהליך יצא, וכל חלון הוא isolate
@@ -918,10 +931,14 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   }
 
   /// המעדכן ויתר לפני שנגע בהתקנה — חוזרים ל"מוכן להתקנה" עם אותו staging.
-  void _restorePreparedUpdate(PreparedDifferentialUpdate prepared) {
+  void _restorePreparedUpdate({
+    PreparedDifferentialUpdate? differential,
+    File? installer,
+  }) {
     if (!mounted) return;
     setState(() {
-      _differentialUpdate = prepared;
+      _differentialUpdate = differential;
+      _installerFile = installer;
       _awaitingCloseForUpdate = false;
       _status = UpdatStatus.readyToInstall;
     });
@@ -1163,6 +1180,12 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
 
     if (Platform.isLinux && _isLinuxPortableInstall()) {
+      await _openReleasePageForManualUpdate();
+      return;
+    }
+    if (Platform.isWindows &&
+        _preferredWindowsFormat() == 'zip' &&
+        !_canSwapWindowsPortable()) {
       await _openReleasePageForManualUpdate();
       return;
     }
@@ -1472,27 +1495,53 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
       }
     }
 
-    // ב-Windows גם החבילה הניידת חייבת את מסלול ה-breakaway: openInstaller
-    // משגר דרך המעטפת, והתהליך שנוצר חי בתוך ה-Job של אוצריא ונהרג ביציאתה.
     if (Platform.isWindows && lowerPath.endsWith('.zip')) {
-      final executable = _extractedWindowsExecutable(installer);
-      if (!launchWindowsDetachedProcess(executable.absolute.path)) {
-        throw Exception('Failed to launch the extracted update');
-      }
+      await _launchWindowsPortableSwap(installer, relaunchApp: relaunchApp);
       return;
     }
 
     await openInstaller(installer, 'otzaria');
   }
 
-  /// מאתרת את קובץ ההרצה בתוך חבילת ה-zip שחולצה ליד קובץ ההורדה
-  /// (ראה [downloadReleaseFile]).
-  File _extractedWindowsExecutable(File zipFile) {
-    final outDir = Directory(p.join(p.dirname(zipFile.path), 'otzaria'));
-    final entry = outDir.listSync().firstWhere(
-      (e) => e.path.toLowerCase().endsWith('.exe'),
+  /// מחליף את קובצי התיקייה הניידת בקבצים שחולצו מה-zip, דרך המעדכן העצמאי
+  /// ואחרי יציאת אוצריא — כמו העדכון המצומצם.
+  Future<void> _launchWindowsPortableSwap(
+    File zipFile, {
+    required bool relaunchApp,
+  }) async {
+    final installRoot = Directory(p.dirname(Platform.resolvedExecutable));
+    final work = differentialWorkDirectory();
+    final plan = await fullPackageSwapPlan(
+      installRoot: installRoot,
+      stagingRoot: Directory(p.join(p.dirname(zipFile.path), 'otzaria')),
+      backupRoot: Directory(p.join(work.path, kSwapBackupDirName)),
+      platform: 'windows',
+      architecture: installedWindowsArchitecture(
+        isWindowsOnArm: WindowsArchInfo.isWindowsOnArm,
+        isEmulatedOnArm: WindowsArchInfo.isEmulatedOnArm,
+      ),
+      fromReleaseTag: _currentVersion ?? 'unknown',
+      toReleaseTag: _latestVersion ?? 'unknown',
+      relaunchExecutable: relaunchApp ? Platform.resolvedExecutable : null,
+      waitForPid: pid,
     );
-    return File(entry.path);
+    final planFile = await writeSwapPlanFile(plan, work);
+    final helper = File(p.join(installRoot.path, kUpdaterHelperFileName));
+    if (!launchWindowsDetachedProcess(
+      helper.absolute.path,
+      arguments: ['--plan', planFile.absolute.path],
+    )) {
+      throw Exception('Failed to launch the updater helper');
+    }
+  }
+
+  /// בהתקנה ניידת ב-Windows העדכון מוחל במקום רק דרך המעדכן העצמאי.
+  bool _canSwapWindowsPortable() {
+    final installRoot = Directory(p.dirname(Platform.resolvedExecutable));
+    return File(
+          p.join(installRoot.path, kUpdaterHelperFileName),
+        ).existsSync() &&
+        isDirectoryWritable(installRoot);
   }
 
   void _dismissUpdate() {
