@@ -4611,9 +4611,7 @@ class DatabaseLibraryProvider implements LibraryProvider {
     if (link.path2.isEmpty) return 'שגיאה: נתיב ריק';
     if (link.index2 <= 0) return 'שגיאה: אינדקס לא תקין';
 
-    final targetTitle = link.path2.contains('/')
-        ? _bookTitleFromLinkPath(link.path2)
-        : link.path2;
+    final targetTitle = _bookTitleFromLinkPath(link.path2);
 
     final repository = _sqliteProvider.repository;
     if (repository == null) return 'שגיאה: מאגר לא מאותחל';
