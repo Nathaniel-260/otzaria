@@ -175,11 +175,7 @@ class _TocRefLookup {
   }
 
   String refAt(int index) {
-    var lo = 0, hi = _sortedKeys.length;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      _sortedKeys[mid] <= index ? lo = mid + 1 : hi = mid;
-    }
+    final lo = _countAtMost(_sortedKeys, index);
     if (lo == 0) return '';
     final root = _roots[lo - 1];
     final parts = <String>[];
@@ -190,6 +186,15 @@ class _TocRefLookup {
     }
     return parts.reversed.where((part) => part.isNotEmpty).join(', ');
   }
+}
+
+int _countAtMost(List<int> sorted, int value) {
+  var lo = 0, hi = sorted.length;
+  while (lo < hi) {
+    final mid = (lo + hi) >> 1;
+    sorted[mid] <= value ? lo = mid + 1 : hi = mid;
+  }
+  return lo;
 }
 
 /// מחזירה כתובת תצוגה מלאה ואחידה עבור ספר יעד.
@@ -414,24 +419,35 @@ String referenceFromPageNumber(
   return texts.join(', ');
 }
 
-/// Returns the index of the last [TocEntry] whose [index] is less than or equal
-/// to [targetIndex]. If no such entry exists, returns `null`.
+/// האינדקס הגדול ביותר מבין הכותרות שהאינדקס שלהן ושל כל אבותיהן <=
+/// [targetIndex], או null. נקראת בכל גלילה, ולכן במבנה עזר שנבנה פעם אחת לכל עץ.
 int? closestTocEntryIndex(List<TocEntry> entries, int targetIndex) {
-  TocEntry? closest;
+  final (:keys, :best) = _closestTocLookups[entries] ??= _closestTocLookup(
+    entries,
+  );
+  final count = _countAtMost(keys, targetIndex);
+  return count == 0 ? null : best[count - 1];
+}
 
-  void search(List<TocEntry> toc) {
-    for (final entry in toc) {
-      if (entry.index <= targetIndex) {
-        if (closest == null || entry.index > closest!.index) {
-          closest = entry;
-        }
-        search(entry.children);
-      }
+final _closestTocLookups = Expando<({List<int> keys, List<int> best})>();
+
+/// מפתח כותרת = מקסימום האינדקסים שלה ושל אבותיה; ממוין, עם מקסימום מצטבר.
+({List<int> keys, List<int> best}) _closestTocLookup(List<TocEntry> toc) {
+  final pairs = <(int, int)>[];
+  final pending = [for (final entry in toc) (entry, entry.index)];
+  while (pending.isNotEmpty) {
+    final (entry, key) = pending.removeLast();
+    pairs.add((key, entry.index));
+    for (final child in entry.children) {
+      pending.add((child, max(key, child.index)));
     }
   }
-
-  search(entries);
-  return closest?.index;
+  pairs.sort((a, b) => a.$1.compareTo(b.$1));
+  final best = <int>[];
+  for (final (_, index) in pairs) {
+    best.add(max(index, best.lastOrNull ?? index));
+  }
+  return (keys: [for (final (key, _) in pairs) key], best: best);
 }
 
 /// הקטע שתחת הכותרת הקרובה ל-[line] (מעליה או בה): מהכותרת ועד הכותרת הבאה
