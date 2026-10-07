@@ -94,8 +94,13 @@ void pruneCommentaryExpansionStates(
   Map<String, bool> states,
   List<Link> links,
 ) {
-  final titles = {for (final l in links) utils.getTitleFromPath(l.path2)};
-  states.removeWhere((key, value) => !titles.contains(key));
+  if (states.isEmpty) return;
+  final missing = states.keys.toSet();
+  for (final link in links) {
+    missing.remove(utils.getTitleFromPath(link.path2));
+    if (missing.isEmpty) return;
+  }
+  states.removeWhere((key, value) => missing.contains(key));
 }
 
 /// מפתחות צ׳יפי סוגי המפרשים שקיימים בפועל בקישורי הקטע, בסדר

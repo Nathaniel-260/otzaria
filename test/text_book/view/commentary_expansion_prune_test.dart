@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +14,27 @@ Link _link(String path2, {int index2 = 1}) => Link(
   connectionType: 'commentary',
 );
 
+class _CountingLinks extends ListBase<Link> {
+  final List<Link> links;
+  int reads = 0;
+
+  _CountingLinks(this.links);
+
+  @override
+  int get length => links.length;
+  @override
+  set length(int value) => throw UnsupportedError('read only');
+  @override
+  Link operator [](int index) {
+    reads++;
+    return links[index];
+  }
+
+  @override
+  void operator []=(int index, Link value) =>
+      throw UnsupportedError('read only');
+}
+
 void main() {
   group('pruneCommentaryExpansionStates', () {
     // המימוש הקודם, כאורקל: any() על כל הקישורים לכל מפתח.
@@ -21,6 +43,36 @@ void main() {
           (key, _) =>
               !links.any((link) => key == utils.getTitleFromPath(link.path2)),
         );
+
+    test('מפה ריקה אינה קוראת קישורים', () {
+      final links = _CountingLinks([_link('רש"י.txt')]);
+      pruneCommentaryExpansionStates({}, links);
+      expect(links.reads, 0);
+    });
+
+    test('מפרש יחיד עוצר בקישור הראשון שלו', () {
+      final links = _CountingLinks([
+        for (var i = 0; i < 1000; i++) _link('רש"י.txt', index2: i + 1),
+      ]);
+      final states = {'רש"י': false};
+      pruneCommentaryExpansionStates(states, links);
+      expect(states, {'רש"י': false});
+      expect(links.reads, 1);
+    });
+
+    test('עוצר כשכל המפתחות נמצאו גם עם כפילויות ומפתח ריק', () {
+      final links = _CountingLinks([
+        _link('רש"י.txt'),
+        _link('רש"י.txt', index2: 2),
+        _link(''),
+        _link('רמב"ן.txt'),
+        _link('ספורנו.txt'),
+      ]);
+      final states = {'רש"י': false, '': true, 'רמב"ן': true};
+      pruneCommentaryExpansionStates(states, links);
+      expect(states, {'רש"י': false, '': true, 'רמב"ן': true});
+      expect(links.reads, 4);
+    });
 
     test('מסיר רק מפרשים שאין להם קישור', () {
       final states = {'רש"י': true, 'רמב"ן': false, 'אבן עזרא': true};
