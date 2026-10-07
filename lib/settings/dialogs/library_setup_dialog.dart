@@ -16,6 +16,7 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
 import 'package:otzaria/empty_library/services/library_package/library_source.dart';
@@ -28,16 +29,6 @@ import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/move_directory.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
-
-// ── דיאלוג מאוחד להגדרת/עדכון מיקום הספרייה ────────────────────────────────
-//
-// כרטיס "פעולה" בוחר את *מקור* הקבצים: הורדה מהאינטרנט, תיקייה שבה נמצאים
-// קובצי הספרייה, ובמצב עדכון גם העברת תוכן הספרייה הקיימת. מקטע "תיקיית היעד"
-// בוחר *לאן* הקבצים ילכו — תחת התיקייה שתיבחר נוצרות "books" ו-"index".
-// "שימוש בספרייה קיימת במקומה" הוא היוצא מן הכלל: אין העתקה ואין יעד — הנתיב
-// שנבחר נשמר כמות שהוא, והאינדקס נקבע תחת השורש שלו.
-// כשיש ספרייה קיימת והיעד נשאר במקום הנוכחי — עדכון במקום עם גיבוי בטוח;
-// כשהיעד שונה — רלוקציה: הקבצים נכתבים ליעד החדש, והישנים נמחקים בהצלחה.
 
 /// דיאלוג מאוחד להגדרת/עדכון מיקום הספרייה. יוצר [EmptyLibraryBloc] משלו
 /// ומחזיר `true` אם הספרייה הוגדרה/עודכנה/הועברה בהצלחה.
@@ -74,6 +65,23 @@ EmptyLibraryBloc Function()? debugCreateLibrarySetupBloc;
 /// מחליף את בורר התיקיות של אנדרואיד בבדיקות.
 @visibleForTesting
 Future<PackageFolder?> Function()? debugPickAndroidSourceFolder;
+
+/// מחליף את יעדי האחסון של אנדרואיד בבדיקות (ומדמה בכך אנדרואיד).
+@visibleForTesting
+Future<List<({bool isRemovable, String root})>> Function()?
+debugAndroidStorageChoices;
+
+/// אחסון פנימי, ולצדו כל כרטיס SD (תיקיית האפליקציה שעליו).
+Future<List<({bool isRemovable, String root})>> _androidStorageChoices() async {
+  final internal = (isRemovable: false, root: await AppPaths.getDataRootPath());
+  final options = await AndroidStorageService.listStorageOptions();
+  return [
+    internal,
+    for (final option in options)
+      if (option.libraryRoot != null)
+        (isRemovable: true, root: option.libraryRoot!),
+  ];
+}
 
 enum _LibraryAction { moveContents, useInPlace, download, chooseFolder }
 
@@ -174,6 +182,9 @@ class _LibrarySetupDialogContentState
   /// סיכום הייבוא כשחסרים בספרייה רכיבים; הדיאלוג נסגר רק אחרי שהמשתמש ראה.
   LibraryImportReport? _report;
 
+  /// יעדי האחסון באנדרואיד; null בשולחן העבודה (בורר תיקיות חופשי).
+  List<({bool isRemovable, String root})>? _storageChoices;
+
   bool get _hasLibrary => (widget.currentLibraryPath ?? '').isNotEmpty;
 
   /// שימוש במקום מוצע בשולחן העבודה בלבד: ב-Android/iOS ספרייה בתיקייה שאינה
@@ -197,6 +208,14 @@ class _LibrarySetupDialogContentState
     _targetRoot = _hasLibrary
         ? _currentRoot
         : (widget.defaultTargetPath.isEmpty ? null : widget.defaultTargetPath);
+    if (Platform.isAndroid || debugAndroidStorageChoices != null) {
+      _storageChoices = const [];
+      (debugAndroidStorageChoices ?? _androidStorageChoices)()
+          .then((choices) {
+            if (mounted) setState(() => _storageChoices = choices);
+          })
+          .catchError((_) {});
+    }
     if (_hasLibrary) {
       // best-effort: הנתיב נחוץ רק למחיקת האינדקס הישן ברלוקציה.
       AppPaths.getIndexPath()
@@ -214,6 +233,10 @@ class _LibrarySetupDialogContentState
   }
 
   bool get _isAtDefaultRoot => _targetRoot == widget.defaultTargetPath;
+
+  bool get _targetOnSdCard =>
+      _storageChoices?.any((c) => c.isRemovable && c.root == _targetRoot) ??
+      false;
 
   Future<void> _pickTargetRoot() async {
     final path = await FilePicker.getDirectoryPath(
@@ -546,6 +569,14 @@ class _LibrarySetupDialogContentState
           if (context.mounted) Navigator.of(context).pop(true);
           return;
         }
+        // גילוי חסר אינו בחירה באחסון פנימי — שומרים רק יעד שאומת.
+        for (final choice in _storageChoices ?? const []) {
+          if (choice.root != _targetRoot) continue;
+          await AppPaths.setAndroidLibraryRoot(
+            choice.isRemovable ? choice.root : null,
+          );
+          break;
+        }
         final relocating = _isRelocating;
         // יעד שורש חדש (הגדרה או רלוקציה) — האינדקס יושב תחת אותו שורש.
         if ((!_hasLibrary || relocating) && _targetRoot != null) {
@@ -778,6 +809,16 @@ class _LibrarySetupDialogContentState
             onPickFolder: _pickTargetRoot,
             onUseDefault: () =>
                 setState(() => _targetRoot = widget.defaultTargetPath),
+            storageChoices: _storageChoices,
+            onSelectStorage: (root) => setState(() => _targetRoot = root),
+          ),
+        if (_targetOnSdCard)
+          MoveContentsWarning(
+            text: context.settingsText(
+              'אם הכרטיס יוסר, האפליקציה לא תוכל לגשת לספרים עד שיוחזר.\n\n'
+              'שים לב: תיקיית האפליקציה שבכרטיס נספרת כמטמון של האפליקציה — '
+              '"ניקוי מטמון" בהגדרות המכשיר ימחק ממנה את הספרייה.',
+            ),
           ),
         if (state is EmptyLibraryError && state.errorMessage != null)
           MoveContentsWarning(text: state.errorMessage!),

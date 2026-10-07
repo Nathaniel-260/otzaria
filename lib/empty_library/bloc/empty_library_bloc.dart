@@ -1408,6 +1408,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           await _extractCompressedDatabase(tempPath, outputPath, report);
         }
       }
+    } on FileSystemException {
+      // כשל כתיבה ביעד (הרשאה, מקום) אינו ארכיון פגום — שומרים לניסיון חוזר.
+      rethrow;
     } catch (_) {
       // חילוץ שנכשל על קובץ שלם (פגום/franken) משאיר temp שיגרום לדילוג על
       // ההורדה בניסיון הבא ולולאה אינסופית — מוחקים כדי לכפות הורדה מחדש.
