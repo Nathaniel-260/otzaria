@@ -88,6 +88,16 @@ bool shouldFocusScrollOnPointerDown(int buttons) =>
 String? captureSelectedTextForMenu(ValueListenable<String?> saved) =>
     saved.value;
 
+/// מסיר מ-[states] מפרשים שאין להם עוד קישור ב-[links].
+@visibleForTesting
+void pruneCommentaryExpansionStates(
+  Map<String, bool> states,
+  List<Link> links,
+) => states.removeWhere(
+  (key, value) =>
+      !links.any((link) => key == utils.getTitleFromPath(link.path2)),
+);
+
 /// מפתחות צ׳יפי סוגי המפרשים שקיימים בפועל בקישורי הקטע, בסדר
 /// [LinkTypes.commentaryFilterTypes]. סוג בלי קישורים אינו מקבל צ׳יפ.
 @visibleForTesting
@@ -2080,11 +2090,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
                     });
                   }
 
-                  _expansionStates.removeWhere(
-                    (key, value) => !data.any(
-                      (link) => key == utils.getTitleFromPath(link.path2),
-                    ),
-                  );
+                  pruneCommentaryExpansionStates(_expansionStates, data);
 
                   // מיירט גם את CopySelectionTextIntent, ולא רק את צירוף
                   // המקשים: בלעדיו Ctrl+C נופל להעתקת ברירת המחדל של Flutter,
