@@ -36,8 +36,7 @@ class AppWindowListener extends WindowListener {
     this.windowId = AppWindowId.primary,
     AppWindowController? window,
   }) : _window = window ?? const WindowManagerAppWindowController() {
-    // הערוץ היה חד-כיווני (Dart → נייטיב) עד כאן. כיבוי מערכת הוא המקרה
-    // הראשון שבו הנייטיב צריך לקרוא **לנו**.
+    // כיבוי מערכת מבקש מ-Dart לשטוף כתיבות לפני סיום התהליך.
     _processControlChannel.setMethodCallHandler(_handleProcessControlCall);
     if (!kIsWeb && Platform.isMacOS) {
       _macTerminationChannel.setMethodCallHandler(_handleMacTerminationCall);
@@ -283,66 +282,51 @@ class AppWindowListener extends WindowListener {
     if (_isClosing) {
       return;
     }
-    if (canClose != null && !canClose()) return;
-    // לפני _isClosing וכלב-השמירה: ביטול חייב להשאיר את התוכנה שלמה.
-    if (!await confirmAppCloseWithUnsavedChanges()) return;
-    if (_isClosing || (canClose != null && !canClose())) {
-      return;
-    }
     _isClosing = true;
     try {
-      // הגיבוב עשוי להימשך יותר מכלב השמירה של הכיבוי.
+      if (canClose != null && !canClose()) return;
+      if (!await confirmAppCloseWithUnsavedChanges()) return;
+      if (canClose != null && !canClose()) return;
+
+      // הגיבוב עשוי להימשך מעבר לכלב השמירה של הכיבוי.
+      // לכן הוא רץ אחרי האישור ולפני חימושו.
       await prepareUpdateForClose?.call();
-    } catch (_) {
-      _isClosing = false;
-      rethrow;
-    }
 
-    // ⚠️ **לפני** ההכרעה מי האחרון. סגירה של כמה חלונות יחד יכולה לגמור
-    // ב-`TerminateProcess` של ה-runner בלי ששום חלון ריץ את הכיבוי המסודר,
-    // ואז ה-canary נשאר וההפעלה הבאה מסרבת לטעון את התוספים. אידמפוטנטי.
-    PluginCrashGuard.markCleanShutdownSync();
-    StartupCrashCounter.markStableSync();
+      // כמה חלונות יכולים להיסגר יחד בלי ששום חלון יריץ כיבוי תהליך;
+      // מנקים canaries לפני ההכרעה מי האחרון כדי שלא יישארו בטעות.
+      PluginCrashGuard.markCleanShutdownSync();
+      StartupCrashCounter.markStableSync();
 
-    // ⚠️ הפיצול הוא לפי *בעלות* — מה פר-חלון ומה פר-תהליך — ולא לפי סדר.
-    // הצעד הפר-חלוני היחיד הוא ה-flush, והוא יושב באמצע רצף פר-תהליכי:
-    // אחרי סגירת ה-DB ולפני הדיווח והריגת התהליך. לכן החלק הפר-תהליכי
-    // מפוצל לשניים סביבו. **הסדר בין שלושת החלקים זהה לסדר המקורי של
-    // הצעדים, ואסור לשנותו** — הרצת ה-flush ראשון תקדים אותו לסגירת ה-DB.
-    // ⚠️ נשאל **פעם אחת**, בתחילת הסגירה. שאלה חוזרת אחרי ה-flush עלולה
-    // לקבל תשובה אחרת אם חלון אחר נסגר בינתיים, והתוצאה תהיה חצי כיבוי:
-    // הצעדים שלפני ה-flush רצו והצעדים שאחריו לא, או להפך.
-    final isLast = quit || await _isLastWindowClosing();
-    final endsProcess = isLast && (quit || !_keepsProcessAfterLastWindow);
+      // מכריעים פעם אחת: ספירה חוזרת אחרי ה-flush עלולה להשלים חצי כיבוי.
+      final isLast = quit || await _isLastWindowClosing();
+      final endsProcess = isLast && (quit || !_keepsProcessAfterLastWindow);
 
-    if (endsProcess) {
-      // לפני הפירוק: כשל בהמשך הסגירה אינו קריסה שכדאי להציע לדווח עליה.
-      AppCrashSession.markCleanExitSync();
-      await _shutdownProcessUpToFlush();
-    }
-    final flushFailure = await _closeWindowScoped();
-    if (endsProcess) {
-      await _shutdownProcessAfterFlush(flushFailure);
-    } else {
-      // חלון אחד מתוך כמה: לסגור רק אותו. `setPreventClose(true)` מנע את
-      // הסגירה הרגילה, ובלי הסגירה המפורשת החלון היה נשאר פתוח.
-      //
-      // ⚠️ אחרי ה-flush ולפני הסגירה. המשתמש סגר את החלון הזה במכוון,
-      // ולכן הסשן שלו אינו "פתוח" יותר: השארתו הייתה מחזירה בהפעלה הבאה
-      // כרטיסיות שהוא בחר לסגור (`adoptOrphanWindowSessions`).
-      // `Ctrl+Shift+T` אינו נשען עליו אלא על המנוע שנשאר חי בזיכרון.
-      // החלון האחרון במק נשאר ב-Dock, והכרטיסיות שלו הן הסשן הבא.
-      if (!isLast) await TabsRepository().discardWindowSession();
+      if (endsProcess) {
+        // לפני הפירוק: כשל בהמשך הסגירה אינו קריסה שכדאי להציע לדווח עליה.
+        AppCrashSession.markCleanExitSync();
+        await _shutdownProcessUpToFlush();
+      }
+      // ה-flush הפר-חלוני חייב להישאר בין שני חלקי כיבוי התהליך.
+      final flushFailure = await _closeWindowScoped();
+      if (endsProcess) {
+        await _shutdownProcessAfterFlush(flushFailure);
+      } else {
+        // אחרי ה-flush מוחקים סשן שנסגר במכוון; Ctrl+Shift+T משתמש במנוע החי.
+        // עדכון והחלון האחרון במק שומרים את הכרטיסיות להפעלה הבאה.
+        if (!isLast && !MultiWindowService.closingAll) {
+          await TabsRepository().discardWindowSession();
+        }
 
-      // מוסתר ולא נהרס: תוספים שממשיכים לרוץ היו צורכים משאבים ברקע.
-      PluginRuntimeDispatcher.instance.setWindowShown(false);
+        // מוסתר ולא נהרס: תוספים שממשיכים לרוץ היו צורכים משאבים ברקע.
+        PluginRuntimeDispatcher.instance.setWindowShown(false);
 
-      // ⚠️ דרך ה-runner ולא `quitApplication()`: האחרון הוא
-      // `PostQuitMessage` — הוא סוגר את התוכנה כולה ולא את החלון הזה.
-      await const MultiWindowService().closeSelf();
-      // ⚠️ החלון מוסתר ולא נהרס, וה-listener שלו חי. חלון שיוחזר לשימוש
-      // (`ReviveWith` / Ctrl+Shift+T) חייב שסגירה חוזרת שלו תעבוד — עם
-      // דגל שנשאר דלוק לחיצה על X פשוט לא הייתה עושה כלום.
+        // ⚠️ דרך ה-runner ולא `quitApplication()`: האחרון הוא
+        // `PostQuitMessage` — הוא סוגר את התוכנה כולה ולא את החלון הזה.
+        await const MultiWindowService().closeSelf();
+      }
+    } finally {
+      // רק בעל הניסיון מנקה: בקשת עדכון יכולה להגיע בזמן שומר הסגירה.
+      MultiWindowService.closingAll = false;
       _isClosing = false;
     }
   }
