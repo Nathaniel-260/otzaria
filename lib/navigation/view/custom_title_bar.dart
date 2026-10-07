@@ -1167,7 +1167,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
                                       end: 4,
                                     ),
                                     child: Icon(
-                                      OtzariaIcons.book_pdf_24_regular,
+                                      OtzariaIcons.document_pdf_24_regular,
                                       size: 14,
                                       color: colorScheme.onSurface,
                                     ),

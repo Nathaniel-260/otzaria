@@ -647,7 +647,7 @@ void main() {
     expect(tester.takeException(), isNull);
     // רק טאב-PDF מקבל אייקון-סוג; בטאב מפרשים אין אייקון מוביל.
     expect(find.byIcon(OtzariaIcons.book_24_regular), findsNothing);
-    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsNothing);
+    expect(find.byIcon(OtzariaIcons.document_pdf_24_regular), findsNothing);
   });
 
   testWidgets('טאב PDF רחב מציג אייקון PDF ליד שם הספר', (tester) async {
@@ -675,7 +675,7 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsOneWidget);
+    expect(find.byIcon(OtzariaIcons.document_pdf_24_regular), findsOneWidget);
   });
 
   testWidgets('טאב PDF צר (רוחב < 100) מסתיר את אייקון ה-PDF', (tester) async {
@@ -706,7 +706,7 @@ void main() {
       settingsBloc: settingsBloc,
     );
 
-    expect(find.byIcon(OtzariaIcons.book_pdf_24_regular), findsNothing);
+    expect(find.byIcon(OtzariaIcons.document_pdf_24_regular), findsNothing);
   });
 
   testWidgets('CombinedTab מציג את התחלת שני הספרים, כל אחד בחצי', (
