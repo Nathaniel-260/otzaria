@@ -1,10 +1,10 @@
 import 'package:equatable/equatable.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
 
 abstract class EmptyLibraryState extends Equatable {
   final bool isLoading;
   final String? selectedPath;
   final String? errorMessage;
-  final List<String>? zipFiles;
   // non-null = כפתור ההורדה מושבת + הסיבה מוצגת למשתמש
   final String? downloadDisabledReason;
 
@@ -12,7 +12,6 @@ abstract class EmptyLibraryState extends Equatable {
     this.isLoading = false,
     this.selectedPath,
     this.errorMessage,
-    this.zipFiles,
     this.downloadDisabledReason,
   });
 
@@ -21,7 +20,6 @@ abstract class EmptyLibraryState extends Equatable {
     isLoading,
     selectedPath,
     errorMessage,
-    zipFiles,
     downloadDisabledReason,
   ];
 }
@@ -37,33 +35,24 @@ class EmptyLibraryLoading extends EmptyLibraryState {
 }
 
 class EmptyLibraryDirectorySelected extends EmptyLibraryState {
+  /// בייבוא — מה הותקן ומה חסר בספרייה; null בבחירת ספרייה קיימת.
+  final LibraryImportReport? importReport;
+
   const EmptyLibraryDirectorySelected({
     required String selectedPath,
+    this.importReport,
   }) : super(selectedPath: selectedPath);
+
+  @override
+  List<Object?> get props => [...super.props, importReport];
 }
 
 class EmptyLibraryError extends EmptyLibraryState {
   const EmptyLibraryError({
     super.errorMessage,
     super.selectedPath,
-    super.zipFiles,
     super.downloadDisabledReason,
   });
-}
-
-class EmptyLibraryZipExtracted extends EmptyLibraryState {
-  final String extractedFileName;
-
-  const EmptyLibraryZipExtracted({
-    required String selectedPath,
-    required this.extractedFileName,
-  }) : super(selectedPath: selectedPath);
-
-  @override
-  List<Object?> get props => [
-    ...super.props,
-    extractedFileName,
-  ];
 }
 
 class EmptyLibraryExtracting extends EmptyLibraryState {

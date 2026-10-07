@@ -16,6 +16,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
 import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
 import 'package:otzaria/library_update/services/library_access_gate.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -274,6 +275,17 @@ void main() {
       expect(Settings.getValue<String>(SettingsRepository.keyIndexPath), index);
       expect(indexHostCalls, ['release', 'reopen']);
       expect(reopenedLibrary, [('new-db', '{"new":true}')]);
+      final report =
+          (bloc.state as EmptyLibraryDirectorySelected).importReport!;
+      expect(report.imported, {
+        LibraryComponent.libraryDb,
+        LibraryComponent.talmudBavli,
+        LibraryComponent.searchIndex,
+      });
+      expect(report.missing, {
+        LibraryComponent.catalog,
+        LibraryComponent.lexicon,
+      });
       expectNoLeftovers();
     },
   );

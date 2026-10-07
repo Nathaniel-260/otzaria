@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
 
 abstract class EmptyLibraryEvent extends Equatable {
   @override
@@ -53,40 +54,23 @@ class UpdateLibraryRequested extends EmptyLibraryEvent {
   ];
 }
 
-/// ייבוא ספרייה מתיקייה שנבחרה: מזהה אוטומטית את נכסי הספרייה שבתוכה (seforim.db,
-/// קטלוג, מילון, תלמוד בבלי) בגרסה דחוסה או רגילה, ומחלץ/מעתיק כל אחד אל היעד.
+/// ייבוא נכסי הספרייה הגולמיים שזוהו בתיקייה (seforim.db, קטלוג, מילון,
+/// תלמוד בבלי — דחוסים, מפוצלים או רגילים) אל [targetPath].
 /// [backupExistingPath] — כשמסופק (עדכון במקום), ה-DB הישן בנתיב זה מגובה
 /// ומשוחזר בכישלון.
 class ImportLibraryFolderRequested extends EmptyLibraryEvent {
-  final String sourceFolder;
+  final RawLibraryScan assets;
   final String targetPath;
   final String? backupExistingPath;
 
   ImportLibraryFolderRequested({
-    required this.sourceFolder,
+    required this.assets,
     required this.targetPath,
     this.backupExistingPath,
   });
 
   @override
-  List<Object?> get props => [sourceFolder, targetPath, backupExistingPath];
-}
-
-/// ייבוא ספרייה מארכיון ZIP או ZST אל תיקיית היעד. [backupExistingPath]
-/// משמש להחזרת ה-DB הישן אם החילוץ או אימות הארכיון נכשלים.
-class ImportLibraryArchiveRequested extends EmptyLibraryEvent {
-  final String archivePath;
-  final String targetPath;
-  final String? backupExistingPath;
-
-  ImportLibraryArchiveRequested({
-    required this.archivePath,
-    required this.targetPath,
-    this.backupExistingPath,
-  });
-
-  @override
-  List<Object?> get props => [archivePath, targetPath, backupExistingPath];
+  List<Object?> get props => [assets, targetPath, backupExistingPath];
 }
 
 /// ייבוא קובצי הספרייה שמסייע ההורדה הכין (חלקי tar.zst, ואופציונלית
@@ -106,7 +90,7 @@ class ImportLibraryPackageRequested extends EmptyLibraryEvent {
   List<Object?> get props => [packages, targetPath, backupExistingPath];
 }
 
-/// עוצר פריסה של [ImportLibraryPackageRequested] לפני שהספרייה מוחלפת.
+/// עוצר פריסה של ייבוא תיקייה או חבילה לפני שהספרייה מוחלפת.
 class CancelLibraryImportRequested extends EmptyLibraryEvent {}
 
 /// בודק מקום פנוי בהתקנה וקובע אם כפתור ההורדה זמין.

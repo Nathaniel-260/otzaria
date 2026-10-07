@@ -18,6 +18,7 @@ import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
 import 'package:otzaria/empty_library/services/library_space_estimate.dart';
 import 'package:otzaria/library_update/services/library_access_gate.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
@@ -25,17 +26,13 @@ import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/download_sidecar.dart';
-import 'package:otzaria/utils/file/archive_extractor.dart';
 import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/download_space.dart';
 import 'package:otzaria/utils/file/tar_zst_extractor.dart';
-import 'package:otzaria/utils/move_directory.dart';
-import 'package:otzaria/utils/file/split_archive_joiner.dart';
 import 'package:otzaria/utils/file/zstd_patch_decoder.dart';
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 import 'package:path/path.dart' as path;
 import 'package:http/http.dart' as http;
-import 'package:path_provider/path_provider.dart';
 import 'package:seforim_library_updater/seforim_library_updater.dart';
 
 class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
@@ -56,8 +53,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       void Function(double progress)? onProgress,
     )?
     extractTarArchive,
-    Future<void> Function(String archivePath, String outputDir)?
-    extractZipArchive,
     this._defaultLibraryPathOverride,
     this.downloadConnectTimeout = _defaultDownloadConnectTimeout,
     this.downloadSpaceChecker,
@@ -68,7 +63,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
        _packageImporter = packageImporter ?? LibraryPackageImporter(),
        _extractCompressedDatabase = extractCompressedDatabase ?? _extractZst,
        _extractTarArchive = extractTarArchive ?? _extractTarZst,
-       _extractZipArchive = extractZipArchive ?? extractArchiveFileToDisk,
        super(
          const EmptyLibraryInitial(downloadDisabledReason: 'בודק מקום פנוי...'),
        ) {
@@ -76,7 +70,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     on<UseLibraryInPlaceRequested>(_onUseLibraryInPlaceRequested);
     on<DownloadLibraryRequested>(_onDownloadLibraryRequested);
     on<ImportLibraryFolderRequested>(_onImportLibraryFolderRequested);
-    on<ImportLibraryArchiveRequested>(_onImportLibraryArchiveRequested);
     on<ImportLibraryPackageRequested>(_onImportLibraryPackageRequested);
     on<CancelLibraryImportRequested>(
       (_, _) => _activeImportCancel?.cancel(),
@@ -110,24 +103,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     void Function(double progress)? onProgress,
   )
   _extractTarArchive;
-  final Future<void> Function(String archivePath, String outputDir)
-  _extractZipArchive;
 
-  /// בונה callback שמ-emit-ת התקדמות חילוץ למסך.
-  /// הקריאות מגיעות מתוך ה-isolet בזמן ה-await על פעולת החילוץ — עדיין
-  /// בתוך מטפל האירוע — ולכן ה-emit חוקי.
-  void Function(double) _extractProgress(
-    Emitter<EmptyLibraryState> emit,
-    String selectedPath,
-    String message,
-  ) =>
-      (progress) => emit(
-        EmptyLibraryExtracting(
-          selectedPath: selectedPath,
-          progress: progress,
-          message: message,
-        ),
-      );
   // סיבת השבתת כפתור ההורדה — נשמרת כ-instance field כדי להישמר בין state transitions
   String? _downloadDisabledReason = 'בודק מקום פנוי...';
   final String? _defaultLibraryPathOverride;
@@ -142,41 +118,17 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     await _handleDirectorySelection(event.folderPath, emit);
   }
 
-  /// מייבא נכסי ספרייה מתיקייה שנבחרה: מזהה כל נכס (seforim.db, קטלוג, מילון,
-  /// תלמוד) בגרסה דחוסה או רגילה, ומחלץ/מעתיק אותו אל היעד. אם [backupExistingPath]
-  /// מסופק (עדכון במקום) — ה-DB הישן מגובה ומשוחזר בכישלון.
+  /// מייבא את נכסי הספרייה הגולמיים שזוהו בתיקייה (ראה [scanRawLibraryAssets]).
   Future<void> _onImportLibraryFolderRequested(
     ImportLibraryFolderRequested event,
     Emitter<EmptyLibraryState> emit,
   ) => _replaceLibrarySafely(
     emit,
     backupPath: event.backupExistingPath,
-    body: () =>
-        _importLibraryFolder(event.sourceFolder, event.targetPath, emit),
-    // Scoped Storage באנדרואיד: התיקייה נראית אך אינה ניתנת לקריאה (#1219).
+    body: () => _importRawAssets(event.assets, event.targetPath, emit),
     onError: (e) => _error(
-      errorMessage: e is PathAccessException
-          ? 'אין לתוכנה הרשאת קריאה לקובץ המקור ${e.path}. '
-                'באנדרואיד יש לבחור את קובץ ${DatabaseConstants.databaseFileName} '
-                'דרך "בחר קובץ ספרייה".'
-          : 'שגיאה בייבוא הספרייה: $e',
-      selectedPath: event.sourceFolder,
-    ),
-  );
-
-  /// מייבא את הספרייה מארכיון ZIP או ZST, ומשחזר את ה-DB הישן אם הפעולה
-  /// אינה מסתיימת בבחירת ספרייה תקינה.
-  Future<void> _onImportLibraryArchiveRequested(
-    ImportLibraryArchiveRequested event,
-    Emitter<EmptyLibraryState> emit,
-  ) => _replaceLibrarySafely(
-    emit,
-    backupPath: event.backupExistingPath,
-    body: () =>
-        _importLibraryArchive(event.archivePath, event.targetPath, emit),
-    onError: (e) => _error(
-      errorMessage: 'שגיאה בייבוא הארכיון: $e',
-      selectedPath: event.archivePath,
+      errorMessage: packageImportErrorMessage(e, assistantFiles: false),
+      selectedPath: event.targetPath,
     ),
   );
 
@@ -211,7 +163,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           await _restoreDatabaseFiles(backupDir, backupPath!);
         }
       }
-      if (state is EmptyLibraryDirectorySelected) await clearFilePickerCache();
     } catch (e) {
       if (backupDir != null) {
         await _restoreDatabaseFiles(backupDir, backupPath!);
@@ -224,6 +175,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         );
       }
       await afterReplacement?.call();
+      await clearFilePickerCache();
       if (suspension != null) {
         await _accessGate.resumeAll(
           suspension,
@@ -335,6 +287,10 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         );
       }
       await _checkDbSchemaOffThread(stagedDb);
+      final imported = {
+        ...await _presentComponents(staged.booksDir),
+        if (hasIndex) LibraryComponent.searchIndex,
+      };
       if (hasIndex) {
         onIndexReleased();
         await _packageImporter.installIndex(staged, indexTarget);
@@ -347,7 +303,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
             indexTarget,
           );
         }
-        await _handleDirectorySelection(target, emit);
+        await _handleDirectorySelection(target, emit, imported: imported);
       } catch (_) {
         await rollback();
         rethrow;
@@ -389,13 +345,21 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static Future<void> _checkDbSchemaOffThread(String dbPath) =>
       Isolate.run(() => requireReadableDbSchema(dbPath));
 
-  /// הודעה למשתמש על כשל בייבוא קובצי המסייע.
+  /// הודעה למשתמש על כשל בייבוא; [assistantFiles] — הקבצים הוכנו במסייע ההורדה.
   @visibleForTesting
-  static String packageImportErrorMessage(Object error) {
-    const prepareAgain = 'יש להכין את התיקייה מחדש במסייע ההורדה.';
+  static String packageImportErrorMessage(
+    Object error, {
+    bool assistantFiles = true,
+  }) {
+    final prepareAgain = assistantFiles
+        ? 'יש להכין את התיקייה מחדש במסייע ההורדה.'
+        : 'יש לוודא שכל הקבצים הועתקו במלואם לתיקייה ולנסות שוב.';
     return switch (error) {
       LibraryImportCancelled() => 'הייבוא בוטל. הספרייה לא שונתה.',
       InsufficientSpaceException() => '$error',
+      PathAccessException(:final path) =>
+        'אין לתוכנה הרשאת קריאה לקובץ $path. '
+            'יש לבחור את התיקייה שוב, או להעתיק את הקבצים לתיקייה אחרת.',
       FileSystemException(osError: OSError(errorCode: 28 || 112)) =>
         'אין מספיק מקום פנוי לפריסת הספרייה. יש לפנות מקום ולנסות שוב.',
       FormatException(:final message) =>
@@ -406,203 +370,94 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     };
   }
 
-  Future<void> _importLibraryArchive(
-    String archivePath,
+  /// פריסת הנכסים ל-staging (ניתנת לביטול), בדיקת ה-DB והעברה ליעד —
+  /// seforim.db אחרון. כשל לפני ההעברה אינו נוגע ביעד.
+  Future<void> _importRawAssets(
+    RawLibraryScan raw,
     String target,
     Emitter<EmptyLibraryState> emit,
   ) async {
-    final lowerPath = archivePath.toLowerCase();
-    if (!lowerPath.endsWith('.zip') && !lowerPath.endsWith('.zst')) {
-      throw ArgumentError('יש לבחור קובץ ZIP או ZST');
-    }
-    await Directory(target).create(recursive: true);
-    emit(
-      EmptyLibraryExtracting(
-        selectedPath: archivePath,
-        progress: 0.0,
-        message: 'מחלץ את קובץ הספרייה...',
-      ),
-    );
-    if (lowerPath.endsWith('.zip')) {
-      final staging = stagingDirFor(target);
-      await _deleteEntity(staging);
-      try {
-        await _extractZipArchive(archivePath, staging);
-        await promoteStagedImport(staging, target);
-      } finally {
-        await _deleteEntity(staging);
-      }
-    } else {
-      await _writeDbAtomically(
-        path.join(target, DatabaseConstants.databaseFileName),
-        (tempPath) => _extractCompressedDatabase(
-          archivePath,
-          tempPath,
-          _extractProgress(emit, archivePath, 'מחלץ את קובץ הספרייה...'),
-        ),
-      );
-    }
-    emit(
-      EmptyLibraryExtracting(
-        selectedPath: archivePath,
-        progress: 1.0,
-        message: 'הייבוא הושלם',
-      ),
-    );
-    await _checkAndSaveExtractedDatabase(target, emit);
-  }
-
-  /// ליבת ייבוא התיקייה (זורקת בכשל). לכל נכס — מעדיפים גרסה דחוסה (חילוץ),
-  /// ואם אין נופלים לגרסה הרגילה (העתקה). seforim.db חובה; השאר אופציונליים.
-  Future<void> _importLibraryFolder(
-    String source,
-    String target,
-    Emitter<EmptyLibraryState> emit,
-  ) async {
-    emit(
-      EmptyLibraryExtracting(
-        selectedPath: target,
-        progress: 0.0,
-        message: 'מייבא את קבצי הספרייה...',
-      ),
-    );
-    await Directory(target).create(recursive: true);
-
-    // seforim.db — דחוס או רגיל. נדרש אלא אם כבר קיים ביעד (ייבוא נלווים בלבד
-    // אל ספרייה קיימת).
-    File? dbZst;
-    File? dbSplitManifest;
-    for (final name in DatabaseConstants.supportedDatabaseArchiveFileNames) {
-      final archive = File(path.join(source, name));
-      if (await archive.exists()) {
-        dbZst = archive;
-        break;
-      }
-      final manifest = File(path.join(source, '$name$kSplitManifestSuffix'));
-      if (await manifest.exists()) {
-        dbSplitManifest = manifest;
-        break;
-      }
-    }
-    final dbPlain = File(path.join(source, DatabaseConstants.databaseFileName));
-    final targetDb = File(
-      path.join(target, DatabaseConstants.databaseFileName),
-    );
-    final selectedArchive = dbZst;
-    if (selectedArchive != null) {
-      await _writeDbAtomically(
-        path.join(target, DatabaseConstants.databaseFileName),
-        (tempPath) => _extractCompressedDatabase(
-          selectedArchive.path,
-          tempPath,
-          _extractProgress(emit, source, 'מחלץ את ספריית הספרים...'),
-        ),
-      );
-    } else if (dbSplitManifest != null) {
-      final joined = '${targetDb.path}.joining.zst';
-      try {
-        await joinSplitArchive(
-          dbSplitManifest.path,
-          joined,
-          onProgress: _extractProgress(emit, source, 'מחבר את חלקי הספרייה...'),
-        );
-        await _writeDbAtomically(
-          targetDb.path,
-          (tempPath) => _extractCompressedDatabase(
-            joined,
-            tempPath,
-            _extractProgress(emit, source, 'מחלץ את ספריית הספרים...'),
+    void report(String message, double progress, {bool cancellable = true}) =>
+        emit(
+          EmptyLibraryExtracting(
+            selectedPath: target,
+            progress: progress,
+            message: message,
+            cancellable: cancellable,
           ),
         );
-      } finally {
-        await _deleteEntity(joined);
-      }
-    } else if (await dbPlain.exists()) {
-      // File.copy אינו מדווח התקדמות — על קובץ של כמה GB המסך נשאר על 0% עד
-      // הסוף (issue #1334). עותק שהבורר יצר במטמון מועבר, לא מועתק שוב (#1360).
-      final fromPickerCache = await isFilePickerCacheFile(dbPlain);
-      await _writeDbAtomically(
-        path.join(target, DatabaseConstants.databaseFileName),
-        (tempPath) {
-          final onProgress = _extractProgress(
-            emit,
-            source,
-            'מעתיק את ספריית הספרים...',
-          );
-          return fromPickerCache
-              ? moveFileWithProgress(dbPlain, tempPath, onProgress: onProgress)
-              : copyFileWithProgress(dbPlain, tempPath, onProgress: onProgress);
-        },
+
+    report('בודק מקום פנוי...', 0, cancellable: false);
+    final importsDb = raw.assets.containsKey(LibraryComponent.libraryDb);
+    // ייבוא נלווים בלבד מותר רק אל ספרייה שכבר יש בה מסד.
+    if (!importsDb && !await File(_dbPathIn(target)).exists()) {
+      throw FormatException(
+        'לא נמצא ${DatabaseConstants.databaseFileName} '
+        '(או הגרסה הדחוסה שלו) בתיקייה שנבחרה',
       );
-    } else if (!await targetDb.exists()) {
-      emit(
-        _error(
-          errorMessage:
-              'לא נמצא ${DatabaseConstants.databaseFileName} (או הגרסה הדחוסה) בתיקייה שנבחרה',
-          selectedPath: source,
+    }
+    await _packageImporter.checkRawSpace(raw, target);
+
+    final cancel = ZstdCancelFlag();
+    _activeImportCancel = cancel;
+    final String staging;
+    try {
+      staging = await _packageImporter.stageRaw(
+        raw: raw,
+        booksTarget: target,
+        cancel: cancel,
+        onProgress: (component, done, total) => report(
+          '${_extractTitle(component)}\n'
+          '${formatMegabytesProgressHebrew(done, total)}',
+          total > 0 ? (done / total).clamp(0.0, 1.0) : 0,
         ),
       );
-      return;
+    } finally {
+      _activeImportCancel = null;
+      cancel.dispose();
     }
 
-    // קטלוג אוצר החכמה — אופציונלי (דחוס או רגיל)
-    final catZst = File(
-      path.join(source, DatabaseConstants.externalCatalogArchiveFileName),
-    );
-    final catPlain = File(
-      path.join(source, DatabaseConstants.externalCatalogDatabaseFileName),
-    );
-    if (await catZst.exists()) {
-      await _extractCompressedDatabase(
-        catZst.path,
-        path.join(target, DatabaseConstants.externalCatalogDatabaseFileName),
-        _extractProgress(emit, source, 'מחלץ קטלוג אוצר החכמה...'),
-      );
-    } else if (await catPlain.exists()) {
-      await catPlain.copy(
-        path.join(target, DatabaseConstants.externalCatalogDatabaseFileName),
-      );
+    try {
+      report('מעביר את הספרייה למקומה...', 1, cancellable: false);
+      if (importsDb) await _checkDbSchemaOffThread(_dbPathIn(staging));
+      await promoteStagedImport(staging, target);
+    } finally {
+      await _packageImporter.discardRaw(staging);
     }
-
-    // מילון החיפוש המקורב — אינו דחוס, אופציונלי
-    for (final name in DatabaseConstants.lexicalReleaseAssetFileNames) {
-      final lexical = File(path.join(source, name));
-      if (!await lexical.exists()) continue;
-      final dest = path.join(target, DatabaseConstants.lexicalDatabaseFileName);
-      await lexical.copy(dest);
-      await MagicDictionaryDownloader.writeFileDigestMarker(dest);
-      break;
-    }
-
-    // תלמוד בבלי — ארכיון tar.zst או תיקייה מחולצת, אופציונלי
-    final talmudArchive = File(
-      path.join(source, DatabaseConstants.talmudBavliArchiveFileName),
+    await _handleDirectorySelection(
+      target,
+      emit,
+      imported: raw.assets.keys.toSet(),
     );
-    final talmudDir = Directory(
-      path.join(source, DatabaseConstants.talmudBavliFolderName),
-    );
-    if (await talmudArchive.exists()) {
-      await _extractTarArchive(
-        talmudArchive.path,
-        target,
-        _extractProgress(emit, source, 'מחלץ ספרי תלמוד בבלי...'),
-      );
-    } else if (await talmudDir.exists()) {
-      await copyDirectoryEntries(
-        talmudDir.path,
-        path.join(target, DatabaseConstants.talmudBavliFolderName),
-      );
-    }
-
-    emit(
-      EmptyLibraryExtracting(
-        selectedPath: target,
-        progress: 1.0,
-        message: 'הייבוא הושלם',
-      ),
-    );
-    await _checkAndSaveExtractedDatabase(target, emit);
   }
+
+  static String _extractTitle(LibraryComponent component) =>
+      switch (component) {
+        LibraryComponent.libraryDb => 'מחלץ את ספריית הספרים',
+        LibraryComponent.talmudBavli => 'מחלץ את ספרי התלמוד הבבלי',
+        LibraryComponent.catalog => 'מחלץ את קטלוג אוצר החכמה',
+        LibraryComponent.lexicon => 'מעתיק את המילון לחיפוש המקורב',
+        LibraryComponent.searchIndex => 'פורס את אינדקס החיפוש',
+      };
+
+  /// רכיבי הספרייה הקיימים בתיקיית הספרים [booksDir] (בלי האינדקס).
+  static Future<Set<LibraryComponent>> _presentComponents(
+    String booksDir,
+  ) async => {
+    if (await File(_dbPathIn(booksDir)).exists()) LibraryComponent.libraryDb,
+    if (await Directory(
+      path.join(booksDir, DatabaseConstants.talmudBavliFolderName),
+    ).exists())
+      LibraryComponent.talmudBavli,
+    if (await File(
+      path.join(booksDir, DatabaseConstants.externalCatalogDatabaseFileName),
+    ).exists())
+      LibraryComponent.catalog,
+    if (await File(
+      path.join(booksDir, DatabaseConstants.lexicalDatabaseFileName),
+    ).exists())
+      LibraryComponent.lexicon,
+  };
 
   /// שמות קבצי ה-DB שמגובים/מועתקים בעדכון ספרייה (seforim.db והלוואי שלו).
   static const _dbFileSuffixes = ['', '-shm', '-wal', '-journal'];
@@ -720,7 +575,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   static String get _tempRoot => _tempRootOverride ?? Directory.systemTemp.path;
 
-  /// תיקיית הביניים שאליה מחולץ ארכיון ZIP: אחות ליעד, ולכן על אותו התקן —
+  /// תיקיית הביניים שאליה נפרס ייבוא: אחות ליעד, ולכן על אותו התקן —
   /// תנאי ל-rename אטומי בהעברה ממנה.
   @visibleForTesting
   static String stagingDirFor(String target) => '$target.import';
@@ -805,7 +660,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static Future<void> recoverOrphanedDbBackup(String dir) async {
     final dbName = DatabaseConstants.databaseFileName;
     // כתיבה שנהרגה באמצע משאירה `.new` בגודל ה-DB המלא; אין ממנו המשך,
-    // וכך גם תיקיית הביניים של ייבוא ZIP שנקטע.
+    // וכך גם תיקיית הביניים של ייבוא שנקטע.
     await _deleteDbFamily(_dbTempPathFor(path.join(dir, dbName)));
     await _deleteEntity(stagingDirFor(dir));
     // list ולא listSync: הפונקציה רצה בעלייה לפני הפריים הראשון, וסריקה
@@ -878,37 +733,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
   /// מעביר קובץ אל [destPath]. rename נכשל בין volumes שונים (temp מול הספרייה)
   /// עם Cross-device link — במקרה כזה נופלים להעתקה ומחיקה.
-  /// מעתיק קובץ בזרימה ומדווח התקדמות (0..1) כל [reportEvery] בייטים.
-  /// [File.copy] אינו מדווח כלום, ולכן קבצים גדולים הראו 0% עד הסוף.
-  @visibleForTesting
-  static Future<void> copyFileWithProgress(
-    File source,
-    String destPath, {
-    void Function(double progress)? onProgress,
-    int reportEvery = 4 << 20,
-  }) async {
-    final total = await source.length();
-    final sink = File(destPath).openWrite();
-    var done = 0;
-    var sinceReport = 0;
-    onProgress?.call(0);
-    try {
-      await for (final chunk in source.openRead()) {
-        sink.add(chunk);
-        done += chunk.length;
-        sinceReport += chunk.length;
-        if (sinceReport >= reportEvery && total > 0) {
-          sinceReport = 0;
-          onProgress?.call(done / total);
-        }
-      }
-      await sink.flush();
-    } finally {
-      await sink.close();
-    }
-    onProgress?.call(1);
-  }
-
   static Future<void> _moveFile(File file, String destPath) async {
     try {
       await file.rename(destPath);
@@ -918,50 +742,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     }
   }
 
-  static String? _filePickerCacheDirOverride;
-
-  /// תיקיית המטמון שבה file_picker שומר עותקים (`<cache>/file_picker`).
-  /// בבדיקות אין path_provider — מזריקים תיקייה.
-  @visibleForTesting
-  static set filePickerCacheDirOverride(String? value) =>
-      _filePickerCacheDirOverride = value;
-
-  /// האם [file] הוא עותק זמני שיצר file_picker במטמון האפליקציה. באנדרואיד
-  /// הבורר מעתיק לשם כל קובץ נבחר, והעותק מיותר אחרי הייבוא (issue #1360).
-  @visibleForTesting
-  static Future<bool> isFilePickerCacheFile(File file) async {
-    var cacheDir = _filePickerCacheDirOverride;
-    if (cacheDir == null) {
-      try {
-        cacheDir = (await getTemporaryDirectory()).path;
-      } catch (_) {
-        return false;
-      }
-    }
-    final pickerDir = path.join(cacheDir, 'file_picker');
-    return path.isWithin(pickerDir, file.absolute.path);
-  }
-
-  /// מעביר עותק זמני אל [destPath]: rename מיידי על אותו התקן, ובנפילה
-  /// (Cross-device) העתקה עם התקדמות ומחיקת המקור.
-  @visibleForTesting
-  static Future<void> moveFileWithProgress(
-    File source,
-    String destPath, {
-    void Function(double progress)? onProgress,
-  }) async {
-    onProgress?.call(0);
-    try {
-      await source.rename(destPath);
-    } on FileSystemException {
-      await copyFileWithProgress(source, destPath, onProgress: onProgress);
-      await source.delete();
-    }
-    onProgress?.call(1);
-  }
-
-  /// אחרי ייבוא מוצלח העותקים שיצר הבורר במטמון מיותרים — באנדרואיד הם
-  /// הכפילו את נפח הספרייה על המכשיר, גם מניסיונות קודמים (issue #1360).
+  /// עותקים שהבורר יצר במטמון בגרסאות קודמות הכפילו את נפח הספרייה על
+  /// המכשיר (issue #1360); נמחקים בסוף כל ייבוא, גם בכשל.
   static Future<void> clearFilePickerCache() async {
     if (!Platform.isAndroid && !Platform.isIOS) return;
     try {
@@ -1018,10 +800,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     }
   }
 
+  /// [imported] — הרכיבים שהייבוא התקין; אז המצב הסופי נושא דוח רכיבים.
   Future<void> _handleDirectorySelection(
     String directoryPath,
-    Emitter<EmptyLibraryState> emit,
-  ) async {
+    Emitter<EmptyLibraryState> emit, {
+    Set<LibraryComponent>? imported,
+  }) async {
     try {
       final directory = Directory(directoryPath);
       if (!await directory.exists()) {
@@ -1057,7 +841,25 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       // נקה override קודם אם קיים
       await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
 
-      emit(EmptyLibraryDirectorySelected(selectedPath: directoryPath));
+      final present = imported == null
+          ? null
+          : await _presentComponents(directoryPath);
+      emit(
+        EmptyLibraryDirectorySelected(
+          selectedPath: directoryPath,
+          importReport: imported == null
+              ? null
+              : LibraryImportReport(
+                  imported: imported,
+                  missing: {
+                    for (final component in LibraryComponent.values)
+                      if (!imported.contains(component) &&
+                          !present!.contains(component))
+                        component,
+                  },
+                ),
+        ),
+      );
     } catch (e) {
       emit(
         _error(
@@ -1226,60 +1028,12 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   }
 
   /// מייצר EmptyLibraryError תמיד עם downloadDisabledReason הנוכחי.
-  EmptyLibraryError _error({
-    String? errorMessage,
-    String? selectedPath,
-    List<String>? zipFiles,
-  }) => EmptyLibraryError(
-    errorMessage: errorMessage,
-    selectedPath: selectedPath,
-    zipFiles: zipFiles,
-    downloadDisabledReason: _downloadDisabledReason,
-  );
-
-  Future<void> _checkAndSaveExtractedDatabase(
-    String extractedDirectory,
-    Emitter<EmptyLibraryState> emit,
-  ) async {
-    try {
-      // חיפוש קובץ seforim.db בתיקייה המחולצת
-      final directory = Directory(extractedDirectory);
-      final dbFiles = await directory
-          .list(recursive: true)
-          .where(
-            (entity) =>
-                entity is File &&
-                entity.path.toLowerCase().endsWith(
-                  DatabaseConstants.databaseFileName,
-                ),
-          )
-          .cast<File>()
-          .toList();
-
-      if (dbFiles.isEmpty) {
-        emit(
-          _error(
-            errorMessage:
-                'לא נמצא קובץ ${DatabaseConstants.databaseFileName} בקובץ הדחוס',
-            selectedPath: extractedDirectory,
-          ),
-        );
-        return;
-      }
-
-      final dbPath = dbFiles.first.path;
-      final rootPath = path.dirname(dbPath);
-
-      await Settings.setValue(SettingsRepository.keyLibraryPath, rootPath);
-      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
-      // ניקוי override Android — ה-DB החדש נמצא ישירות בספרייה
-      await Settings.setValue(SettingsRepository.keyDbEffectivePath, '');
-
-      emit(EmptyLibraryDirectorySelected(selectedPath: rootPath));
-    } catch (e) {
-      emit(_error(errorMessage: 'שגיאה: $e'));
-    }
-  }
+  EmptyLibraryError _error({String? errorMessage, String? selectedPath}) =>
+      EmptyLibraryError(
+        errorMessage: errorMessage,
+        selectedPath: selectedPath,
+        downloadDisabledReason: _downloadDisabledReason,
+      );
 
   Future<void> _onDownloadLibraryRequested(
     DownloadLibraryRequested event,

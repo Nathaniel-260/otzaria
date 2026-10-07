@@ -1,18 +1,23 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:ffi' as ffi;
 import 'dart:io';
+import 'dart:typed_data';
 
-// ignore: depend_on_referenced_packages
-import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
+import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
+import 'package:otzaria/empty_library/services/library_package/raw_asset_extractor.dart';
+import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/zstd_patch_decoder.dart';
 import 'package:otzaria/settings/dialogs/library_setup_dialog.dart';
@@ -20,6 +25,7 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:path/path.dart' as p;
 
 import '../../empty_library/library_package_test_support.dart';
+import '../../test_helpers/memory_cache_provider.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -102,70 +108,29 @@ class _FolderFilePickerPlatform extends FilePickerPlatform
   }) async => folder;
 }
 
-/// קובץ שנבחר בבורר — כמו העותק שאנדרואיד יוצר במטמון.
-final class _PickedFile extends PlatformFile {
-  _PickedFile(this._path);
-  final String _path;
+/// תיקייה בזיכרון במקום עץ SAF של אנדרואיד.
+class _MemoryFolder extends PackageFolder {
+  _MemoryFolder(this.name, this.files, {this.children = const {}});
+
+  final String name;
+  final Map<String, List<int>> files;
+  final Map<String, _MemoryFolder> children;
 
   @override
-  String get name => p.basename(_path);
+  String get displayName => name;
 
   @override
-  Uri get uri => Uri.file(_path);
+  Future<List<PackageFileEntry>> list() async => [
+    for (final MapEntry(:key, :value) in files.entries)
+      PackageFileEntry(name: key, size: value.length, id: key),
+  ];
 
   @override
-  XFile get xFile => XFile(_path);
+  Future<PackageFolder?> child(String name) async => children[name];
 
   @override
-  int? lengthSync() => File(_path).lengthSync();
-
-  @override
-  Future<int> length() => File(_path).length();
-
-  @override
-  Future<Uint8List> readAsBytes() => File(_path).readAsBytes();
-
-  @override
-  Stream<Uint8List> readAsByteStream() =>
-      File(_path).openRead().map(Uint8List.fromList);
-}
-
-/// בורר קבצים מזויף שמדמה את ההעתקה למטמון באנדרואיד: מדווח picking, מחכה
-/// ל-[finishCopy], ורק אז מחזיר את הקובץ (או זורק, כשההעתקה נכשלת).
-class _CopyingFilePickerPlatform extends FilePickerPlatform
-    with MockPlatformInterfaceMixin {
-  _CopyingFilePickerPlatform(this.path, {this.fails = false});
-  final String path;
-  final bool fails;
-  final _copy = Completer<void>();
-
-  void finishCopy() => _copy.complete();
-
-  @override
-  Future<PlatformFile?> pickFile({
-    String? dialogTitle,
-    String? initialDirectory,
-    FileType type = FileType.any,
-    List<String>? allowedExtensions,
-    Function(FilePickerStatus)? onFileLoading,
-    int compressionQuality = 0,
-    AndroidOptions androidOptions = const AndroidOptions(),
-    DarwinOptions darwinOptions = const DarwinOptions(),
-    WindowsOptions windowsOptions = const WindowsOptions(),
-    LinuxOptions linuxOptions = const LinuxOptions(),
-    WebOptions webOptions = const WebOptions(),
-  }) async {
-    onFileLoading?.call(FilePickerStatus.picking);
-    await _copy.future;
-    onFileLoading?.call(FilePickerStatus.done);
-    if (fails) {
-      throw PlatformException(
-        code: 'unknown_path',
-        message: 'Failed to retrieve path.',
-      );
-    }
-    return _PickedFile(path);
-  }
+  Stream<List<int>> openRead(PackageFileEntry entry) =>
+      Stream.value(files[entry.name]!);
 }
 
 void main() {
@@ -183,14 +148,15 @@ void main() {
       expect(find.text('העברת תוכן התיקייה'), findsNothing);
     });
 
-    testWidgets('פעולות המקור: הורדה, שימוש במקום, תיקייה וארכיון', (
+    testWidgets('פעולות המקור: הורדה, שימוש במקום ותיקייה — בלי ארכיון', (
       tester,
     ) async {
       await _openSetup(tester);
       expect(find.text('הורדת הספרייה'), findsOneWidget);
       expect(find.text('שימוש בספרייה קיימת במקומה'), findsOneWidget);
       expect(find.text('בחירת תיקייה מהמחשב'), findsOneWidget);
-      expect(find.text('בחירת קובץ דחוס'), findsOneWidget);
+      expect(find.textContaining('קובץ דחוס'), findsNothing);
+      expect(find.text('בחר קובץ ספרייה'), findsNothing);
     });
 
     testWidgets('בחירת "שימוש במקום" מסתירה את מקטע היעד', (tester) async {
@@ -265,13 +231,11 @@ void main() {
       // המקטע מקופל כברירת מחדל — אפשרויות ההחלפה מוסתרות.
       expect(find.text('הורדת הספרייה מחדש'), findsNothing);
       expect(find.text('בחירת תיקייה מהמחשב'), findsNothing);
-      expect(find.text('בחירת קובץ דחוס'), findsNothing);
 
       // פריסת המקטע חושפת את אפשרויות ההחלפה.
       await _select(tester, 'החלפת הספרייה בספרייה אחרת');
       expect(find.text('הורדת הספרייה מחדש'), findsOneWidget);
       expect(find.text('בחירת תיקייה מהמחשב'), findsOneWidget);
-      expect(find.text('בחירת קובץ דחוס'), findsOneWidget);
     });
 
     testWidgets('מקטע היעד מוצג בכותרת "מיקום חדש"', (tester) async {
@@ -299,7 +263,7 @@ void main() {
         expect(_actionOnPressed(tester, 'אישור'), isNull);
         // כפתור בחירת המקור מוצג.
         expect(find.text('בחר תיקייה'), findsOneWidget);
-        expect(find.text('בחר קובץ ספרייה'), findsOneWidget);
+        expect(find.text('בחר קובץ ספרייה'), findsNothing);
       },
     );
   });
@@ -323,25 +287,33 @@ void main() {
       () async {
         debugLibraryFolderReadProbe = (file) async =>
             throw PathAccessException(file.path, const OSError('EACCES', 13));
-        final scan = await scanLibraryFolderAssets(temp.path);
+        final scan = await scanLibraryFolder(DirectoryPackageFolder(temp.path));
         expect(scan.readable, isFalse);
         expect(scan.found, isEmpty);
       },
     );
 
-    test('scanLibraryFolderAssets: קובץ קריא → זוהה', () async {
-      final scan = await scanLibraryFolderAssets(temp.path);
+    test('scanLibraryFolder: קובץ קריא → זוהה', () async {
+      final scan = await scanLibraryFolder(DirectoryPackageFolder(temp.path));
       expect(scan.readable, isTrue);
-      expect(scan.found, contains('ספריית הספרים (seforim.db)'));
+      expect(scan.found, contains(LibraryComponent.libraryDb));
     });
 
-    test('scanLibraryFolderAssets: lexical-v2.db מזוהה כמילון', () async {
+    test('scanLibraryFolder: lexical-v2.db מזוהה כמילון', () async {
       await File('${temp.path}/lexical-v2.db').writeAsBytes([3]);
-      final scan = await scanLibraryFolderAssets(temp.path);
-      expect(scan.found, contains('מילון לחיפוש מקורב'));
+      final scan = await scanLibraryFolder(DirectoryPackageFolder(temp.path));
+      expect(scan.found, contains(LibraryComponent.lexicon));
     });
 
-    testWidgets('תיקייה חסומה: הנחיה לבחור את הקובץ, ואישור מושבת', (
+    test('scanLibraryFolder: קבצים בתת-התיקייה library_db מזוהים', () async {
+      final sub = await Directory('${temp.path}/library_db').create();
+      await File('${temp.path}/seforim.db').delete();
+      await File('${sub.path}/seforim.db.zst').writeAsBytes([1]);
+      final scan = await scanLibraryFolder(DirectoryPackageFolder(temp.path));
+      expect(scan.found, {LibraryComponent.libraryDb});
+    });
+
+    testWidgets('תיקייה חסומה: הנחיה לבחור תיקייה אחרת, ואישור מושבת', (
       tester,
     ) async {
       debugLibraryFolderReadProbe = (file) async =>
@@ -356,11 +328,11 @@ void main() {
       });
       await tester.pumpAndSettle();
       expect(find.textContaining('אין הרשאת קריאה לתיקייה'), findsOneWidget);
-      expect(find.text('כל הקבצים זוהו'), findsNothing);
+      expect(find.text('בחר קובץ ספרייה'), findsNothing);
       expect(_actionOnPressed(tester, 'אישור'), isNull);
     });
 
-    testWidgets('תיקייה קריאה: כל הקבצים זוהו ואישור פעיל', (tester) async {
+    testWidgets('תיקייה קריאה: פירוט לפי רכיב ואישור פעיל', (tester) async {
       await _openSetup(tester);
       await _select(tester, 'בחירת תיקייה מהמחשב');
       await tester.ensureVisible(find.text('בחר תיקייה'));
@@ -370,93 +342,151 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 200));
       });
       await tester.pumpAndSettle();
-      expect(find.textContaining('הספרייה (seforim.db)'), findsNothing);
+      expect(find.text('נמצאו קובצי הספרייה — הפירוט למטה'), findsOneWidget);
+      expect(find.text('מה נמצא בתיקייה'), findsOneWidget);
+      expect(find.text('ספריית הספרים (seforim.db)'), findsOneWidget);
+      expect(find.text('ספרי התלמוד בבלי לא ייכללו'), findsOneWidget);
       expect(_actionOnPressed(tester, 'אישור'), isNotNull);
     });
   });
 
-  group('בחירת קובץ ספרייה — העתקה למטמון באנדרואיד (issue #1360)', () {
+  group('תיקיית קובצי הספרייה (כמו SAF באנדרואיד)', () {
     late Directory temp;
 
     setUp(() async {
-      temp = await Directory.systemTemp.createTemp('otzaria_1360_');
-      await File('${temp.path}/seforim.db').writeAsBytes([0, 1, 2]);
+      temp = await Directory.systemTemp.createTemp('otzaria_raw_dialog_');
+      await Settings.init(cacheProvider: MemoryCacheProvider());
+      await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
     });
 
     tearDown(() async {
+      debugPickAndroidSourceFolder = null;
+      debugCreateLibrarySetupBloc = null;
+      EmptyLibraryBloc.tempRootOverride = null;
       await temp.delete(recursive: true);
     });
 
-    Future<void> tapPickFile(WidgetTester tester) async {
-      await _openSetup(tester);
+    Future<void> pickFolder(WidgetTester tester, PackageFolder folder) async {
+      debugPickAndroidSourceFolder = () async => folder;
+      await _openSetup(tester, defaultTargetPath: p.join(temp.path, 'lib'));
       await _select(tester, 'בחירת תיקייה מהמחשב');
-      await tester.ensureVisible(find.text('בחר קובץ ספרייה'));
-      await tester.tap(find.text('בחר קובץ ספרייה'));
-      await tester.pump();
+      await tester.ensureVisible(find.text('בחר תיקייה'));
+      await tester.runAsync(() async {
+        await tester.tap(find.text('בחר תיקייה'));
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+      });
+      await tester.pumpAndSettle();
     }
 
-    testWidgets('בזמן ההעתקה: הודעה, הכפתורים והאישור מושבתים; בסיום — זוהה', (
+    final fullBundle = _MemoryFolder(
+      'Download/otzaria',
+      {DatabaseConstants.talmudBavliArchiveFileName: Uint8List(10)},
+      children: {
+        'library_db': _MemoryFolder('Download/otzaria/library_db', {
+          DatabaseConstants.databaseArchiveFileName: Uint8List(10),
+          DatabaseConstants.externalCatalogArchiveFileName: Uint8List(10),
+          DatabaseConstants.lexicalDatabaseFileName: Uint8List(10),
+        }),
+      },
+    );
+
+    testWidgets('חבילת אנדרואיד המלאה: כל רכיב מוצג עם הקובץ שנמצא', (
       tester,
     ) async {
-      final picker = _CopyingFilePickerPlatform('${temp.path}/seforim.db');
-      FilePickerPlatform.instance = picker;
-      await tapPickFile(tester);
+      await pickFolder(tester, fullBundle);
 
+      for (final label in [
+        'ספריית הספרים (seforim.db)',
+        'תלמוד בבלי (קובצי PDF)',
+        'קטלוג אוצר החכמה',
+        'מילון לחיפוש מקורב',
+        'אינדקס חיפוש',
+      ]) {
+        expect(find.text(label), findsOneWidget, reason: label);
+      }
       expect(
-        find.textContaining('המערכת מעתיקה את הקובץ שנבחר'),
+        find.text(DatabaseConstants.databaseArchiveFileName),
         findsOneWidget,
       );
-      expect(_actionOnPressed(tester, 'בחר קובץ ספרייה'), isNull);
-      expect(_actionOnPressed(tester, 'בחר תיקייה'), isNull);
-      expect(_actionOnPressed(tester, 'אישור'), isNull);
-
-      picker.finishCopy();
-      await tester.pumpAndSettle();
-
-      expect(find.textContaining('המערכת מעתיקה'), findsNothing);
-      expect(_actionOnPressed(tester, 'בחר קובץ ספרייה'), isNotNull);
+      expect(
+        find.text(DatabaseConstants.talmudBavliArchiveFileName),
+        findsOneWidget,
+      );
+      expect(
+        find.text('התוכנה תבנה את אינדקס החיפוש אחרי ההתקנה'),
+        findsOneWidget,
+      );
       expect(_actionOnPressed(tester, 'אישור'), isNotNull);
     });
 
-    testWidgets('כשל בהעתקה למטמון מוצג למשתמש ומשחרר את הכפתורים', (
+    testWidgets('בלי קובץ הספרייה: הסבר ברור ואישור מושבת', (tester) async {
+      await pickFolder(
+        tester,
+        _MemoryFolder('x', {
+          DatabaseConstants.lexicalDatabaseFileName: [1],
+        }),
+      );
+      expect(
+        find.textContaining('לא נמצא בתיקייה קובץ הספרייה'),
+        findsOneWidget,
+      );
+      expect(find.text('חובה — בלעדיו לא ניתן להתקין'), findsOneWidget);
+      expect(_actionOnPressed(tester, 'אישור'), isNull);
+    });
+
+    testWidgets('אחרי ההתקנה: סיכום מה הותקן ומה חסר, ואז הדיאלוג נסגר', (
       tester,
     ) async {
-      final picker = _CopyingFilePickerPlatform(
-        '${temp.path}/seforim.db',
-        fails: true,
+      EmptyLibraryBloc.tempRootOverride = temp.path;
+      debugCreateLibrarySetupBloc = () => EmptyLibraryBloc(
+        downloadSpaceChecker: (_) async => null,
+        packageImporter: LibraryPackageImporter(
+          rawRunner: (job, {required onProgress, required cancel}) =>
+              extractRawAssetJob(
+                job,
+                openZstd: () => throw StateError('אין נכס דחוס'),
+                onProgress: onProgress,
+              ),
+          diskSpace: (_) async => DiskSpaceInfo.unknown,
+        ),
       );
-      FilePickerPlatform.instance = picker;
-      await tapPickFile(tester);
-      expect(_actionOnPressed(tester, 'בחר קובץ ספרייה'), isNull);
+      Future<void> pumpUntil(bool Function() done) async {
+        for (var i = 0; i < 300 && !done(); i++) {
+          await tester.runAsync(
+            () => Future<void>.delayed(const Duration(milliseconds: 10)),
+          );
+          await tester.pump(const Duration(milliseconds: 10));
+        }
+      }
 
-      picker.finishCopy();
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await pickFolder(
+        tester,
+        _MemoryFolder('x', {
+          DatabaseConstants.databaseFileName: utf8.encode('db'),
+          DatabaseConstants.lexicalDatabaseFileName: utf8.encode('lex'),
+        }),
+      );
+      await tester.tap(find.text('אישור'));
+      await pumpUntil(() => find.text('הספרייה הותקנה').evaluate().isNotEmpty);
 
-      expect(find.textContaining('העתקת הקובץ שנבחר נכשלה'), findsOneWidget);
-      expect(_actionOnPressed(tester, 'בחר קובץ ספרייה'), isNotNull);
-      expect(_actionOnPressed(tester, 'אישור'), isNull);
-      // ההודעה נעלמת מעצמה — מנקים כדי שלא יישאר טיימר פתוח.
-      await tester.pumpAndSettle(const Duration(seconds: 4));
-    });
+      expect(find.text('הספרייה הותקנה'), findsOneWidget);
+      expect(find.text('הותקנו'), findsOneWidget);
+      expect(find.text('חסרים'), findsOneWidget);
+      expect(find.text('ספריית הספרים (seforim.db)'), findsOneWidget);
+      expect(
+        find.textContaining(DatabaseConstants.talmudBavliArchiveFileName),
+        findsOneWidget,
+      );
+      expect(
+        File(
+          p.join(temp.path, 'lib', 'books', DatabaseConstants.databaseFileName),
+        ).readAsStringSync(),
+        'db',
+      );
 
-    testWidgets('בזמן ההעתקה אי אפשר להחליף פעולה', (tester) async {
-      final picker = _CopyingFilePickerPlatform('${temp.path}/seforim.db');
-      FilePickerPlatform.instance = picker;
-      await tapPickFile(tester);
-
-      final download = find.text('הורדת הספרייה');
-      await tester.ensureVisible(download);
-      await tester.tap(download);
-      final archive = find.text('בחירת קובץ דחוס');
-      await tester.ensureVisible(archive);
-      await tester.tap(archive);
-      await tester.pump();
-
-      picker.finishCopy();
+      await tester.tap(find.text('סגור'));
       await tester.pumpAndSettle();
-
-      expect(_actionOnPressed(tester, 'אישור'), isNotNull);
+      expect(find.text('הספרייה הותקנה'), findsNothing);
     });
   });
 
