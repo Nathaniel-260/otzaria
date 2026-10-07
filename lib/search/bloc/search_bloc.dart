@@ -979,54 +979,6 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
     emit(const SearchState());
   }
 
-  Future<int> countForFacet(
-    String facet, {
-    Map<String, String>? customSpacing,
-    Map<int, List<String>>? alternativeWords,
-    Map<String, Map<String, bool>>? searchOptions,
-    Map<String, String>? negativeCustomSpacing,
-    Map<int, List<String>>? negativeAlternativeWords,
-    Map<String, Map<String, bool>>? negativeSearchOptions,
-  }) async {
-    if (state.searchQuery.isEmpty || state.currentFacets.isEmpty) {
-      return 0;
-    }
-
-    // קודם נבדוק אם יש לנו את הספירה ב-state
-    if (state.facetCounts.containsKey(facet)) {
-      return state.facetCounts[facet]!;
-    }
-
-    // אם אין, נבצע ספירה ישירה (fallback)
-    debugPrint('🔢 Counting texts for facet: $facet');
-    debugPrint('🔢 Query: ${state.searchQuery}');
-    debugPrint(
-      '🔢 Books to search: ${state.booksToSearch.map((e) => e.title).toList()}',
-    );
-    final result = await TantivyDataProvider.instance.countTexts(
-      SearchQueryBuilder.sanitizeQuery(state.searchQuery),
-      state.booksToSearch.map((e) => e.title).toList(),
-      [facet],
-      fuzzy: state.fuzzy,
-      distance: state.distance,
-      negativeQuery: SearchQueryBuilder.sanitizeQuery(state.negativeQuery),
-      negativeDistance: state.distance,
-      scope: state.proximityScope,
-      negativeScope: state.proximityScope,
-      searchMode: state.configuration.searchMode,
-      wordMatchMode: state.wordMatchMode,
-      wordMatchCount: state.wordMatchCount,
-      customSpacing: customSpacing,
-      alternativeWords: alternativeWords,
-      searchOptions: searchOptions,
-      negativeCustomSpacing: negativeCustomSpacing,
-      negativeAlternativeWords: negativeAlternativeWords,
-      negativeSearchOptions: negativeSearchOptions,
-    );
-    debugPrint('🔢 Count result for $facet: $result');
-    return result;
-  }
-
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים
   Future<Map<String, int>> countForMultipleFacets(
     List<String> facets, {
