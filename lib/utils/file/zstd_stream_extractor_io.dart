@@ -116,12 +116,10 @@ void _decompressCore(
       throw Exception('ZSTD_initDStream נכשל: ${zstdError(initRet)}');
     }
 
-    // ברירת המחדל מגבילה את חלון הדחיסה ל-128MB (windowLog=27). seforim.db.zst
-    // נדחס עם `--long` ולכן נכשל עם windowTooLarge (קוד 16). 31 = חלון עד 2GB.
     final paramRet = bindings.ZSTD_DCtx_setParameter(
       dStream,
       ZSTD_dParameter.ZSTD_d_windowLogMax,
-      31,
+      zstdWindowLogMax(),
     );
     if (bindings.ZSTD_isError(paramRet) != 0) {
       throw Exception(

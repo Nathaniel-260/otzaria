@@ -2,6 +2,7 @@ import 'dart:ffi';
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
+import 'package:otzaria/utils/file/zstd_library.dart';
 import 'package:zstandard_native/zstandard_native_bindings.dart';
 
 /// מפענח zstd בזרימה שמוזן בנתחים מכל מקור (חלקים, ערוץ SAF) ומוסר את
@@ -20,13 +21,11 @@ class ZstdStreamDecoder {
     _inBuf = malloc<ZSTD_inBuffer_s>();
     _outBuf = malloc<ZSTD_outBuffer_s>();
     _check(_zstd.ZSTD_initDStream(_stream), 'ZSTD_initDStream');
-    // ארכיון שנדחס עם --long דורש חלון גדול מברירת המחדל (128MB).
-    // ב-32 ביט (armeabi-v7a) zstd דוחה 31 — התקרה שם היא 30.
     _check(
       _zstd.ZSTD_DCtx_setParameter(
         _stream,
         ZSTD_dParameter.ZSTD_d_windowLogMax,
-        sizeOf<IntPtr>() == 4 ? 30 : 31,
+        zstdWindowLogMax(),
       ),
       'ZSTD_DCtx_setParameter',
     );
