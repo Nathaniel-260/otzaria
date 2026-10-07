@@ -475,7 +475,7 @@ class _BookmarkViewState extends State<BookmarkView> {
 }
 
 /// קיבוץ "לפי תאריך הוספה". השבוע מתחיל ביום ראשון (מנהג ישראלי).
-/// הגבולות נבנים פעם ביום: DateTime מקומי יקר, והמפתח נקרא לכל סימניה בכל הקשה.
+/// הגבולות נשמרים כל עוד היום והיסטי אזור הזמן שלהם לא השתנו.
 @visibleForTesting
 class BookmarkDateGroups {
   static const _keys = [
@@ -500,6 +500,7 @@ class BookmarkDateGroups {
   };
 
   List<DateTime> _starts = const [];
+  List<Duration> _offsets = const [];
 
   /// תחילת כל תקופה ב-[_keys], מהחדשה לישנה.
   List<DateTime> periodStarts(DateTime now) {
@@ -507,14 +508,15 @@ class BookmarkDateGroups {
       final today = _starts.first;
       if (today.year == now.year &&
           today.month == now.month &&
-          today.day == now.day) {
+          today.day == now.day &&
+          _offsetsUnchanged()) {
         return _starts;
       }
     }
     final today = DateTime(now.year, now.month, now.day);
     // ראשון=weekday 7 → 7%7=0, שני=1, ..., שבת=6
     final startOfThisWeek = today.subtract(Duration(days: today.weekday % 7));
-    return _starts = [
+    _starts = [
       today,
       today.subtract(const Duration(days: 1)),
       startOfThisWeek,
@@ -525,6 +527,16 @@ class BookmarkDateGroups {
           : DateTime(now.year, now.month - 1, 1),
       DateTime(now.year, 1, 1),
     ];
+    _offsets = [for (final start in _starts) start.timeZoneOffset];
+    return _starts;
+  }
+
+  bool _offsetsUnchanged() {
+    // ההיסט ב-DateTime ישן מחושב מחדש; גם גבול היסטורי יכול לשנות היסט לבדו.
+    for (var i = 0; i < _starts.length; i++) {
+      if (_starts[i].timeZoneOffset != _offsets[i]) return false;
+    }
+    return true;
   }
 
   String keyFor(DateTime? date, {DateTime? now}) {
