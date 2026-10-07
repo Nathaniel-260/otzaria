@@ -248,7 +248,6 @@
 | Laaz Rashi commentary sub-block widget | `test/tools/dictionary/laaz_commentary_subblock_test.dart` |
 | Laaz Rashi commentary wiring (surfaces) | `test/tools/dictionary/laaz_commentary_wiring_test.dart` |
 | Commentary reverse links | `test/text_book/commentary_reverse_links_test.dart` |
-| Inline links | `test/models/inline_links_test.dart` |
 | Dialog navigation | `test/widgets/dialogs/dialog_navigation_test.dart` |
 | Focus restore | `test/core/focus_restore_test.dart` |
 | Models (books, links) | `test/models/books_test.dart`, `…links_test.dart`, `…phone_report_data_test.dart` |
@@ -258,7 +257,6 @@
 | חיתוך HTML לפי טווח הבחירה (שימור עיצוב בהעתקה חלקית) | `test/utils/text/html_slice_test.dart` |
 | גודל פענוח תמונות (cacheWidth על נכסים כבדים) | `test/utils/ui/image_decode_size_test.dart` |
 | Hebrew text utils (migration) | `test/migration/hebrew_text_utils_test.dart` |
-| Text book searcher (in-book search) | `test/text_book/models/text_book_searcher_test.dart` |
 | Note text utils | `test/personal_notes/note_text_utils_test.dart` |
 | Shortcut validator | `test/shortcuts/shortcut_validator_test.dart` |
 | Core (activation queue/channel, error log) | `test/core/` |

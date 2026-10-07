@@ -743,32 +743,6 @@ class TantivyDataProvider {
     return Map<String, int>.from(results);
   }
 
-  /// Performs an asynchronous stream-based search operation across indexed texts.
-  ///
-  /// [query] The search query string
-  /// [books] List of book identifiers to search within
-  /// [limit] Maximum number of results to return
-  /// [fuzzy] Whether to perform fuzzy matching
-  ///
-  /// Returns a Stream of search results that can be listened to for real-time updates
-  Stream<List<SearchResult>> searchTextsStream(
-    String query,
-    List<String> facets,
-    int limit,
-    bool fuzzy,
-  ) async* {
-    yield* _searchGateway.searchStream(
-      RustSearchEngineOperations(await engine),
-      SearchEngineRequest(
-        query: query,
-        facets: facets,
-        limit: limit,
-        searchMode: fuzzy ? SearchMode.fuzzy : SearchMode.exact,
-      ),
-      chunkSize: 50,
-    );
-  }
-
   /// ספירה מקבצת של תוצאות עבור מספר facets בבת אחת - לשיפור ביצועים.
   /// מקבץ facets לפי parent prefix ומשתמש ב-getFacetCounts כשיש כמה siblings,
   /// כדי לחסוך קריאות FFI מיותרות.
