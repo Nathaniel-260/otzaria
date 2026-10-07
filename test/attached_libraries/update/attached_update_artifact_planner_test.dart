@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/attached_libraries/models/attached_update_manifest.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_planner.dart';
@@ -22,15 +21,12 @@ AttachedUpdateArtifact _artifact({
 void main() {
   late Directory temp;
   late String installed;
-  late String installedSha;
 
   setUp(() async {
-    AttachedUpdateArtifactPlanner.clearCacheForTesting();
     temp = await Directory.systemTemp.createTemp('otzaria_delta_plan');
     installed = p.join(temp.path, 'lib.db');
     final bytes = List<int>.generate(4096, (i) => i % 251);
     await File(installed).writeAsBytes(bytes);
-    installedSha = sha256.convert(bytes).toString();
   });
 
   tearDown(() async {
@@ -59,7 +55,7 @@ void main() {
     String url = 'https://updates.example.org/lib/patch',
   }) => AttachedUpdateDelta(
     fromDbVersion: fromDbVersion,
-    fromSha256: fromSha256 ?? installedSha,
+    fromSha256: fromSha256 ?? 'c' * 64,
     artifact: _artifact(
       compression: AttachedUpdateCompression.zstdPatch,
       size: 9000,
@@ -73,14 +69,9 @@ void main() {
     List<AttachedUpdateDelta> deltas, {
     int? pointerSize,
     int maxBaseBytes = kMaxDeltaBaseBytes,
-    void Function(String path)? onHash,
   }) => AttachedUpdateArtifactPlanner(
     pointerSize: pointerSize ?? 8,
     maxBaseBytes: maxBaseBytes,
-    hashFile: (path) async {
-      onHash?.call(path);
-      return sha256.convert(await File(path).readAsBytes()).toString();
-    },
   ).plan(manifest(deltas), installedPath: installed, installedDbVersion: 2);
 
   test('picks the smallest applicable delta', () async {
@@ -97,9 +88,11 @@ void main() {
     expect(plan.artifact.compressedSize, 5000);
   });
 
-  test('a delta whose from_sha256 differs is ignored', () async {
+  test('the installed file contents are not hashed to pick a delta', () async {
+    // 2080: sha256 של 1GB ב-Dart לוקח דקות. אי-התאמה של הבסיס נתפסת באימות
+    // הפלט מול המניפסט החתום, ושם חוזרים לקובץ המלא.
     final plan = await planWith([delta(fromSha256: 'b' * 64)]);
-    expect(plan.isDelta, isFalse);
+    expect(plan.isDelta, isTrue);
   });
 
   test(
@@ -111,14 +104,8 @@ void main() {
   );
 
   test('a 32-bit process never uses a delta', () async {
-    var hashed = 0;
-    final plan = await planWith(
-      [delta()],
-      pointerSize: 4,
-      onHash: (_) => hashed++,
-    );
+    final plan = await planWith([delta()], pointerSize: 4);
     expect(plan.isDelta, isFalse);
-    expect(hashed, 0);
   });
 
   test('an installed file over the window ceiling is ignored', () async {
@@ -130,31 +117,5 @@ void main() {
     await File(installed).delete();
     final plan = await planWith([delta()]);
     expect(plan.isDelta, isFalse);
-  });
-
-  test('the installed file is not hashed without a matching delta', () async {
-    var hashed = 0;
-    await planWith([delta(fromDbVersion: 1)], onHash: (_) => hashed++);
-    expect(hashed, 0);
-  });
-
-  test('the hash is cached, and recomputed after the file changes', () async {
-    var hashed = 0;
-    expect(
-      (await planWith([delta()], onHash: (_) => hashed++)).isDelta,
-      isTrue,
-    );
-    expect(
-      (await planWith([delta()], onHash: (_) => hashed++)).isDelta,
-      isTrue,
-    );
-    expect(hashed, 1);
-
-    await File(installed).writeAsBytes([1, 2, 3]);
-    expect(
-      (await planWith([delta()], onHash: (_) => hashed++)).isDelta,
-      isFalse,
-    );
-    expect(hashed, 2);
   });
 }

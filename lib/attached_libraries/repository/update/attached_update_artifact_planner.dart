@@ -1,10 +1,8 @@
 import 'dart:ffi';
 import 'dart:io';
-import 'dart:isolate';
 
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:otzaria/attached_libraries/models/attached_update_manifest.dart';
-import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_builder.dart';
 
 /// תקרת החלון של zstd (2^31): prefix גדול מזה אינו ניתן להצגה לפענוח.
 const int kMaxDeltaBaseBytes = 2 * 1024 * 1024 * 1024;
@@ -19,32 +17,21 @@ class AttachedUpdatePlan {
   bool get isDelta => delta != null;
 }
 
-/// בוחר בין הקובץ המלא לתיקון דלתא. כל ספק — מידות, גרסה, sha256 של הקובץ
-/// המותקן, מכונה 32 סיביות — מחזיר את הקובץ המלא בלי להציג שגיאה למשתמש.
+/// בוחר בין הקובץ המלא לתיקון דלתא. כל ספק — מידות, גרסה, מכונה 32 סיביות —
+/// מחזיר את הקובץ המלא בלי להציג שגיאה למשתמש. הבסיס אינו מוחשב ב-sha256
+/// (דקות על גיגה-בייט): דלתא על בסיס שונה נכשלת באימות הפלט מול המניפסט
+/// החתום, והשירות חוזר אז לקובץ המלא.
 class AttachedUpdateArtifactPlanner {
   const AttachedUpdateArtifactPlanner({
-    this.hashFile = _sha256InIsolate,
     this.pointerSize,
     this.maxBaseBytes = kMaxDeltaBaseBytes,
   });
-
-  /// sha256 של הקובץ המותקן; ברירת המחדל רצה ב-isolate.
-  final Future<String> Function(String path) hashFile;
 
   /// דריסה לבדיקות של רוחב המצביע (8 = 64 סיביות).
   final int? pointerSize;
 
   /// גודל הקובץ המותקן שעדיין אפשר להשתמש בו כ-prefix.
   final int maxBaseBytes;
-
-  static Future<String> _sha256InIsolate(String path) =>
-      Isolate.run(() => AttachedUpdateArtifactBuilder.sha256OfFile(path));
-
-  // המסד נשאר זהה בין בדיקה להתקנה; חישוב מחדש היה קורא גיגה-בתים שוב.
-  static final _hashCache =
-      <String, ({int size, int mtimeMs, String digest})>{};
-
-  static void clearCacheForTesting() => _hashCache.clear();
 
   Future<AttachedUpdatePlan> plan(
     AttachedUpdateManifest manifest, {
@@ -76,29 +63,11 @@ class AttachedUpdateArtifactPlanner {
           stat.size > maxBaseBytes) {
         return full;
       }
-      final digest = await _installedDigest(installedPath, stat);
-      for (final delta in candidates) {
-        if (delta.fromSha256 == digest) {
-          return AttachedUpdatePlan(delta.artifact, delta: delta);
-        }
-      }
-      return full;
+      final delta = candidates.first;
+      return AttachedUpdatePlan(delta.artifact, delta: delta);
     } catch (e) {
       debugPrint('[AttachedUpdates] delta planning failed: $e');
       return full;
     }
-  }
-
-  Future<String> _installedDigest(String path, FileStat stat) async {
-    final mtimeMs = stat.modified.millisecondsSinceEpoch;
-    final cached = _hashCache[path];
-    if (cached != null &&
-        cached.size == stat.size &&
-        cached.mtimeMs == mtimeMs) {
-      return cached.digest;
-    }
-    final digest = await hashFile(path);
-    _hashCache[path] = (size: stat.size, mtimeMs: mtimeMs, digest: digest);
-    return digest;
   }
 }
