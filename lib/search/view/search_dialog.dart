@@ -435,7 +435,7 @@ class _SearchDialogState extends State<SearchDialog> {
                 onPressed: () {
                   Navigator.of(context).pop();
                   mainWindowScreenKey.currentState?.handleInternalDeepLink(
-                    'otzaria://settings/library',
+                    'otzaria://open/settings/library',
                   );
                 },
               ),
