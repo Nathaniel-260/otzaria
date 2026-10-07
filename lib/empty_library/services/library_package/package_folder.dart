@@ -13,13 +13,16 @@ class PackageFileEntry {
   final String? id;
 }
 
-/// תיקייה שבה המסייע הניח את קובצי הספרייה. המימושים מחזיקים מחרוזות בלבד,
-/// ולכן ניתן להעביר אותם ל-isolate שפורס.
-sealed class PackageFolder {
+/// תיקייה שבה מונחים קובצי הספרייה (חבילת המסייע או הקבצים עצמם). המימושים
+/// מחזיקים מחרוזות בלבד, ולכן ניתן להעביר אותם ל-isolate שפורס.
+abstract class PackageFolder {
   const PackageFolder();
 
   /// הקבצים שבשורש התיקייה (בלי תתי-תיקיות).
   Future<List<PackageFileEntry>> list();
+
+  /// תת-התיקייה [name], או null כשאינה קיימת.
+  Future<PackageFolder?> child(String name);
 
   Stream<List<int>> openRead(PackageFileEntry entry);
 
@@ -51,6 +54,12 @@ class DirectoryPackageFolder extends PackageFolder {
   }
 
   @override
+  Future<PackageFolder?> child(String name) async {
+    final dir = p.join(path, name);
+    return await Directory(dir).exists() ? DirectoryPackageFolder(dir) : null;
+  }
+
+  @override
   Stream<List<int>> openRead(PackageFileEntry entry) =>
       File(p.join(path, entry.name)).openRead();
 }
@@ -59,10 +68,17 @@ class DirectoryPackageFolder extends PackageFolder {
 /// בנתחים דרך `FolderImportChannel.kt`. מתוך isolate נדרש קודם
 /// `BackgroundIsolateBinaryMessenger.ensureInitialized`.
 class SafPackageFolder extends PackageFolder {
-  const SafPackageFolder({required this.treeUri, required this.name});
+  const SafPackageFolder({
+    required this.treeUri,
+    required this.name,
+    this.documentId,
+  });
 
   final String treeUri;
   final String name;
+
+  /// מזהה תת-תיקייה בתוך העץ; null — שורש העץ שנבחר.
+  final String? documentId;
 
   static const _channel = MethodChannel('otzaria/folder_import');
   static const _chunkBytes = 4 << 20;
@@ -74,6 +90,7 @@ class SafPackageFolder extends PackageFolder {
   Future<List<PackageFileEntry>> list() async {
     final files = await _channel.invokeListMethod<Map>('listFiles', {
       'uri': treeUri,
+      'parentId': documentId,
     });
     return [
       for (final file in files ?? const <Map>[])
@@ -83,6 +100,22 @@ class SafPackageFolder extends PackageFolder {
           id: file['id'] as String,
         ),
     ];
+  }
+
+  @override
+  Future<PackageFolder?> child(String name) async {
+    final id = await _channel.invokeMethod<String>('childFolder', {
+      'uri': treeUri,
+      'parentId': documentId,
+      'name': name,
+    });
+    return id == null
+        ? null
+        : SafPackageFolder(
+            treeUri: treeUri,
+            name: '${this.name}/$name',
+            documentId: id,
+          );
   }
 
   @override

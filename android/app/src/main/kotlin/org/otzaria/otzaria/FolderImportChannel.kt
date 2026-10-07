@@ -92,7 +92,16 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
                 val files = listBookFiles(treeUriOf(call), extensionsOf(call))
                 mapOf("fileCount" to files.size, "totalBytes" to files.sumOf { it.size })
             }
-            "listFiles" -> runInBackground(result) { listTopFiles(treeUriOf(call)) }
+            "listFiles" -> runInBackground(result) {
+                listTopFiles(treeUriOf(call), call.argument<String>("parentId"))
+            }
+            "childFolder" -> runInBackground(result) {
+                childFolderId(
+                    treeUriOf(call),
+                    call.argument<String>("parentId"),
+                    call.argument<String>("name")!!,
+                )
+            }
             "openDocument" -> runInBackground(result, streamExecutor) {
                 val uri = DocumentsContract.buildDocumentUriUsingTree(
                     treeUriOf(call),
@@ -192,12 +201,12 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
         return files
     }
 
-    /** הקבצים שבשורש העץ בלבד, עם המזהה לפתיחה ב-openDocument. */
-    private fun listTopFiles(treeUri: Uri): List<Map<String, Any>> {
+    /** הקבצים שישירות תחת [parentId] (שורש העץ כשהוא null), עם המזהה ל-openDocument. */
+    private fun listTopFiles(treeUri: Uri, parentId: String?): List<Map<String, Any>> {
         val files = mutableListOf<Map<String, Any>>()
         val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
             treeUri,
-            DocumentsContract.getTreeDocumentId(treeUri),
+            parentId ?: DocumentsContract.getTreeDocumentId(treeUri),
         )
         activity.contentResolver.query(childrenUri, CHILD_COLUMNS, null, null, null)
             ?.use { cursor ->
@@ -210,6 +219,25 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
                 }
             }
         return files
+    }
+
+    /** מזהה תת-התיקייה [name] שתחת [parentId] (שורש העץ כשהוא null), או null. */
+    private fun childFolderId(treeUri: Uri, parentId: String?, name: String): String? {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+            treeUri,
+            parentId ?: DocumentsContract.getTreeDocumentId(treeUri),
+        )
+        activity.contentResolver.query(childrenUri, CHILD_COLUMNS, null, null, null)
+            ?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    if (cursor.getString(1) == name &&
+                        cursor.getString(2) == Document.MIME_TYPE_DIR
+                    ) {
+                        return cursor.getString(0)
+                    }
+                }
+            }
+        return null
     }
 
     /** ממלא עד [max] בתים; מערך קצר יותר רק בסוף הקובץ, וריק אחריו. */
@@ -266,7 +294,7 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
     private fun runInBackground(
         result: MethodChannel.Result,
         on: java.util.concurrent.Executor = executor,
-        work: () -> Any,
+        work: () -> Any?,
     ) {
         on.execute {
             try {
