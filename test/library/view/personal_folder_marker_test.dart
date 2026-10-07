@@ -1,4 +1,6 @@
 // תיקייה אישית בספרייה: אותו סימון ואותה מחיקה שיש לספר אישי (issue #1998).
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/gestures.dart';
@@ -7,6 +9,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/focus_repository.dart';
+import 'package:otzaria/core/ui_snack.dart';
+import 'package:otzaria/core/messages/library_messages.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
 import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
@@ -14,6 +19,7 @@ import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/library/view/grid_items.dart';
 import 'package:otzaria/library/view/library_browser.dart';
 import 'package:otzaria/library_update/bloc/library_update_bloc.dart';
+import 'package:otzaria/migration/sync/file_sync_service.dart';
 import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
@@ -127,6 +133,7 @@ Future<void> _pumpGridItem(
   CustomFoldersBloc? bloc,
 }) async {
   Widget child = MaterialApp(
+    navigatorKey: navigatorKey,
     home: Directionality(
       textDirection: TextDirection.rtl,
       child: Material(
@@ -249,6 +256,113 @@ void main() {
     });
 
     group('מחיקה מהספרייה', () {
+      tearDown(UiSnack.hide);
+      for (final duringDialog in [false, true]) {
+        testWidgets(
+          duringDialog
+              ? 'סריקה שמתחילה בזמן הדיאלוג מונעת הסרה באישור'
+              : 'סריקה פעילה משביתה את תפריט ההסרה',
+          (tester) async {
+            final folder = _folder('/personal/מסמכים');
+            final sync = Completer<FileSyncResult>();
+            var deletes = 0;
+            var saves = 0;
+            final bloc = CustomFoldersBloc(
+              addLibraryEvent: (_) {},
+              loadFolders: () => [folder],
+              saveFolders: (_) async => saves++,
+              syncFolders: (_, {String? onlyFolderPath}) => sync.future,
+              deleteFolderFromDb: (_) async => deletes++,
+            )..add(const LoadCustomFolders());
+            addTearDown(() async {
+              if (!sync.isCompleted) sync.complete(const FileSyncResult());
+              UiSnack.hide();
+              await tester.pumpAndSettle();
+              await tester.runAsync(bloc.close);
+            });
+            await _pumpGridItem(tester, _personalTree().folder, bloc: bloc);
+            if (duringDialog) {
+              await tester.tap(find.byTooltip('אפשרויות נוספות'));
+              await tester.pumpAndSettle();
+              await tester.tap(find.text('מחק מהספרייה'));
+              await tester.pumpAndSettle();
+            }
+            bloc.add(const RescanCustomFolders());
+            await tester.pumpAndSettle();
+            if (duringDialog) {
+              await tester.tap(find.text('מחק'));
+            } else {
+              await tester.tap(find.byTooltip('אפשרויות נוספות'));
+            }
+            await tester.pumpAndSettle();
+            expect(find.text('מחק מהספרייה'), findsNothing);
+            if (duringDialog) {
+              expect(
+                find.text(LibraryMessages.folderRemovalBusy),
+                findsOneWidget,
+              );
+            }
+            expect(saves, 0);
+            expect(deletes, 0);
+            UiSnack.hide();
+            await tester.pumpAndSettle();
+          },
+        );
+      }
+
+      testWidgets('תור מסד הנתונים משבית את תפריט ההסרה', (tester) async {
+        final harness = _FoldersHarness([_folder('/personal/מסמכים')]);
+        await _pumpGridItem(tester, _personalTree().folder, bloc: harness.bloc);
+        final busyCount = DatabaseLibraryProvider.operationQueue.busyCount;
+        busyCount.value++;
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('אפשרויות נוספות'));
+        await tester.pumpAndSettle();
+        expect(find.text('מחק מהספרייה'), findsNothing);
+        busyCount.value--;
+        await tester.pumpAndSettle();
+        await tester.pumpWidget(const SizedBox.shrink());
+        await tester.runAsync(harness.bloc.close);
+      });
+
+      testWidgets('סיום סריקה אחרת לא מסתיר כשל הסרה מאוחר', (tester) async {
+        var folders = [_folder('/personal/מסמכים')];
+        final deletion = Completer<void>();
+        final sync = Completer<FileSyncResult>();
+        final bloc = CustomFoldersBloc(
+          addLibraryEvent: (_) {},
+          loadFolders: () => folders,
+          saveFolders: (saved) async => folders = saved,
+          syncFolders: (_, {String? onlyFolderPath}) => sync.future,
+          deleteFolderFromDb: (_) => deletion.future,
+        )..add(const LoadCustomFolders());
+        addTearDown(() async {
+          if (!sync.isCompleted) sync.complete(const FileSyncResult());
+          if (!deletion.isCompleted) deletion.complete();
+          UiSnack.hide();
+          await tester.pumpAndSettle();
+          await tester.runAsync(bloc.close);
+        });
+        await _pumpGridItem(tester, _personalTree().folder, bloc: bloc);
+        await tester.tap(find.byTooltip('אפשרויות נוספות'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('מחק מהספרייה'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('מחק'));
+        await tester.pumpAndSettle();
+        bloc.add(const RescanCustomFolders());
+        await tester.pump();
+        sync.complete(const FileSyncResult(addedBooks: 1));
+        await tester.pumpAndSettle();
+        expect(find.text('התיקייה "מסמכים" הוסרה מהספרייה'), findsNothing);
+        deletion.completeError(StateError('delete-db-failed'));
+        await tester.pumpAndSettle();
+        expect(find.textContaining('delete-db-failed'), findsOneWidget);
+        expect(find.text('התיקייה "מסמכים" הוסרה מהספרייה'), findsNothing);
+        UiSnack.hide();
+        await tester.pumpAndSettle();
+      });
+
       testWidgets(
         'תיקייה אישית מוגדרת: "מחק מהספרייה" עם אישור מסיר אותה דרך שירות התיקיות',
         (tester) async {
@@ -272,6 +386,8 @@ void main() {
           expect(harness.deletedFromDb, [docs]);
           expect(harness.saved.last, [other]);
           expect(harness.libraryEvents.whereType<RefreshLibrary>(), isNotEmpty);
+          UiSnack.hide();
+          await tester.pumpAndSettle();
         },
       );
 

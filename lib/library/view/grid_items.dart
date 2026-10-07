@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
@@ -9,6 +11,7 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
 import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/plugins/services/plugin_library_books_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
@@ -890,37 +893,49 @@ class CategoryActionsMenuButton extends StatelessWidget {
         category.personalSource?.isUser != true) {
       return const SizedBox.shrink();
     }
-    return BlocSelector<CustomFoldersBloc, CustomFoldersState, CustomFolder?>(
-      selector: (state) => _customFolderOf(category, state.folders),
-      builder: (context, folder) {
+    return BlocSelector<
+      CustomFoldersBloc,
+      CustomFoldersState,
+      ({CustomFolder? folder, bool isSyncing})
+    >(
+      selector: (state) => (
+        folder: _customFolderOf(category, state.folders),
+        isSyncing: state.isSyncing,
+      ),
+      builder: (context, selection) {
+        final folder = selection.folder;
         if (folder == null) return const SizedBox.shrink();
         final theme = Theme.of(context);
         return SizedBox(
           width: 28,
           height: 28,
-          child: AppPopupMenuButton<String>(
-            icon: Icon(
-              FluentIcons.more_vertical_24_regular,
-              size: 15,
-              color: theme.colorScheme.secondary,
-            ),
-            tooltip: 'אפשרויות נוספות',
-            position: PopupMenuPosition.under,
-            padding: EdgeInsets.zero,
-            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-            onSelected: (value) {
-              if (value == 'delete') {
-                _showDeleteFolderDialog(context, category.title, folder);
-              }
-            },
-            entries: const [
-              AppMenuEntry<String>(
-                value: 'delete',
-                label: 'מחק מהספרייה',
-                icon: FluentIcons.delete_24_regular,
-                isDestructive: true,
+          child: ValueListenableBuilder<int>(
+            valueListenable: DatabaseLibraryProvider.operationQueue.busyCount,
+            builder: (context, busyCount, _) => AppPopupMenuButton<String>(
+              enabled: !selection.isSyncing && busyCount == 0,
+              icon: Icon(
+                FluentIcons.more_vertical_24_regular,
+                size: 15,
+                color: theme.colorScheme.secondary,
               ),
-            ],
+              tooltip: 'אפשרויות נוספות',
+              position: PopupMenuPosition.under,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _showDeleteFolderDialog(context, category.title, folder);
+                }
+              },
+              entries: const [
+                AppMenuEntry<String>(
+                  value: 'delete',
+                  label: 'מחק מהספרייה',
+                  icon: FluentIcons.delete_24_regular,
+                  isDestructive: true,
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -943,6 +958,10 @@ Future<void> _showDeleteFolderDialog(
   CustomFolder folder,
 ) async {
   final bloc = context.read<CustomFoldersBloc>();
+  if (bloc.state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy) {
+    UiSnack.show(LibraryMessages.folderRemovalBusy);
+    return;
+  }
   final confirmed = await showWarningDialog(
     context: context,
     title: 'למחוק את התיקייה?',
@@ -952,15 +971,15 @@ Future<void> _showDeleteFolderDialog(
     cancelText: 'ביטול',
     confirmText: 'מחק',
   );
-  if (confirmed != true) return;
+  if (confirmed != true || !context.mounted || bloc.isClosed) return;
+  if (bloc.state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy) {
+    UiSnack.show(LibraryMessages.folderRemovalBusy);
+    return;
+  }
 
-  final done = bloc.stream.firstWhere(
-    (state) =>
-        !state.isSyncing && (state.message != null || state.error != null),
-  );
-  bloc.add(RemoveCustomFolder(folder, deleteFromDb: true));
-  final result = await done;
-  final error = result.error;
+  final done = Completer<String?>();
+  bloc.add(RemoveCustomFolder(folder, deleteFromDb: true, completer: done));
+  final error = await done.future;
   if (error != null) {
     UiSnack.showError(error);
   } else {
