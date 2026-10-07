@@ -118,6 +118,7 @@ void main() {
   late _Gate gate;
   late _FailingCache cache;
   late List<(String?, String?)> reopenedLibrary;
+  late Completer<void> reopened;
 
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('otzaria-pkg-bloc-');
@@ -127,6 +128,7 @@ void main() {
     books = p.join(root, 'books');
     indexHostCalls = [];
     reopenedLibrary = [];
+    reopened = Completer<void>();
     await Settings.init(cacheProvider: cache = _FailingCache());
     await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
     await Settings.setValue<String>(SettingsRepository.keyIndexPath, '');
@@ -208,6 +210,7 @@ void main() {
             db.existsSync() ? db.readAsStringSync() : null,
             meta.existsSync() ? meta.readAsStringSync() : null,
           ));
+          if (!reopened.isCompleted) reopened.complete();
           if (failReopen) throw StateError('simulated reopen failure');
         },
       ),
@@ -218,7 +221,8 @@ void main() {
     DirectoryPackageFolder(source.path),
   )).packages!;
 
-  /// עדכון במקום מסתיים ב-resumeAll; הגדרה ראשונה — במצב הסופי.
+  /// עדכון במקום מסתיים ב-resumeAll; הגדרה ראשונה — במצב הסופי, ואם האינדקס
+  /// שוחרר גם בפתיחתו מחדש, שבאה אחרי שחזור וניקוי שעושים IO אמיתי.
   Future<void> settle(EmptyLibraryBloc bloc, {bool replacing = false}) async {
     if (replacing) {
       await gate.resumed.future.timeout(const Duration(seconds: 30));
@@ -229,6 +233,9 @@ void main() {
           (s) => s is EmptyLibraryDirectorySelected || s is EmptyLibraryError,
         )
         .timeout(const Duration(seconds: 30));
+    if (indexHostCalls.contains('release')) {
+      await reopened.future.timeout(const Duration(seconds: 30));
+    }
     await pumpEventQueue();
   }
 
