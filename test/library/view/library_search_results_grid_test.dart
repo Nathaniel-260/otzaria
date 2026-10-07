@@ -215,6 +215,33 @@ void main() {
     },
   );
 
+  testWidgets('סינון לפי קטגוריה מסנן גם את התיקיות בתוצאות (issue #2070)', (
+    tester,
+  ) async {
+    final library = Library(categories: []);
+    await _pumpLibraryBrowser(
+      tester,
+      LibraryState(
+        library: library,
+        currentCategory: library,
+        searchResults: [TextBook(title: 'דברי תורה', topics: 'קבלה, רמח"ל')],
+        searchCategoryResults: [
+          _category(
+            'דברי חיים',
+            _category('שות', _category('אחרונים', library)),
+          ),
+          _category('דברי שלום', _category('קבלה', library)),
+        ],
+        selectedTopics: const ['קבלה'],
+        searchQuery: 'דברי',
+      ),
+      size: const Size(1200, 800),
+    );
+
+    expect(find.byType(CategoryGridItem), findsOneWidget);
+    expect(find.text('דברי חיים'), findsNothing);
+  });
+
   for (final width in [
     320.0,
     411.0,
