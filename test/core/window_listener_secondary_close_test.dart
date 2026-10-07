@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui' as ui show IsolateNameServer;
@@ -54,6 +55,7 @@ void main() {
   });
 
   tearDown(() async {
+    AppWindowListener.prepareUpdateForClose = null;
     TabsRepository.debugSessions = null;
     database.close();
     runner.uninstall();
@@ -67,6 +69,59 @@ void main() {
     ui.IsolateNameServer.removePortNameMapping('$_namespace.owner');
     WindowBus.namespace = 'otzaria.window';
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+  });
+
+  test('הכנת העדכון מסתיימת לפני flush וסגירה, גם באירוע כפול', () async {
+    WindowBus.instance.register();
+    final preparing = Completer<void>();
+    final started = Completer<void>();
+    final steps = <String>[];
+    AppWindowListener.prepareUpdateForClose = () async {
+      steps.add('prepare');
+      started.complete();
+      await preparing.future;
+      steps.add('launched');
+    };
+    Future<void> flush() async => steps.add('flush');
+    PreCloseRegistry.register(flush);
+    addTearDown(() => PreCloseRegistry.unregister(flush));
+
+    final listener = AppWindowListener();
+    final close = listener.handleWindowClose();
+    await started.future;
+    await listener.handleWindowClose();
+    expect(steps, ['prepare']);
+    expect(runner.closeSelfCalls, 0);
+
+    preparing.complete();
+    await close;
+    expect(steps, ['prepare', 'launched', 'flush']);
+    expect(runner.closeSelfCalls, 1);
+  });
+
+  test('סגירה שבוטלה אינה מכינה או משגרת עדכון', () async {
+    var launches = 0;
+    AppWindowListener.prepareUpdateForClose = () async => launches++;
+
+    await AppWindowListener().handleWindowClose(canClose: () => false);
+
+    expect(launches, 0);
+    expect(runner.closeSelfCalls, 0);
+  });
+
+  test('כשל בהכנת העדכון אינו נועל את ניסיון הסגירה הבא', () async {
+    WindowBus.instance.register();
+    final listener = AppWindowListener();
+    AppWindowListener.prepareUpdateForClose = () async {
+      throw StateError('preparation failed');
+    };
+
+    await expectLater(listener.handleWindowClose(), throwsStateError);
+    expect(runner.closeSelfCalls, 0);
+
+    AppWindowListener.prepareUpdateForClose = null;
+    await listener.handleWindowClose();
+    expect(runner.closeSelfCalls, 1);
   });
 
   test('חלון משני שאינו האחרון: flush רץ, הסשן נמחק, ורק הוא נסגר', () async {

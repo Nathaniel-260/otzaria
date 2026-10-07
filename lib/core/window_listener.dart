@@ -184,6 +184,9 @@ class AppWindowListener extends WindowListener {
   VoidCallback? onWindowResizeOccurred;
   bool _isClosing = false;
 
+  /// הכנת עדכון פר-isolate, אחרי אישור הסגירה ולפני תחילת הכיבוי.
+  static Future<void> Function()? prepareUpdateForClose;
+
   Future<void> _runBestEffortShutdownStep(
     String stepName,
     Future<void> Function() action, {
@@ -287,6 +290,13 @@ class AppWindowListener extends WindowListener {
       return;
     }
     _isClosing = true;
+    try {
+      // הגיבוב עשוי להימשך יותר מכלב השמירה של הכיבוי.
+      await prepareUpdateForClose?.call();
+    } catch (_) {
+      _isClosing = false;
+      rethrow;
+    }
 
     // ⚠️ **לפני** ההכרעה מי האחרון. סגירה של כמה חלונות יחד יכולה לגמור
     // ב-`TerminateProcess` של ה-runner בלי ששום חלון ריץ את הכיבוי המסודר,

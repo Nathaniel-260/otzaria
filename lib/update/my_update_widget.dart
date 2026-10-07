@@ -8,7 +8,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/update_check_frequency.dart';
 import 'package:otzaria/core/update_source_reachability.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/tabs/utils/confirm_close_tabs.dart';
+import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/messages/library_messages.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/windows_arch_info.dart';
@@ -21,7 +21,6 @@ import 'dart:convert';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:updat/utils/file_handler.dart' show openInstaller;
-import 'package:window_manager/window_manager.dart';
 import 'package:otzaria/core/windowing/app_window_controller.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
@@ -716,14 +715,13 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// האם הקובץ ב-[_installerFile] הוא מתקין Windows שמתקין בשקט (נקבע לפי
   /// ה-URL בעת ההורדה — ראה [isSilentWindowsInstallerUrl]).
   bool _installerIsSilent = false;
-  bool _windowCloseHookInstalled = false;
+  Future<bool>? _installerLaunch;
 
   /// עדכון מצומצם שכבר נבנה ואומת ב-staging. קיומו מסיט את ההתקנה
   /// למעדכן העצמאי במקום למתקין המלא.
   PreparedDifferentialUpdate? _differentialUpdate;
 
-  /// המתקין כבר שוגר אך התהליך עוד חי (שומר סגירה סירב, או שחלון אחר פתוח) —
-  /// רק במצב הזה סגירת החלונות שנותרו היא שמשלימה את העדכון.
+  /// ההתקנה החלה; הכפתור נעול בזמן השיגור ועד לסגירת החלונות.
   bool _awaitingCloseForUpdate = false;
 
   /// פעיל רק כל עוד המעדכן המצומצם ממתין ליציאת התהליך.
@@ -757,7 +755,7 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   void initState() {
     super.initState();
     _softwareCheck = _initialSoftwareCheck.begin();
-    _installWindowCloseHook();
+    AppWindowListener.prepareUpdateForClose = _handleWindowClose;
     _listenForUpdateUnblock();
     // דוחים את הבדיקה הראשונית ל-post-frame כדי שהסיור המודרך (שמופעל אף הוא
     // ב-post-frame, מוקדם יותר באותו פריים) יספיק לעדכן את מצבו לפני שנחליט.
@@ -830,11 +828,8 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     _settingsSubscription?.cancel();
     _offlineRecheckTimer?.cancel();
     _updaterGiveUpWatch?.cancel();
-    if (_windowCloseHookInstalled) {
-      // ⚠️ ה-singleton של `window_manager` ולא `AppWindowController`: רשימת
-      // ה-listeners שלו היא פר-isolate, ולכן היא **כבר** של החלון הזה.
-      windowManager.removeListener(_windowListener);
-      _windowCloseHookInstalled = false;
+    if (AppWindowListener.prepareUpdateForClose == _handleWindowClose) {
+      AppWindowListener.prepareUpdateForClose = null;
     }
     super.dispose();
   }
@@ -847,32 +842,13 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     UiSnack.showError(message);
   }
 
-  Future<void> _installWindowCloseHook() async {
-    try {
-      // ⚠️ `window_manager` הוא סינגלטון פר-isolate, ולכן הקריאה חלה על
-      // החלון של ה-isolate הזה — לא על "החלון של התהליך".
-      await windowManager.setPreventClose(true);
-      if (!mounted) {
-        return;
-      }
-      windowManager.addListener(_windowListener);
-      _windowCloseHookInstalled = true;
-    } catch (e) {
-      // בלי ה-hook העדכון לא יותקן בסגירת החלון — הכשל חייב להיות גלוי בלוג
-      debugPrint('[Update] window close hook install failed: $e');
-      _windowCloseHookInstalled = false;
-    }
-  }
-
-  late final WindowListener _windowListener = _ManagedUpdateWindowListener(
-    handleWindowClose: _handleWindowClose,
-  );
-
-  /// ⚠️ **אינו סוגר את החלון.** `AppWindowListener` רץ על אותו אירוע סגירה
-  /// ומכריע בין כיבוי התהליך לבין `closeSelf`; הריסה מכאן הפילה את התהליך.
   Future<void> _handleWindowClose() async {
-    // אותה הבטחה שהמאזין הראשי ממתין לה — ביטול שם מבטל גם את ההתקנה.
-    if (!await confirmAppCloseWithUnsavedChanges()) return;
+    // שיגור שכבר התחיל חייב להסתיים לפני שהכיבוי מסיים את התהליך.
+    final pending = _installerLaunch;
+    if (pending != null) {
+      await pending;
+      return;
+    }
     if (!shouldLaunchInstallerOnExit(
       status: _status,
       hasInstallerFile: _installerFile != null || _differentialUpdate != null,
@@ -888,23 +864,21 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
     }
   }
 
-  /// מפעיל את ההתקנה ביוזמת המשתמש (כפתור "מוכן להתקנה"): משגר את המתקין
-  /// ורק אם השיגור הצליח סוגר את אוצריא. כך המתקין מופעל כפעולה האחרונה
-  /// לפני היציאה — אוצריא כבר אינה רצה כשהמתקין מעתיק קבצים, ולכן אין צורך
-  /// שהמתקין יבקש לסגור אותה ואין מצב שבו סגירה ידנית קוטעת מתקין שרץ.
-  ///
-  /// אם השיגור נכשל החלון נשאר פתוח כדי שהמשתמש יראה את מצב השגיאה ויוכל
-  /// לנסות שוב.
+  /// משגר את העדכון ביוזמת המשתמש וסוגר את אוצריא רק אם השיגור הצליח.
   Future<void> _installNow() async {
+    if (_awaitingCloseForUpdate || _installerLaunch != null) return;
     if (_installerFile == null && _differentialUpdate == null) return;
+    setState(() => _awaitingCloseForUpdate = true);
     final differential = _differentialUpdate;
     final installer = _installerFile;
     final launched = await _launchInstaller(relaunchApp: true);
+    if (!launched && mounted) {
+      setState(() => _awaitingCloseForUpdate = false);
+    }
     if (shouldDestroyWindowAfterInstallNow(installerLaunched: launched)) {
       // איפוס המקורות מונע שיגור כפול כשאירוע הסגירה יגיע ל-hook.
       _installerFile = null;
       _differentialUpdate = null;
-      if (mounted) setState(() => _awaitingCloseForUpdate = true);
       final portableZip =
           Platform.isWindows &&
           (installer?.path.toLowerCase().endsWith('.zip') ?? false);
@@ -1433,13 +1407,17 @@ class _ManagedUpdatWidgetState extends State<_ManagedUpdatWidget> {
   /// [relaunchApp] — האם אוצריא תופעל מחדש בסיום ההתקנה (רלוונטי למתקין
   /// השקט ב-Windows): `true` בעדכון יזום ("התקן כעת"), `false` בעדכון
   /// בעת סגירת התוכנה.
-  Future<bool> _launchInstaller({required bool relaunchApp}) async {
-    if (_differentialUpdate != null) {
-      return _launchDifferentialSwap(relaunchApp: relaunchApp);
-    }
-    if (_installerFile == null) return false;
+  Future<bool> _launchInstaller({required bool relaunchApp}) =>
+      _installerLaunch ??= _launchInstallerOnce(
+        relaunchApp: relaunchApp,
+      ).whenComplete(() => _installerLaunch = null);
 
+  Future<bool> _launchInstallerOnce({required bool relaunchApp}) async {
     try {
+      if (_differentialUpdate != null) {
+        return await _launchDifferentialSwap(relaunchApp: relaunchApp);
+      }
+      if (_installerFile == null) return false;
       await _launchInstallerDirect(relaunchApp: relaunchApp);
       return true;
     } catch (_) {
@@ -1588,7 +1566,7 @@ class ManagedUpdateScope extends InheritedWidget {
   final UpdatStatus status;
   final String? changelog;
 
-  /// המתקין שוגר והתהליך עוד חי — ראה `_awaitingCloseForUpdate`.
+  /// ההתקנה החלה והתהליך עוד חי — ראה `_awaitingCloseForUpdate`.
   final bool awaitingClose;
   final VoidCallback checkForUpdate;
   final VoidCallback startUpdate;
@@ -1644,17 +1622,6 @@ class ManagedUpdateTitleBarIndicator extends StatelessWidget {
       launchInstaller: update.launchInstaller,
       dismissUpdate: update.dismissUpdate,
     );
-  }
-}
-
-class _ManagedUpdateWindowListener extends WindowListener {
-  _ManagedUpdateWindowListener({required this.handleWindowClose});
-
-  final Future<void> Function() handleWindowClose;
-
-  @override
-  void onWindowClose() async {
-    await handleWindowClose();
   }
 }
 
