@@ -2097,6 +2097,31 @@ void main() {
       },
     );
 
+    test(
+      'ספר שהריצה מתה באמצעו פעמיים ברצף מדולג ככשל קבוע (issue #2038)',
+      () async {
+        final tempDir = await io.Directory.systemTemp.createTemp('canary_');
+        addTearDown(() => tempDir.delete(recursive: true));
+        final engine = _RecordingSearchEngine();
+        final provider = _RecordingTantivyDataProvider(engine)
+          ..activeIndexPath = p.join(tempDir.path, 'index');
+        final crasher = TextBook(id: 1, title: 'קורס', source: BookSource.user);
+        final crasherKey = IndexingRepository.buildIndexedBookFilePath(crasher);
+        io.File(
+          '${provider.activeIndexPath}.in_flight.json',
+        ).writeAsStringSync(jsonEncode({crasherKey: 2}));
+        final library = Library(categories: [])..books.add(crasher);
+
+        final result = await _FakeExtractionRepository(
+          provider,
+        ).indexAllBooks(library, onProgress: (_, _) {});
+
+        expect(result.failures.single.bookTitle, crasher.title);
+        expect(result.failures.single.isRetryable, isFalse);
+        expect(provider.indexedFilePaths, contains(crasherKey));
+      },
+    );
+
     test('docx פגום (מעל מגבלת ה-ZIP) מסומן ככשל קבוע', () async {
       final engine = _RecordingSearchEngine();
       final provider = _RecordingTantivyDataProvider(engine);
@@ -3295,6 +3320,9 @@ class _RecordingTantivyDataProvider implements TantivyDataProvider {
 
   @override
   final Set<String> indexedFilePaths = {};
+
+  @override
+  String? activeIndexPath;
 
   /// כמו האמיתי: reader טרי + טעינת המעקב מחדש מהמצב החתום של האינדקס.
   @override
