@@ -1542,7 +1542,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
     final asset = parseLatestDatabaseAsset(decoded);
     if (asset == null) {
-      throw Exception('לא נמצא ברליס האחרון קובץ ספרייה שגרסה זו יודעת לקרוא');
+      throw Exception(
+        'לא נמצאה ספרייה שאפשר להוריד. נסו לעדכן את התוכנה לגרסה האחרונה ולנסות שוב',
+      );
     }
     if (!asset.isSplitManifest) return asset;
 

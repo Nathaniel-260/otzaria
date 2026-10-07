@@ -410,7 +410,7 @@ class ExternalCatalogRepository {
 
     final databaseAsset = parseLatestDatabaseAsset(decoded);
     if (databaseAsset == null) {
-      throw Exception('לא נמצא קובץ DB של הקטלוגים ברליס האחרון');
+      throw Exception('לא נמצא קובץ DB של הקטלוגים בשחרור האחרון');
     }
 
     return ExternalCatalogReleaseInfo(
@@ -446,7 +446,7 @@ class ExternalCatalogRepository {
     final versionAsset = release.versionAsset;
     if (versionAsset == null) {
       throw Exception(
-        'לא נמצא ${DatabaseConstants.externalCatalogVersionFileName} ברליס ${release.tagName}',
+        'לא נמצא ${DatabaseConstants.externalCatalogVersionFileName} בשחרור ${release.tagName}',
       );
     }
 
