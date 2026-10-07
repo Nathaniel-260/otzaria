@@ -1,8 +1,11 @@
+import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/utils/file/native_sha256.dart';
 
@@ -11,7 +14,7 @@ void main() {
   setUpAll(() => dir = Directory.systemTemp.createTempSync('native_sha_'));
   tearDownAll(() => dir.deleteSync(recursive: true));
 
-  final nativeSupported = Platform.isWindows;
+  final nativeSupported = Platform.isWindows || Platform.isMacOS;
   const chunk = 8 * 1024 * 1024;
   final rnd = Random(7);
 
@@ -56,4 +59,84 @@ void main() {
       throwsA(isA<PathNotFoundException>()),
     );
   });
+
+  test('הספרייה הנייטיבית נטענת ללא מעבר למסלול Dart', () async {
+    final file = File('${dir.path}/native')..writeAsStringSync('abc');
+    final messages = <String?>[];
+    final originalDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) => messages.add(message);
+    try {
+      expect(
+        await sha256OfFileFast(file.path),
+        'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad',
+      );
+      expect(messages, isEmpty);
+    } finally {
+      debugPrint = originalDebugPrint;
+    }
+  }, skip: nativeSupported ? false : 'אין מימוש נייטיבי בפלטפורמה זו');
+
+  test('חישובים ב-isolates מקבילים משתמשים בהקשרים נפרדים', () async {
+    final files = List.generate(4, (index) {
+      final bytes = Uint8List.fromList(
+        List.generate(chunk + index, (offset) => (offset + index) % 256),
+      );
+      final file = File('${dir.path}/parallel$index')..writeAsBytesSync(bytes);
+      return (path: file.path, digest: sha256.convert(bytes).toString());
+    });
+    final results = await Future.wait(
+      files.map((file) => Isolate.run(() => sha256OfFileFast(file.path))),
+    );
+    expect(results, files.map((file) => file.digest).toList());
+  }, skip: nativeSupported ? false : 'אין מימוש נייטיבי בפלטפורמה זו');
+
+  test('קובץ חסר משחרר hasher בלי לאתחל אותו', () async {
+    final calls = <String>[];
+    await expectLater(
+      sha256OfFileFast(
+        '${dir.path}/missing-with-hasher',
+        loadNative: () => NativeSha256(
+          () => calls.add('init'),
+          (_, _) => calls.add('update'),
+          (_) => calls.add('finish'),
+          () => calls.add('dispose'),
+        ),
+      ),
+      throwsA(isA<PathNotFoundException>()),
+    );
+    expect(calls, ['dispose']);
+  });
+
+  for (final failure in ['init', 'update', 'finish']) {
+    test('כשל $failure מועבר לקורא ומשחרר את המשאבים', () async {
+      final file = File('${dir.path}/failure-$failure')
+        ..writeAsStringSync('abc');
+      final calls = <String>[];
+      final error = StateError('simulated $failure failure');
+      void call(String stage) {
+        calls.add(stage);
+        if (stage == failure) throw error;
+      }
+
+      await expectLater(
+        sha256OfFileFast(
+          file.path,
+          loadNative: () => NativeSha256(
+            () => call('init'),
+            (Pointer<Uint8> _, int _) => call('update'),
+            (_) => call('finish'),
+            () => call('dispose'),
+          ),
+        ),
+        throwsA(same(error)),
+      );
+      expect(calls, [
+        ...['init', 'update', 'finish'].takeWhile((stage) => stage != failure),
+        failure,
+        'dispose',
+      ]);
+      await file.delete();
+      expect(file.existsSync(), isFalse);
+    });
+  }
 }

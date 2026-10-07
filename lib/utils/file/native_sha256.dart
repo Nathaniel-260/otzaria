@@ -5,12 +5,8 @@ import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
-/// SHA-256 של קובץ, כ-hex קטן. ב-Windows מחושב ב-bcrypt של המערכת, כי
-/// package:crypto (Dart טהור) לוקח כמה דקות ל-1GB (#2080). בשאר הפלטפורמות,
-/// או אם טעינת הספרייה נכשלה, נופל ל-package:crypto.
-/// macOS/iOS (CommonCrypto) לא נכללים: לא נבדקו בפועל.
-///
-/// [loadNative] ניתן להחלפה לבדיקות. כשל קריאה/חישוב אינו נבלע, רק כשל טעינה.
+/// SHA-256 כ-hex קטן דרך BCrypt ב-Windows ו-CommonCrypto ב-macOS.
+/// בשאר הפלטפורמות או בכשל טעינה משתמש ב-package:crypto; יש להריץ ב-isolate.
 Future<String> sha256OfFileFast(
   String path, {
   @visibleForTesting NativeSha256 Function()? loadNative,
@@ -29,7 +25,39 @@ Future<String> sha256OfFileFast(
 
 NativeSha256 Function()? get _platformNative {
   if (Platform.isWindows) return _bcrypt;
+  if (Platform.isMacOS) return _commonCrypto;
   return null;
+}
+
+NativeSha256 _commonCrypto() {
+  final lib = DynamicLibrary.open('/usr/lib/system/libcommonCrypto.dylib');
+  final init = lib
+      .lookupFunction<
+        Int32 Function(Pointer<Uint32>),
+        int Function(Pointer<Uint32>)
+      >('CC_SHA256_Init');
+  final update = lib
+      .lookupFunction<
+        Int32 Function(Pointer<Uint32>, Pointer<Uint8>, Uint32),
+        int Function(Pointer<Uint32>, Pointer<Uint8>, int)
+      >('CC_SHA256_Update');
+  final finish = lib
+      .lookupFunction<
+        Int32 Function(Pointer<Uint8>, Pointer<Uint32>),
+        int Function(Pointer<Uint8>, Pointer<Uint32>)
+      >('CC_SHA256_Final');
+  // CommonDigest.h: CC_SHA256_CTX = count[2], hash[8], wbuf[16] of CC_LONG.
+  final context = calloc<Uint32>(26);
+  void check(int status, String operation) {
+    if (status != 1) throw StateError('$operation failed: $status');
+  }
+
+  return NativeSha256(
+    () => check(init(context), 'CC_SHA256_Init'),
+    (data, length) => check(update(context, data, length), 'CC_SHA256_Update'),
+    (out) => check(finish(out, context), 'CC_SHA256_Final'),
+    () => calloc.free(context),
+  );
 }
 
 /// init -> update* -> finish (32 בתים ל-out) -> dispose.
