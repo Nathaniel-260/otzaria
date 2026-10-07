@@ -264,6 +264,7 @@ class _WindowBusHostState extends State<WindowBusHost> {
     if (!mounted) return false;
     final window = AppWindowScope.controllerOf(context);
     if (!await window.isVisible()) return false;
+    MultiWindowService.closingAll = true;
     await window.close();
     return true;
   }

@@ -332,7 +332,9 @@ class AppWindowListener extends WindowListener {
       // כרטיסיות שהוא בחר לסגור (`adoptOrphanWindowSessions`).
       // `Ctrl+Shift+T` אינו נשען עליו אלא על המנוע שנשאר חי בזיכרון.
       // החלון האחרון במק נשאר ב-Dock, והכרטיסיות שלו הן הסשן הבא.
-      if (!isLast) await TabsRepository().discardWindowSession();
+      if (!isLast && !MultiWindowService.closingAll) {
+        await TabsRepository().discardWindowSession();
+      }
 
       // מוסתר ולא נהרס: תוספים שממשיכים לרוץ היו צורכים משאבים ברקע.
       PluginRuntimeDispatcher.instance.setWindowShown(false);
