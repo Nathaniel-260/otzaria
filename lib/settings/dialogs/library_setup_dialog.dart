@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -388,12 +389,19 @@ class _LibrarySetupDialogContentState
         throw StateError('picked file without a path');
       }
       return file;
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
+        // רק בנייד הבורר מעתיק את הקובץ למטמון; בשולחן העבודה הכשל הוא בבורר עצמו.
         UiSnack.showError(
-          context.settingsText(
-            'העתקת הקובץ שנבחר נכשלה — בדוק שיש די מקום פנוי באחסון הפנימי',
-          ),
+          defaultTargetPlatform == TargetPlatform.android ||
+                  defaultTargetPlatform == TargetPlatform.iOS
+              ? context.settingsText(
+                  'העתקת הקובץ שנבחר נכשלה — בדוק שיש די מקום פנוי באחסון הפנימי',
+                )
+              : context.settingsText(
+                  'פתיחת חלון בחירת הקובץ נכשלה: {error}',
+                  args: {'error': '$error'},
+                ),
         );
       }
       return null;
