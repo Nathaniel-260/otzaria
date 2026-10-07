@@ -25,7 +25,6 @@ import '../../models/source.dart';
 import '../../models/toc_entry.dart';
 import '../../models/toc_text.dart';
 import '../../models/topic.dart';
-import '../daos/connection_type_dao.dart';
 import '../daos/database.dart';
 import '../db_capabilities.dart';
 import '../sqlite3_utils.dart';
@@ -193,30 +192,6 @@ class SeforimRepository {
   }
 
   // --- Line ⇄ TOC mapping ---
-
-  /// Bulk upsert line→toc mappings
-  Future<void> bulkUpsertLineToc(List<({int lineId, int tocId})> pairs) async {
-    if (pairs.isEmpty) return;
-    final db = await _database.database;
-    withTransaction(db, () {
-      for (final pair in pairs) {
-        db.execute(
-          'INSERT OR REPLACE INTO line_toc (lineId, tocEntryId) VALUES (?, ?)',
-          [pair.lineId, pair.tocId],
-        );
-      }
-    });
-  }
-
-  /// Returns all line ids that belong to the given TOC entry (section), ordered by lineIndex.
-  Future<List<int>> getLineIdsForTocEntry(int tocEntryId) async {
-    final db = await _database.database;
-    final result = db.select(
-      'SELECT lineId FROM line_toc WHERE tocEntryId = ? ORDER BY lineId',
-      [tocEntryId],
-    ).toMapList();
-    return result.map((row) => row['lineId'] as int).toList();
-  }
 
   /// Builds all mappings for a given book by assigning to each line
   /// the latest TOC entry whose start line index is <= line's index.
@@ -1105,14 +1080,6 @@ class SeforimRepository {
     return await _database.bookDao.getBookByFilePath(filePath);
   }
 
-  /// Gets an external book by its file path and file type.
-  Future<Book?> getExternalBookByFilePathAndType(
-    String filePath,
-    String fileType,
-  ) async {
-    return await _database.bookDao.getBookByFilePathAndType(filePath, fileType);
-  }
-
   /// Inserts TOC entries for an external book.
   /// Creates toc_text entries and toc_entry entries.
   Future<void> _insertTocEntriesForExternalBook(
@@ -1246,10 +1213,6 @@ class SeforimRepository {
   Future<List<String>> getLineContents(int bookId) async {
     return await _database.lineDao.selectContentByBookId(bookId);
   }
-
-  /// האם המסד מכיל את אינדקס ההפניות `line_ref`. כשאין — הקוראים נופלים
-  /// חזרה למסלול ה-TOC.
-  Future<bool> hasLineRefIndex() => _database.lineRefDao.isAvailable();
 
   /// השורה שמפתחה [refKey] בכל אחד מ-[bookIds], בשאילתה מאוגדת אחת.
   ///
@@ -1477,28 +1440,6 @@ class SeforimRepository {
     ).toMapList();
   }
 
-  /// Gets the previous line for a given book and line index.
-  ///
-  /// @param bookId The ID of the book
-  /// @param currentLineIndex The index of the current line
-  /// @return The previous line, or null if there is no previous line
-  Future<Line?> getPreviousLine(int bookId, int currentLineIndex) async {
-    if (currentLineIndex <= 0) return null;
-
-    final previousIndex = currentLineIndex - 1;
-    return await getLineByIndex(bookId, previousIndex);
-  }
-
-  /// Gets the next line for a given book and line index.
-  ///
-  /// @param bookId The ID of the book
-  /// @param currentLineIndex The index of the current line
-  /// @return The next line, or null if there is no next line
-  Future<Line?> getNextLine(int bookId, int currentLineIndex) async {
-    final nextIndex = currentLineIndex + 1;
-    return await getLineByIndex(bookId, nextIndex);
-  }
-
   Future<int> insertLine(Line line) async {
     _logger.fine('Repository inserting line with bookId: ${line.bookId}');
 
@@ -1563,16 +1504,8 @@ class SeforimRepository {
     return _database.tocDao.selectByBookId(bookId);
   }
 
-  Future<TocEntry?> getTocEntry(int id) async {
-    return await _database.tocDao.selectTocById(id);
-  }
-
   Future<List<TocEntry>> getBookToc(int bookId) async {
     return await _database.tocDao.selectByBookId(bookId);
-  }
-
-  Future<List<TocEntry>> getTocChildren(int parentId) async {
-    return await _database.tocDao.selectChildren(parentId);
   }
 
   // --- Persistent external PDF outline cache ---
@@ -1713,44 +1646,9 @@ class SeforimRepository {
     return _database.tocDao.insertTocEntry(entryWithTextId);
   }
 
-  // Nouvelle méthode pour mettre à jour hasChildren
-  Future<void> updateTocEntryHasChildren(
-    int tocEntryId,
-    bool hasChildren,
-  ) async {
-    // bookId לא ידוע כאן — ניקוי גורף בטוח יותר מ-stale data.
-    _invalidateTocCache();
-    await _database.tocDao.updateHasChildren(tocEntryId, hasChildren);
-  }
-
   Future<void> updateTocEntryLineId(int tocEntryId, int lineId) async {
     _invalidateTocCache();
     await _database.tocDao.updateLineId(tocEntryId, lineId);
-  }
-
-  Future<void> updateTocEntryIsLastChild(
-    int tocEntryId,
-    bool isLastChild,
-  ) async {
-    _invalidateTocCache();
-    await _database.tocDao.updateIsLastChild(tocEntryId, isLastChild);
-  }
-
-  /// Bulk update TOC entry lineIds
-  Future<void> bulkUpdateTocEntryLineIds(
-    List<({int tocId, int lineId})> updates,
-  ) async {
-    if (updates.isEmpty) return;
-    _invalidateTocCache();
-    final db = await _database.database;
-    withTransaction(db, () {
-      for (final update in updates) {
-        db.execute('UPDATE tocEntry SET lineId = ? WHERE id = ?', [
-          update.lineId,
-          update.tocId,
-        ]);
-      }
-    });
   }
 
   /// Bulk update TOC entries hasChildren flag
@@ -1884,21 +1782,7 @@ class SeforimRepository {
     return result.map((row) => row['name'] as String).toList();
   }
 
-  /// שליפת כל סוגי ההקשרים מטבלת connection_type
-  Future<List<ConnectionTypeEntry>> getAllConnectionTypesObj() async {
-    return await _database.connectionTypeDao.getAllConnectionTypes();
-  }
-
   // --- Links ---
-
-  Future<Link?> getLink(int id) async {
-    final db = await _database.database;
-    final result = db.select('SELECT * FROM link WHERE id = ?', [
-      id,
-    ]).toMapList();
-    if (result.isEmpty) return null;
-    return Link.fromJson(result.first);
-  }
 
   Future<List<CommentatorInfo>> getAvailableCommentators(int bookId) async {
     final capabilities = await _capabilities;
@@ -1995,16 +1879,6 @@ class SeforimRepository {
       generationId: result.first['id'] as int,
       generationName: result.first['name'] as String,
     );
-  }
-
-  // New paginated methods for per-commentator pagination use cases
-  Future<List<CommentatorInfo>> getAvailableCommentatorsPaginated(
-    int bookId,
-    int offset,
-    int limit,
-  ) async {
-    final commentators = await getAvailableCommentators(bookId);
-    return commentators.skip(offset).take(limit).toList();
   }
 
   Future<int> insertLink(Link link) async {
@@ -2306,31 +2180,6 @@ class SeforimRepository {
     return result.first.values.first as int;
   }
 
-  /// ספירת קישורים לפי מזהה סוג הקישור (במקום שם)
-  Future<int> countLinksBySourceBookAndTypeId(int bookId, int typeId) async {
-    final db = await _database.database;
-    final result = db.select(
-      '''
-      SELECT COUNT(*) FROM link
-      WHERE sourceBookId = ? AND connectionTypeId = ?
-    ''',
-      [bookId, typeId],
-    );
-    return result.first.values.first as int;
-  }
-
-  Future<int> countLinksByTargetBookAndTypeId(int bookId, int typeId) async {
-    final db = await _database.database;
-    final result = db.select(
-      '''
-      SELECT COUNT(*) FROM link
-      WHERE targetBookId = ? AND connectionTypeId = ?
-    ''',
-      [bookId, typeId],
-    );
-    return result.first.values.first as int;
-  }
-
   Future<void> updateBookConnectionFlags(
     int bookId,
     bool hasTargum,
@@ -2347,87 +2196,6 @@ class SeforimRepository {
       hasCommentary,
       hasOther,
     );
-  }
-
-  /// Optimized version that updates all book connection flags in a single query
-  /// This is MUCH faster than looping through books individually
-  Future<void> updateAllBookConnectionFlagsOptimized() async {
-    _logger.info('Updating all book connection flags with optimized query...');
-    final db = await _database.database;
-
-    // First, ensure connection_type table has all types
-    final types = ['TARGUM', 'REFERENCE', 'COMMENTARY', 'OTHER'];
-    for (final type in types) {
-      await getOrCreateConnectionType(type);
-    }
-
-    // Get connection type IDs
-    final typeIds = <String, int>{};
-    for (final type in types) {
-      final result = db.select(
-        'SELECT id FROM connection_type WHERE name = ?',
-        [type],
-      ).toMapList();
-      if (result.isNotEmpty) {
-        typeIds[type] = result.first['id'] as int;
-      }
-    }
-
-    // Update book_has_links table with a single query
-    db.execute('''
-      INSERT OR REPLACE INTO book_has_links (bookId, hasSourceLinks, hasTargetLinks)
-      SELECT b.id,
-             CASE WHEN EXISTS(SELECT 1 FROM link WHERE sourceBookId = b.id) THEN 1 ELSE 0 END,
-             CASE WHEN EXISTS(SELECT 1 FROM link WHERE targetBookId = b.id) THEN 1 ELSE 0 END
-      FROM book b
-    ''');
-
-    // Update connection flags in book table with optimized queries
-    if (typeIds.containsKey('TARGUM')) {
-      db.execute('''
-        UPDATE book SET hasTargumConnection = 
-          CASE WHEN EXISTS(
-            SELECT 1 FROM link 
-            WHERE (sourceBookId = book.id OR targetBookId = book.id) 
-            AND connectionTypeId = ${typeIds['TARGUM']}
-          ) THEN 1 ELSE 0 END
-      ''');
-    }
-
-    if (typeIds.containsKey('REFERENCE')) {
-      db.execute('''
-        UPDATE book SET hasReferenceConnection = 
-          CASE WHEN EXISTS(
-            SELECT 1 FROM link 
-            WHERE (sourceBookId = book.id OR targetBookId = book.id) 
-            AND connectionTypeId = ${typeIds['REFERENCE']}
-          ) THEN 1 ELSE 0 END
-      ''');
-    }
-
-    if (typeIds.containsKey('COMMENTARY')) {
-      db.execute('''
-        UPDATE book SET hasCommentaryConnection = 
-          CASE WHEN EXISTS(
-            SELECT 1 FROM link 
-            WHERE (sourceBookId = book.id OR targetBookId = book.id) 
-            AND connectionTypeId = ${typeIds['COMMENTARY']}
-          ) THEN 1 ELSE 0 END
-      ''');
-    }
-
-    if (typeIds.containsKey('OTHER')) {
-      db.execute('''
-        UPDATE book SET hasOtherConnection = 
-          CASE WHEN EXISTS(
-            SELECT 1 FROM link 
-            WHERE (sourceBookId = book.id OR targetBookId = book.id) 
-            AND connectionTypeId = ${typeIds['OTHER']}
-          ) THEN 1 ELSE 0 END
-      ''');
-    }
-
-    _logger.info('All book connection flags updated successfully');
   }
 
   /// Gets all books that have any links (source or target).
@@ -2631,14 +2399,6 @@ class SeforimRepository {
     return count;
   }
 
-  /// Finalizes database settings after bulk operations
-  Future<void> finalizeDatabase() async {
-    _logger.info('Finalizing database settings...');
-    await _executeRawQuery('PRAGMA synchronous=FULL');
-    await _executeRawQuery('PRAGMA locking_mode=NORMAL');
-    _logger.info('Database finalized');
-  }
-
   /// Closes the database connection.
   /// Should be called when the repository is no longer needed.
   Future<void> close() async {
@@ -2653,23 +2413,6 @@ class SeforimRepository {
   Future<void> _executeRawQuery(String sql) async {
     final db = await _database.database;
     db.execute(sql);
-  }
-
-  /// Disables foreign key constraints.
-  Future<void> disableForeignKeys() async {
-    await _executeRawQuery('PRAGMA foreign_keys = OFF');
-  }
-
-  /// Enables foreign key constraints.
-  Future<void> enableForeignKeys() async {
-    await _executeRawQuery('PRAGMA foreign_keys = ON');
-  }
-
-  /// Checks if a book with the given title already exists in the database.
-  /// Returns the book if found, null otherwise.
-  Future<Book?> checkBookExists(String title) async {
-    _logger.fine('Checking if book exists: $title');
-    return await _database.bookDao.getBookByTitle(title);
   }
 
   /// Checks if a book with the given title, category and file type already exists in the database.
@@ -2849,54 +2592,8 @@ class BookGenerationInfo {
       'BookGenerationInfo(id: $generationId, name: $generationName)';
 }
 
-/// Mapping between a line and its TOC entry
-class LineTocMapping {
-  final int lineId;
-  final int tocEntryId;
-
-  const LineTocMapping({
-    required this.lineId,
-    required this.tocEntryId,
-  });
-}
-
-/// Result of getting max IDs from database tables
-class MaxIdsResult {
-  final int maxBookId;
-  final int maxLineId;
-  final int maxTocId;
-  final int maxCategoryId;
-
-  const MaxIdsResult({
-    required this.maxBookId,
-    required this.maxLineId,
-    required this.maxTocId,
-    required this.maxCategoryId,
-  });
-}
-
 /// Extension methods for file sync operations
 extension FileSyncRepository on SeforimRepository {
-  /// Gets the maximum IDs from all relevant tables in a single query.
-  /// Used for initializing ID counters in file sync operations.
-  Future<MaxIdsResult> getMaxIds() async {
-    final db = await database.database;
-    final result = db.select('''
-      SELECT 
-        (SELECT COALESCE(MAX(id), 0) FROM book) as maxBookId,
-        (SELECT COALESCE(MAX(id), 0) FROM line) as maxLineId,
-        (SELECT COALESCE(MAX(id), 0) FROM tocEntry) as maxTocId,
-        (SELECT COALESCE(MAX(id), 0) FROM category) as maxCatId
-    ''').toMapList();
-
-    return MaxIdsResult(
-      maxBookId: result.first['maxBookId'] as int,
-      maxLineId: result.first['maxLineId'] as int,
-      maxTocId: result.first['maxTocId'] as int,
-      maxCategoryId: result.first['maxCatId'] as int,
-    );
-  }
-
   /// Deletes all lines for a specific book.
   /// Used when updating book content.
   Future<void> deleteBookLines(int bookId) async {
@@ -3819,28 +3516,6 @@ extension BookAcronymRepository on SeforimRepository {
       compareSegments: (a, b) => a.segment.compareTo(b.segment),
     );
     return _putAltTocCache(bookId, entries);
-  }
-
-  /// מחזיר את כל הספרים שיש להם לפחות מבנה AltToc אחד.
-  /// משמש ל-fallback גלובלי של חיפוש כותרות-משנה ללא שם ספר בשאילתה.
-  Future<List<({int bookId, String bookTitle})>> getAllBooksWithAltToc() async {
-    if (!(await _capabilities).hasAltTocStructures) return const [];
-    final db = await _database.database;
-    final rows = db
-        .select(
-          'SELECT DISTINCT s.bookId, b.title '
-          'FROM alt_toc_structure s JOIN book b ON b.id = s.bookId',
-          [],
-        )
-        .toMapList();
-    return rows
-        .map(
-          (r) => (
-            bookId: r['bookId'] as int,
-            bookTitle: r['title'] as String,
-          ),
-        )
-        .toList();
   }
 
   /// מזהי כל הספרים שיש להם מבנה AltToc — מאפשר לצרכן לדלג על שאילתות
