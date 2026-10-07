@@ -50,19 +50,41 @@ class AppThemeData {
     // ערכת "לבן": monochrome מחזיר לזרע לבן ולזרע אפור את אותו סולם נייטרלי,
     // ולכן גם ה-surface וגם סולם ה-surfaceContainer נדרסים — בלעדיו הסרגל,
     // חלונית הניווט ורקע הלוח נשארים אפורים כמו בערכת "אפור" (issue #1221).
-    if (seedColor.toARGB32() == AppSeedColors.white.toARGB32() &&
-        brightness == Brightness.light) {
+    // "פרגמנט": tonalSpot שומר רק את גוון הזרע, והערכה יצאה זהה ל"חום".
+    final surfaces = brightness == Brightness.light
+        ? _lightSurfaces[seedColor.toARGB32()]
+        : null;
+    if (surfaces != null) {
       return scheme.copyWith(
-        surface: Colors.white,
-        surfaceContainerLowest: Colors.white,
-        surfaceContainerLow: const Color(0xFFFAFAFA),
-        surfaceContainer: const Color(0xFFF6F6F6),
-        surfaceContainerHigh: const Color(0xFFF1F1F1),
-        surfaceContainerHighest: const Color(0xFFECECEC),
+        surface: surfaces[0],
+        surfaceContainerLowest: surfaces[1],
+        surfaceContainerLow: surfaces[2],
+        surfaceContainer: surfaces[3],
+        surfaceContainerHigh: surfaces[4],
+        surfaceContainerHighest: surfaces[5],
       );
     }
     return scheme;
   }
+
+  static final Map<int, List<Color>> _lightSurfaces = {
+    AppSeedColors.white.toARGB32(): const [
+      Colors.white,
+      Colors.white,
+      Color(0xFFFAFAFA),
+      Color(0xFFF6F6F6),
+      Color(0xFFF1F1F1),
+      Color(0xFFECECEC),
+    ],
+    AppSeedColors.parchment.toARGB32(): const [
+      Color(0xFFF5EDDC),
+      Color(0xFFFAF5EA),
+      Color(0xFFF2E8D5),
+      Color(0xFFEEE3CD),
+      Color(0xFFE9DDC5),
+      Color(0xFFE3D6BC),
+    ],
+  };
 
   // ── Light Theme ──────────────────────────────────────────────────────────
   static ThemeData light(
