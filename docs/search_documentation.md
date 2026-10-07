@@ -134,7 +134,7 @@
 1. **"חפש בכל הקטגוריות"** (ברירת מחדל) — חיפוש על פני כל הספרייה.
 2. **בחירה ידנית** — עץ קטגוריות שממנו המשתמש בוחר תתי-קטגוריות או ספרים ספציפיים.
 
-**קובץ:** `lib/search/view/category_tree_selector.dart` — `SearchScopeSelector`  
+**קובץ:** `lib/search/view/search_scope_menu.dart` — `SearchScopeMenuButton`  
 **קובץ נתונים:** `lib/search/search_scope_preferences.dart`  
 **שמירה:** נשמר בין הפעלות (`'key-search-all-categories-enabled'`, `'key-search-manual-category-facets'`)
 

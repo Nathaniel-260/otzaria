@@ -5,8 +5,8 @@ import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/search/utils/search_catalogue_order_helper.dart';
 
 /// עץ הבחירה של היקף החיפוש (קטגוריות → תת-קטגוריות → ספרים) ואלגוריתמי
-/// הבחירה שמעליו. לוגיקה טהורה ללא ווידג'טים, משותפת ל-[CategoryTreeSelector]
-/// ולתפריט הסינון המאוחד. כל הפעולות מקבלות ומחזירות סט של facets
+/// הבחירה שמעליו, לתפריט הסינון המאוחד. לוגיקה טהורה ללא ווידג'טים.
+/// כל הפעולות מקבלות ומחזירות סט של facets
 /// קטגוריאליים בלבד (בלי facets ממדיים — אלה מטופלים בנפרד).
 class ScopeTree {
   final List<ScopeNode> rootNodes;
