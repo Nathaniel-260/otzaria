@@ -44,6 +44,7 @@ void main() {
     ui.IsolateNameServer.removePortNameMapping('$_namespace.owner');
     WindowBus.namespace = 'otzaria.window';
     MultiWindowService.debugSupportedOverride = null;
+    MultiWindowService.closingAll = false;
     WindowRole.isSecondary = false;
   });
 
@@ -148,6 +149,7 @@ void main() {
 
     expect(handled, isTrue);
     expect(window.closeCalls, 1, reason: 'close() הוא בדיוק המסלול של X');
+    expect(MultiWindowService.closingAll, isTrue, reason: 'הסשן נשמר');
     expect(
       window.quitCalls,
       0,

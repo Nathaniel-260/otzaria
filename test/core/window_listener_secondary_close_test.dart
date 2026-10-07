@@ -57,6 +57,7 @@ void main() {
   tearDown(() async {
     AppWindowListener.prepareUpdateForClose = null;
     TabsRepository.debugSessions = null;
+    MultiWindowService.closingAll = false;
     database.close();
     runner.uninstall();
     MultiWindowService.debugSupportedOverride = null;
@@ -164,6 +165,19 @@ void main() {
 
     expect(runner.closeSelfCalls, 1);
     expect(await sessions.load(slot), isNull);
+  });
+
+  test('סגירה לעדכון כשחלון אחר עוד פתוח: הסשן נשמר (issue #2095)', () async {
+    // `closePeers` אינו ממתין, ולכן החלון שמתקין רואה עוד חלון פתוח.
+    WindowBus.instance.register();
+    final slot = WindowBus.instance.slot!;
+    await TabsRepository().saveTabs(const [], 0);
+
+    MultiWindowService.closePeers();
+    await AppWindowListener().handleWindowClose();
+
+    expect(runner.closeSelfCalls, 1);
+    expect(await sessions.load(slot), isNotNull);
   });
 
   test('macOS, החלון האחרון: מוסתר, הסשן נשמר, והתהליך אינו מסתיים', () async {
