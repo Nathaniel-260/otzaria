@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/utils/category_query_parser.dart';
+import 'package:otzaria/search/utils/facet_helper.dart';
 
 Category _category(
   String title,
@@ -153,6 +154,33 @@ void main() {
 
       expect(parsed.categoryFound, isTrue);
       expect(parsed.facets!.single, contains('משנה ברורה'));
+    });
+
+    test('@שם מחבר — מחזיר כל ספר שהשם בכותרתו (issue #2030)', () {
+      final books = [
+        TextBook(title: 'חידושי רמב"ן על בבא מציעא', id: 2),
+        TextBook(title: 'אגרת הרמב"ן', id: 3),
+      ];
+      final library = Library(
+        categories: [
+          _category('רמב״ן', [TextBook(title: 'רמב"ן על בראשית', id: 1)]),
+          _category('ראשונים', books),
+        ],
+      );
+
+      final parsed = parseCategoryQuery('מוחזק @רמב"ן', library);
+
+      expect(
+        parsed.facets,
+        containsAll(
+          books.map(
+            (book) => FacetHelper.buildBookFacet(
+              FacetHelper.resolveCategoryPath(book),
+              book,
+            ),
+          ),
+        ),
+      );
     });
 
     test('@ ריק — מתעלם מהתחביר', () {
