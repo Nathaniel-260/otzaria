@@ -560,11 +560,8 @@ class _LinksListViewState extends State<LinksListView> {
   }
 
   /// פותח את יעד הקישור בכרטיסייה חדשה (טקסט או PDF, לפי תבנית הפתיחה).
-  Future<void> _navigateToLink(Link link) async {
-    final tab = await buildLinkTargetTab(link);
-    if (!mounted) return;
-    widget.openBookCallback(tab);
-  }
+  Future<void> _navigateToLink(Link link) =>
+      openLinkTarget(link, (tab) => widget.openBookCallback(tab));
 
   Widget _buildLinksList(
     List<Link> links,
