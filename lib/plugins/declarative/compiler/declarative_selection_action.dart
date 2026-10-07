@@ -1,5 +1,6 @@
 import 'package:otzaria/plugins/declarative/commands/declarative_command_registry.dart';
 import 'package:otzaria/plugins/declarative/compiler/declarative_action_compiler.dart';
+import 'package:otzaria/plugins/declarative/compiler/declarative_value_checks.dart';
 import 'package:otzaria/plugins/declarative/models/declarative_program.dart';
 
 /// מה נלחץ: פריט בתפריט הקשר (`$selection`) או ספר של ספק בחיפוש הספרייה
@@ -41,7 +42,7 @@ class DeclarativeSelectionAction {
     Set<String>? declaredPermissions,
     DeclarativeClickSource source = DeclarativeClickSource.selection,
   }) {
-    _assertOnlyKeys(json, const {'type', 'args'}, 'action');
+    assertOnlyKeys(json, const {'type', 'args'}, 'action');
     final type = json['type'];
     if (type is! String || type.isEmpty) {
       throw const DeclarativeProgramException(
@@ -66,7 +67,7 @@ class DeclarativeSelectionAction {
       );
     }
     final args = _requiredMap(json['args'], 'action.args');
-    _assertOnlyKeys(
+    assertOnlyKeys(
       args,
       {...definition.requiredArgs, ...definition.optionalArgs},
       'action.args',
@@ -325,36 +326,8 @@ class DeclarativeSelectionAction {
     return value;
   }
 
-  static Map<String, dynamic> _requiredMap(Object? value, String context) {
-    if (value is! Map) {
-      throw DeclarativeProgramException(
-        'declarative.invalid_action',
-        '$context must be an object',
-      );
-    }
-    try {
-      return Map<String, dynamic>.from(value);
-    } on TypeError {
-      throw DeclarativeProgramException(
-        'declarative.invalid_action',
-        '$context keys must be strings',
-      );
-    }
-  }
-
-  static void _assertOnlyKeys(
-    Map<String, dynamic> value,
-    Set<String> allowed,
-    String context,
-  ) {
-    final unknown = value.keys.where((key) => !allowed.contains(key)).toList();
-    if (unknown.isNotEmpty) {
-      throw DeclarativeProgramException(
-        'declarative.unknown_field',
-        '$context contains unsupported fields: ${unknown.join(', ')}',
-      );
-    }
-  }
+  static Map<String, dynamic> _requiredMap(Object? value, String context) =>
+      requiredMap(value, context, code: 'declarative.invalid_action');
 }
 
 class _Budget {
