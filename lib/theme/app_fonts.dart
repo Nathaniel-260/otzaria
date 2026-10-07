@@ -177,6 +177,7 @@ class AppFonts {
   static Map<String, SystemFontFamilyFaces>? _pluginSystemFamiliesCache;
   static Map<String, String>? _systemFontAliasCache;
   static Future<void>? _warmUpFuture;
+  static final Map<String, SystemFontFamilyFaces> _earlySystemFamilies = {};
 
   /// רשימת כל הגופנים הזמינים לבחירה ב-UI.
   /// בדסקטופ: מתווספים גם גופנים שמותקנים במערכת (באמצעות system_fonts).
@@ -203,6 +204,8 @@ class AppFonts {
     final map = <String, bool>{
       for (final font in _bundledFonts)
         font.value.toLowerCase(): font.supportsTaamim,
+      for (final family in _earlySystemFamilies.values)
+        family.family.toLowerCase(): family.supportsTaamim,
     };
     final system = _systemFontsHebrewCache;
     if (system == null) return map;
@@ -242,34 +245,42 @@ class AppFonts {
   /// שבו `availableFonts` נקרא ומריץ סריקת בינארי על מאות קבצי גופן.
   /// בטוח לקריאה מרובה — אם הקאש כבר חם או שכבר רצה משימת חימום, חוזר מיידית.
   static Future<void> warmUpSystemFontsCache() {
-    if (_systemFontsHebrewCache != null) return Future.value();
+    if (_systemFontsHebrewCache != null) {
+      return _warmUpFuture ?? Future.value();
+    }
     if (!_supportsSystemFonts) return Future.value();
     return _warmUpFuture ??= _runWarmUp();
   }
 
   static Future<void> _runWarmUp() async {
     try {
-      final result = await compute(_computeSystemFontScan, 0);
-      _storeScan(result);
+      final result = await compute(_scanSystemFonts, null);
+      await Future.wait(_storeScan(result));
     } catch (_) {
-      // אם החימום ב-isolate נכשל מסיבה כלשהי - לא מאתחלים את הקאש,
-      // והנתיב הסינכרוני ב-_getSystemFontsHebrewOnly ירוץ בפעם הראשונה.
+      // בלי תוצאת סריקה, availableFonts ינסה שוב במסלול הסינכרוני.
     }
   }
 
-  /// פונקציה שרצה ב-isolate נפרד דרך `compute`.
-  /// חייבת להיות סטטית/top-level וללא תלות במצב של isolate הראשי.
-  static SystemFontScanResult _computeSystemFontScan(int _) {
-    return _scanSystemFonts();
-  }
-
-  static void _storeScan(SystemFontScanResult scan) {
-    if (_systemFontsHebrewCache != null) return;
+  static List<Future<void>> _storeScan(SystemFontScanResult scan) {
+    if (_systemFontsHebrewCache != null) return const [];
     _systemFontsHebrewCache = scan.fonts;
     _taamimSupportByFamily = null;
     _systemFamiliesCache = scan.families;
     _pluginSystemFamiliesCache = scan.allFamilies;
     _systemFontAliasCache = scan.aliases;
+    final completions = <Future<void>>[];
+    for (final name in _earlySystemFamilies.keys) {
+      final family = scan.families[name];
+      if (family == null) continue;
+      final completion = _loadingSystemFonts[name]!.then((_) {
+        _loadingSystemFonts.remove(name);
+        return ensureFontLoaded(name);
+      });
+      _loadingSystemFonts[name] = completion;
+      completions.add(completion);
+    }
+    _earlySystemFamilies.clear();
+    return completions;
   }
 
   static List<FontInfo> _getSystemFontsHebrewOnly() {
@@ -281,9 +292,10 @@ class AppFonts {
     return _systemFontsHebrewCache!;
   }
 
-  static SystemFontScanResult _scanSystemFonts() {
+  /// רץ גם ב-isolate נפרד דרך `compute`. עם [family]: רק הקבצים שמזכירים אותה.
+  static SystemFontScanResult _scanSystemFonts([String? family]) {
     try {
-      return _buildScan(_installedFacesLazily());
+      return _buildScan(_installedFacesLazily(family));
     } catch (_) {
       // אם אין גישה לגופני מערכת מסיבה כלשהי, נחזיר תוצאה ריקה.
       return const SystemFontScanResult.empty();
@@ -292,8 +304,10 @@ class AppFonts {
 
   /// עצל בכוונה: הבייטים של כל גופן משתחררים לפני קריאת הבא, במקום להחזיק
   /// את כל הגופנים המותקנים בזיכרון בבת אחת (מאות MB במחשב עם Office).
-  static Iterable<MapEntry<String, Uint8List>> _installedFacesLazily() sync* {
-    for (final path in SystemFontLocator.installedFontPaths()) {
+  static Iterable<MapEntry<String, Uint8List>> _installedFacesLazily(
+    String? family,
+  ) sync* {
+    for (final path in SystemFontLocator.installedFontPaths(family)) {
       final bytes = SfntMetadataReader.readSync(path);
       if (bytes == null) continue;
       yield MapEntry(path, bytes);
@@ -758,10 +772,7 @@ class AppFonts {
           : const TextStyle();
       return DropdownMenuItem<String>(
         value: font.value,
-        child: Text(
-          font.label,
-          style: previewStyle.merge(itemTextStyle),
-        ),
+        child: Text(font.label, style: previewStyle.merge(itemTextStyle)),
       );
     }).toList();
   }
@@ -779,8 +790,25 @@ class AppFonts {
 
     return _loadingSystemFonts.putIfAbsent(fontFamily, () async {
       try {
-        if (_systemFamiliesCache == null) await warmUpSystemFontsCache();
-        final family = _systemFamiliesCache?[fontFamily];
+        var family = _systemFamiliesCache?[fontFamily];
+        if (_systemFontsHebrewCache == null) {
+          final targeted =
+              await (debugScanFamily?.call(fontFamily) ??
+                  compute(_scanSystemFonts, fontFamily));
+          family = _systemFamiliesCache?[fontFamily];
+          if (_systemFontsHebrewCache == null) {
+            final candidate = targeted.families[fontFamily];
+            // רק regular במשקל 400 בטוח להצגה לפני איתור שאר המשפחה.
+            if (candidate != null && candidate.regularWeight == 400) {
+              family = candidate;
+              _earlySystemFamilies[fontFamily] = candidate;
+            }
+          }
+        }
+        if (family == null) {
+          await warmUpSystemFontsCache();
+          family = _systemFamiliesCache?[fontFamily];
+        }
         if (family != null) {
           await _loadFamilyFaces(fontFamily, family);
           return;
@@ -790,6 +818,7 @@ class AppFonts {
       } catch (_) {
         // אם הטעינה נכשלה, מסירים מהקאש כדי לאפשר ניסיון חוזר בעתיד.
         _loadingSystemFonts.remove(fontFamily);
+        _earlySystemFamilies.remove(fontFamily);
         return;
       }
       await _augmentSystemFontWeights(fontFamily);
@@ -1052,7 +1081,13 @@ class AppFonts {
   }
 
   @visibleForTesting
+  static Future<SystemFontScanResult> Function(String)? debugScanFamily;
+
+  @visibleForTesting
   static Future<void>? get debugWarmUpFuture => _warmUpFuture;
+
+  @visibleForTesting
+  static set debugWarmUpFuture(Future<void>? future) => _warmUpFuture = future;
 
   /// מדמה גופן מערכת שנטען לו קובץ בולד אחי, בלי תלות בגופנים מותקנים.
   @visibleForTesting
@@ -1068,6 +1103,9 @@ class AppFonts {
     _pluginSystemFamiliesCache = null;
     _systemFontAliasCache = null;
     _warmUpFuture = null;
+    _earlySystemFamilies.clear();
+    _loadingSystemFonts.clear();
+    debugScanFamily = null;
     _variableSystemFonts.clear();
     _separateBoldSystemFonts.clear();
   }
@@ -1080,7 +1118,9 @@ class AppFonts {
 
   /// מאחסן תוצאת סריקה כאילו הגיעה מחימום הקאש (לבדיקת מסלולי התצוגה).
   @visibleForTesting
-  static void debugStoreScan(SystemFontScanResult scan) => _storeScan(scan);
+  static Future<void> debugStoreScan(SystemFontScanResult scan) async {
+    await Future.wait(_storeScan(scan));
+  }
 
   @visibleForTesting
   static int debugFontWeightClass(Uint8List data) =>
@@ -1162,6 +1202,7 @@ class SystemFontScanResult {
 class SystemFontFamilyFaces {
   final String family;
   final String regularPath;
+  final int regularWeight;
   final String? boldPath;
   final bool hasWeightAxis;
   final FontCategory category;
@@ -1170,6 +1211,7 @@ class SystemFontFamilyFaces {
   const SystemFontFamilyFaces({
     required this.family,
     required this.regularPath,
+    this.regularWeight = 0,
     this.boldPath,
     this.hasWeightAxis = false,
     this.category = FontCategory.unknown,
@@ -1183,6 +1225,7 @@ class _FamilyAccumulator {
   bool _supportsTaamim = false;
   String? _regularPath;
   int _regularDistance = 1 << 30;
+  int _regularWeight = 0;
   bool _regularHasWeightAxis = false;
   String? _boldPath;
   int _boldDistance = 1 << 30;
@@ -1209,6 +1252,7 @@ class _FamilyAccumulator {
       if (distance < _regularDistance) {
         _regularDistance = distance;
         _regularPath = path;
+        _regularWeight = info.weightClass;
         _regularHasWeightAxis = info.hasWeightAxis;
       }
     }
@@ -1223,6 +1267,7 @@ class _FamilyAccumulator {
     return SystemFontFamilyFaces(
       family: family,
       regularPath: regular,
+      regularWeight: _regularWeight,
       boldPath: useBoldFace ? _boldPath : null,
       hasWeightAxis: _regularHasWeightAxis,
       category: _category,
