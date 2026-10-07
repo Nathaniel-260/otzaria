@@ -471,6 +471,14 @@ blocTest<SearchBloc, SearchState>(
 );
 ```
 
+## Keeping a Branch Up to Date
+
+`dev` moves quickly; a branch that falls behind it conflicts or is tested against code that no longer exists.
+
+- Branch from the latest `upstream/dev`.
+- Before opening a PR and before every push, rebase on the latest `upstream/dev`, then rerun `flutter analyze` and the tests related to your change.
+- Keep diffs in shared files as small as possible; every extra line is a potential conflict.
+
 ## Essential Commands
 ```bash
 flutter pub get              # Install dependencies
