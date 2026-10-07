@@ -3055,6 +3055,31 @@ void main() {
       );
     });
 
+    test('$_assistant: הורדה שנכשלה חוזרת, וקטועה מדווחת כקטועה (#2079)', () {
+      final run = _routine(_script(_assistant), 'function RunDownloads(');
+      expect(
+        run,
+        contains(
+          'until (Failure = \'\') or StopRequested or '
+          '(Attempt > DownloadAttempts)',
+        ),
+      );
+      expect(
+        run.indexOf('DownloadPage.Download;'),
+        lessThan(run.indexOf('until (Failure')),
+        reason: 'ההורדה עצמה חייבת להיות בתוך הלולאה',
+      );
+      // Inno אינו משווה גודל כשמועבר hash: קטיעה מגיעה כ-hash שגוי.
+      final hashFailure = run.indexOf(
+        'Pos(SetupMessage(msgVerificationFileHashIncorrect), Failure)',
+      );
+      expect(hashFailure, greaterThanOrEqualTo(0));
+      expect(
+        run.indexOf("CustomMessage('ErrorDownloadIncomplete')"),
+        greaterThan(hashFailure),
+      );
+    });
+
     test('$_assistant: hash מחושב במקום אחד בלבד, ונרשם ללוג', () {
       final script = _script(_assistant);
       expect(

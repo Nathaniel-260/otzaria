@@ -179,9 +179,11 @@ english.DownloadedOf=%1 of %2 downloaded
 english.TimeLeft=%1 left
 english.CheckingDownloadedFile=Checking the downloaded file
 english.DownloadingItem=Downloading: %1 (%2 of %3)
+english.DownloadingItemAgain=The download was interrupted, downloading again: %1 (try %2 of %3)
 english.ErrorStopped=The download was stopped.
 english.ErrorFileUnavailable=Can't prepare the installation because one of the required files isn't available.
 english.ErrorDownloadDamaged=One of the downloaded files was damaged, so it wasn't saved.
+english.ErrorDownloadIncomplete=The download of one of the files was interrupted before it finished.
 english.JoiningFiles=Joining the files: %1
 english.SizeOf=%1 of %2
 english.ErrorWriteJoined=Couldn't write the joined file. There may not be enough free space.
@@ -295,9 +297,11 @@ hebrew.DownloadedOf=ירדו %1 מתוך %2
 hebrew.TimeLeft=נותרו %1
 hebrew.CheckingDownloadedFile=בודק את הקובץ שירד
 hebrew.DownloadingItem=מוריד: %1 (%2 מתוך %3)
+hebrew.DownloadingItemAgain=ההורדה נקטעה, מוריד שוב: %1 (ניסיון %2 מתוך %3)
 hebrew.ErrorStopped=ההורדה הופסקה.
 hebrew.ErrorFileUnavailable=לא ניתן להכין את ההתקנה משום שאחד הקבצים הדרושים אינו זמין.
 hebrew.ErrorDownloadDamaged=אחד הקבצים שהורדו נמצא פגום ולא נשמר.
+hebrew.ErrorDownloadIncomplete=ההורדה של אחד הקבצים נקטעה לפני שהסתיימה.
 hebrew.JoiningFiles=מחבר את הקבצים: %1
 hebrew.SizeOf=%1 מתוך %2
 hebrew.ErrorWriteJoined=לא ניתן היה לכתוב את הקובץ המאוחד. ייתכן שאין מספיק מקום פנוי.
@@ -405,6 +409,8 @@ const
   AppendSliceSize = 67108864;
   ManifestSchemaVersion = 1;
   SpeedWindowMs = 5000;
+  { Inno אינו ממשיך הורדה מאמצע: חיבור שנקטע מחייב להוריד את הקובץ כולו שוב. }
+  DownloadAttempts = 3;
 
   ModeThisComputer = 0;
   ModeOtherComputer = 1;
@@ -2747,8 +2753,9 @@ end;
 
 function RunDownloads(): Boolean;
 var
-  I: Integer;
+  I, Attempt: Integer;
   Started: Int64;
+  Failure: String;
 begin
   Result := True;
   if GetArrayLength(QueueUrl) = 0 then
@@ -2765,26 +2772,45 @@ begin
   try
     for I := 0 to GetArrayLength(QueueUrl) - 1 do
     begin
-      ProgressCaption := FmtMessage(CustomMessage('DownloadingItem'), [QueueLabel[I],
-        IntToStr(I + 1), IntToStr(GetArrayLength(QueueUrl))]);
-      DownloadPage.SetText(ProgressCaption, '');
-      DownloadPage.Clear;
-      ResetSpeed();
-      VerifyStartTick := 0;
-      Started := NowMs();
-      { ה-hash מהמניפסט מועבר תמיד — קובץ שאינו תואם נדחה כאן ולא נשמר. }
-      DownloadPage.Add(QueueUrl[I], QueueFile[I], QueueSha[I]);
-      try
-        DownloadPage.Download;
-      except
-        if DownloadPage.AbortedByUser then
-          StopRequested := True;
+      Attempt := 1;
+      repeat
+        if Attempt = 1 then
+          ProgressCaption := FmtMessage(CustomMessage('DownloadingItem'), [QueueLabel[I],
+            IntToStr(I + 1), IntToStr(GetArrayLength(QueueUrl))])
+        else
+          ProgressCaption := FmtMessage(CustomMessage('DownloadingItemAgain'), [QueueLabel[I],
+            IntToStr(Attempt), IntToStr(DownloadAttempts)]);
+        DownloadPage.SetText(ProgressCaption, '');
+        DownloadPage.Clear;
+        ResetSpeed();
+        VerifyStartTick := 0;
+        Started := NowMs();
+        { ה-hash מהמניפסט מועבר תמיד — קובץ שאינו תואם נדחה כאן ולא נשמר. }
+        DownloadPage.Add(QueueUrl[I], QueueFile[I], QueueSha[I]);
+        try
+          DownloadPage.Download;
+          Failure := '';
+        except
+          if DownloadPage.AbortedByUser then
+            StopRequested := True;
+          Failure := GetExceptionMessage;
+          Log('DownloadAssistant: ' + QueueFile[I] + ' attempt ' +
+            IntToStr(Attempt) + ' failed: ' + Failure);
+        end;
+        Attempt := Attempt + 1;
+      until (Failure = '') or StopRequested or (Attempt > DownloadAttempts);
+      if Failure <> '' then
+      begin
         if StopRequested then
           LoadErrorMsg := CustomMessage('ErrorStopped')
         else
         begin
-          LoadErrorMsg := CustomMessage('ErrorFileUnavailable');
-          LoadErrorTech := QueueFile[I] + ': ' + GetExceptionMessage;
+          { כשה-hash מועבר Inno אינו משווה גודל, ולכן הורדה קטועה נכשלת כ-hash שגוי. }
+          if Pos(SetupMessage(msgVerificationFileHashIncorrect), Failure) > 0 then
+            LoadErrorMsg := CustomMessage('ErrorDownloadIncomplete')
+          else
+            LoadErrorMsg := CustomMessage('ErrorFileUnavailable');
+          LoadErrorTech := QueueFile[I] + ': ' + Failure;
         end;
         Result := False;
         exit;
