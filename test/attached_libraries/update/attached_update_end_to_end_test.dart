@@ -13,6 +13,7 @@ import 'package:otzaria/attached_libraries/repository/attached_library_probe.dar
 import 'package:otzaria/attached_libraries/repository/attached_library_registry.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_library_update_service.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_builder.dart';
+import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_planner.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_delta_applier.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_downloader.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_fetcher.dart';
@@ -329,9 +330,14 @@ void main() {
     },
   );
 
-  for (final multipleBases in [false, true]) {
+  for (final (multipleBases, foreignOnly, missingPatch, label) in [
+    (false, false, false, 'a delta'),
+    (true, false, false, 'multiple bases'),
+    (true, true, false, 'a foreign delta'),
+    (true, true, true, 'a missing foreign delta'),
+  ]) {
     test(
-      'signed manifest with ${multipleBases ? 'multiple bases' : 'a delta'}: patch the installed file and install',
+      'signed manifest with $label: installs verified output',
       () async {
         final zstd = _findZstd();
         if (zstd == null) {
@@ -460,7 +466,7 @@ void main() {
               dbVersion: packed.manifest.dbVersion,
               full: packed.manifest.full,
               deltas: [
-                delta,
+                if (!foreignOnly) delta,
                 AttachedUpdateDelta(
                   fromDbVersion: foreign.fromDbVersion,
                   fromSha256: foreign.fromSha256,
@@ -489,7 +495,8 @@ void main() {
               'manifest.json.sig' => signaturePath,
               _ => p.join(outDir, name),
             });
-            if (!file.existsSync()) {
+            if (!file.existsSync() ||
+                (missingPatch && foreignNames.contains(name))) {
               request.response.statusCode = HttpStatus.notFound;
             } else {
               request.response.contentLength = file.lengthSync();
@@ -499,7 +506,14 @@ void main() {
           });
 
           final fetcher = _LoopbackFetcher(server.port);
+          var hashCalls = 0;
           final service = AttachedLibraryUpdateService(
+            planner: AttachedUpdateArtifactPlanner(
+              hashFile: (path) async {
+                hashCalls++;
+                return AttachedUpdateArtifactBuilder.sha256OfFile(path);
+              },
+            ),
             repository: repository,
             fetcher: fetcher,
             downloader: AttachedUpdateDownloader(
@@ -524,7 +538,14 @@ void main() {
 
           final found = await service.check(library);
           expect(found, isA<AttachedUpdateAvailable>());
-          expect(found.offer!.downloadSize, delta.artifact.compressedSize);
+          expect(
+            found.offer!.downloadSize,
+            foreignOnly
+                ? AttachedUpdateManifest.parse(
+                    File(packed.manifestPath).readAsBytesSync(),
+                  ).deltas.single.artifact.compressedSize
+                : delta.artifact.compressedSize,
+          );
 
           await service.install(library);
           expect(service.statusOf(library), const AttachedUpdateInstalled(2));
@@ -542,15 +563,19 @@ void main() {
             unorderedEquals([
               'manifest.json',
               'manifest.json.sig',
-              ...deltaNames,
+              if (foreignOnly) ...foreignNames else ...deltaNames,
+              if (foreignOnly) ...fullNames,
             ]),
           );
-          expect(served.where(foreignNames.contains), isEmpty);
-          expect(
-            served.where(fullNames.contains),
-            isEmpty,
-            reason: 'the full artifact must not be downloaded',
-          );
+          expect(hashCalls, multipleBases && !foreignOnly ? 1 : 0);
+          if (!foreignOnly) {
+            expect(served.where(foreignNames.contains), isEmpty);
+            expect(
+              served.where(fullNames.contains),
+              isEmpty,
+              reason: 'the full artifact must not be downloaded',
+            );
+          }
           expect(
             await AttachedUpdateArtifactBuilder.sha256OfFile(installed),
             packed.manifest.full.sha256,

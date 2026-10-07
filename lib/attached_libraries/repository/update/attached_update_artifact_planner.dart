@@ -41,6 +41,13 @@ class AttachedUpdateArtifactPlanner {
     () => AttachedUpdateArtifactBuilder.sha256OfFile(path),
   );
 
+  // בדיקה והתקנה קוראות את אותו בסיס; שינוי בגודל או בזמן מבטל את המטמון.
+  static final _hashCache =
+      <String, ({int size, DateTime modified, String digest})>{};
+
+  @visibleForTesting
+  static void clearCacheForTesting() => _hashCache.clear();
+
   Future<AttachedUpdatePlan> plan(
     AttachedUpdateManifest manifest, {
     required String installedPath,
@@ -72,7 +79,7 @@ class AttachedUpdateArtifactPlanner {
         return full;
       }
       if (candidates.length > 1) {
-        final installedSha256 = await hashFile(installedPath);
+        final installedSha256 = await _installedDigest(installedPath, stat);
         candidates.removeWhere((d) => d.fromSha256 != installedSha256);
         if (candidates.isEmpty) return full;
       }
@@ -82,5 +89,21 @@ class AttachedUpdateArtifactPlanner {
       debugPrint('[AttachedUpdates] delta planning failed: $e');
       return full;
     }
+  }
+
+  Future<String> _installedDigest(String path, FileStat stat) async {
+    final cached = _hashCache[path];
+    if (cached != null &&
+        cached.size == stat.size &&
+        cached.modified == stat.modified) {
+      return cached.digest;
+    }
+    final digest = await hashFile(path);
+    _hashCache[path] = (
+      size: stat.size,
+      modified: stat.modified,
+      digest: digest,
+    );
+    return digest;
   }
 }

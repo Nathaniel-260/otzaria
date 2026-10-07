@@ -26,6 +26,7 @@ void main() {
   late String installedSha256;
 
   setUp(() async {
+    AttachedUpdateArtifactPlanner.clearCacheForTesting();
     temp = await Directory.systemTemp.createTemp('otzaria_delta_plan');
     installed = p.join(temp.path, 'lib.db');
     final bytes = List<int>.generate(4096, (i) => i % 251);
@@ -191,5 +192,62 @@ void main() {
     await File(installed).delete();
     final plan = await planWith([delta()]);
     expect(plan.isDelta, isFalse);
+  });
+
+  for (final change in ['size', 'modified', 'path']) {
+    test('caches repeated plans and invalidates on $change', () async {
+      var calls = 0;
+      Future<String> hash(String path) async {
+        calls++;
+        return sha256.convert(await File(path).readAsBytes()).toString();
+      }
+
+      final candidates = [delta(), delta(fromSha256: 'c' * 64)];
+      expect((await planWith(candidates, hashFile: hash)).isDelta, isTrue);
+      expect((await planWith(candidates, hashFile: hash)).isDelta, isTrue);
+      expect(calls, 1);
+      final previous = await FileStat.stat(installed);
+      switch (change) {
+        case 'size':
+          await File(installed).writeAsBytes([1, 2, 3]);
+          await File(installed).setLastModified(previous.modified);
+        case 'modified':
+          await File(installed).writeAsBytes(List.filled(previous.size, 42));
+          await File(
+            installed,
+          ).setLastModified(previous.modified.add(const Duration(seconds: 1)));
+        case 'path':
+          final copy = await File(
+            installed,
+          ).copy(p.join(temp.path, 'other.db'));
+          await copy.setLastModified(previous.modified);
+          installed = copy.path;
+      }
+      final expectedSha = sha256
+          .convert(await File(installed).readAsBytes())
+          .toString();
+      final matching = delta(fromSha256: expectedSha);
+      expect(
+        (await planWith([
+          matching,
+          delta(fromSha256: 'c' * 64),
+        ], hashFile: hash)).delta,
+        same(matching),
+      );
+      expect(calls, 2);
+    });
+  }
+
+  test('a failed hash is retried instead of cached', () async {
+    var calls = 0;
+    Future<String> hash(String _) async {
+      if (++calls == 1) throw const FileSystemException('read failed');
+      return installedSha256;
+    }
+
+    final candidates = [delta(), delta(fromSha256: 'c' * 64)];
+    expect((await planWith(candidates, hashFile: hash)).isDelta, isFalse);
+    expect((await planWith(candidates, hashFile: hash)).isDelta, isTrue);
+    expect(calls, 2);
   });
 }
