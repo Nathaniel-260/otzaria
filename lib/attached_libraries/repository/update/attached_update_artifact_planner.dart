@@ -1,8 +1,10 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:isolate';
 
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:otzaria/attached_libraries/models/attached_update_manifest.dart';
+import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_builder.dart';
 
 /// תקרת החלון של zstd (2^31): prefix גדול מזה אינו ניתן להצגה לפענוח.
 const int kMaxDeltaBaseBytes = 2 * 1024 * 1024 * 1024;
@@ -17,14 +19,13 @@ class AttachedUpdatePlan {
   bool get isDelta => delta != null;
 }
 
-/// בוחר בין הקובץ המלא לתיקון דלתא. כל ספק — מידות, גרסה, מכונה 32 סיביות —
-/// מחזיר את הקובץ המלא בלי להציג שגיאה למשתמש. הבסיס אינו מוחשב ב-sha256
-/// (דקות על גיגה-בייט): דלתא על בסיס שונה נכשלת באימות הפלט מול המניפסט
-/// החתום, והשירות חוזר אז לקובץ המלא.
+/// בוחר בין הקובץ המלא לתיקון דלתא. דלתא יחידה נבחרת בלי קריאת הבסיס;
+/// בכמה מועמדות בודק SHA-256 כדי לבחור בסיס תואם. כל ספק מחזיר את הקובץ המלא.
 class AttachedUpdateArtifactPlanner {
   const AttachedUpdateArtifactPlanner({
     this.pointerSize,
     this.maxBaseBytes = kMaxDeltaBaseBytes,
+    @visibleForTesting this.hashFile = _hashInstalled,
   });
 
   /// דריסה לבדיקות של רוחב המצביע (8 = 64 סיביות).
@@ -32,6 +33,13 @@ class AttachedUpdateArtifactPlanner {
 
   /// גודל הקובץ המותקן שעדיין אפשר להשתמש בו כ-prefix.
   final int maxBaseBytes;
+
+  @visibleForTesting
+  final Future<String> Function(String path) hashFile;
+
+  static Future<String> _hashInstalled(String path) => Isolate.run(
+    () => AttachedUpdateArtifactBuilder.sha256OfFile(path),
+  );
 
   Future<AttachedUpdatePlan> plan(
     AttachedUpdateManifest manifest, {
@@ -62,6 +70,11 @@ class AttachedUpdateArtifactPlanner {
           stat.size <= 0 ||
           stat.size > maxBaseBytes) {
         return full;
+      }
+      if (candidates.length > 1) {
+        final installedSha256 = await hashFile(installedPath);
+        candidates.removeWhere((d) => d.fromSha256 != installedSha256);
+        if (candidates.isEmpty) return full;
       }
       final delta = candidates.first;
       return AttachedUpdatePlan(delta.artifact, delta: delta);

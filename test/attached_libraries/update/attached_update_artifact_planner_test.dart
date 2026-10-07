@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/attached_libraries/models/attached_update_manifest.dart';
 import 'package:otzaria/attached_libraries/repository/update/attached_update_artifact_planner.dart';
@@ -21,12 +23,14 @@ AttachedUpdateArtifact _artifact({
 void main() {
   late Directory temp;
   late String installed;
+  late String installedSha256;
 
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('otzaria_delta_plan');
     installed = p.join(temp.path, 'lib.db');
     final bytes = List<int>.generate(4096, (i) => i % 251);
     await File(installed).writeAsBytes(bytes);
+    installedSha256 = sha256.convert(bytes).toString();
   });
 
   tearDown(() async {
@@ -55,7 +59,7 @@ void main() {
     String url = 'https://updates.example.org/lib/patch',
   }) => AttachedUpdateDelta(
     fromDbVersion: fromDbVersion,
-    fromSha256: fromSha256 ?? 'c' * 64,
+    fromSha256: fromSha256 ?? installedSha256,
     artifact: _artifact(
       compression: AttachedUpdateCompression.zstdPatch,
       size: 9000,
@@ -69,10 +73,24 @@ void main() {
     List<AttachedUpdateDelta> deltas, {
     int? pointerSize,
     int maxBaseBytes = kMaxDeltaBaseBytes,
-  }) => AttachedUpdateArtifactPlanner(
-    pointerSize: pointerSize ?? 8,
-    maxBaseBytes: maxBaseBytes,
-  ).plan(manifest(deltas), installedPath: installed, installedDbVersion: 2);
+    Future<String> Function(String)? hashFile,
+  }) {
+    final planner = hashFile == null
+        ? AttachedUpdateArtifactPlanner(
+            pointerSize: pointerSize ?? 8,
+            maxBaseBytes: maxBaseBytes,
+          )
+        : AttachedUpdateArtifactPlanner(
+            pointerSize: pointerSize ?? 8,
+            maxBaseBytes: maxBaseBytes,
+            hashFile: hashFile,
+          );
+    return planner.plan(
+      manifest(deltas),
+      installedPath: installed,
+      installedDbVersion: 2,
+    );
+  }
 
   test('picks the smallest applicable delta', () async {
     final small = delta(downloadSize: 700, url: 'https://x.example.org/small');
@@ -82,17 +100,73 @@ void main() {
     expect(plan.artifact.compressedSize, 700);
   });
 
+  test('selects a matching base instead of a smaller foreign delta', () async {
+    final matching = delta(
+      fromSha256: sha256
+          .convert(await File(installed).readAsBytes())
+          .toString(),
+      downloadSize: 1500,
+    );
+    final foreign = delta(fromSha256: 'c' * 64, downloadSize: 100);
+    final plan = await planWith([foreign, matching]);
+    expect(plan.delta, same(matching));
+  });
+
   test('a delta for another db_version is ignored', () async {
     final plan = await planWith([delta(fromDbVersion: 1)]);
     expect(plan.isDelta, isFalse);
     expect(plan.artifact.compressedSize, 5000);
   });
 
-  test('the installed file contents are not hashed to pick a delta', () async {
-    // 2080: sha256 של 1GB ב-Dart לוקח דקות. אי-התאמה של הבסיס נתפסת באימות
-    // הפלט מול המניפסט החתום, ושם חוזרים לקובץ המלא.
-    final plan = await planWith([delta(fromSha256: 'b' * 64)]);
+  test('a single candidate does not hash the installed file', () async {
+    var calls = 0;
+    final plan = await planWith(
+      [
+        delta(fromSha256: 'b' * 64),
+        delta(fromDbVersion: 1),
+        delta(downloadSize: 5000),
+      ],
+      hashFile: (_) async {
+        calls++;
+        throw StateError('the file must not be hashed');
+      },
+    );
     expect(plan.isDelta, isTrue);
+    expect(calls, 0);
+  });
+
+  test('multiple candidates hash the installed file only once', () async {
+    var calls = 0;
+    final matching = delta(downloadSize: 700);
+    final plan = await planWith(
+      [delta(), delta(fromSha256: 'b' * 64, downloadSize: 100), matching],
+      hashFile: (path) async {
+        expect(path, installed);
+        calls++;
+        return installedSha256;
+      },
+    );
+    expect(plan.delta, same(matching));
+    expect(calls, 1);
+  });
+
+  test(
+    'multiple candidates without a matching base fall back to full',
+    () async {
+      final plan = await planWith([
+        delta(fromSha256: 'b' * 64),
+        delta(fromSha256: 'c' * 64),
+      ]);
+      expect(plan.isDelta, isFalse);
+    },
+  );
+
+  test('a hash failure falls back to the full artifact', () async {
+    final plan = await planWith(
+      [delta(), delta(downloadSize: 700)],
+      hashFile: (_) async => throw const FileSystemException('read failed'),
+    );
+    expect(plan.isDelta, isFalse);
   });
 
   test(
