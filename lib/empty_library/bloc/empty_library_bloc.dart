@@ -1263,10 +1263,18 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           'יש לבחור באחסון הפנימי, או לפרמט את הכרטיס ל-exFAT.';
     }
 
-    final temp = await getDiskSpaceInfo(Directory.systemTemp.path);
+    final tempPath = Directory.systemTemp.path;
+    final temp = await getDiskSpaceInfo(tempPath);
     final library = await getDiskSpaceInfo(target);
+    final tempVolume = comparableVolumeId(
+      tempPath,
+      temp.volumeId,
+      isAndroid: true,
+    );
     final sameVolume =
-        temp.volumeId != null && temp.volumeId == library.volumeId;
+        tempVolume != null &&
+        tempVolume ==
+            comparableVolumeId(target, library.volumeId, isAndroid: true);
     // על אותו כונן הארכיונים נמחקים אחד-אחד בזמן החילוץ, ולכן רק השיא נספר.
     return insufficientSpaceMessage([
       if (sameVolume)

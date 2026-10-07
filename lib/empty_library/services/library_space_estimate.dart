@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/utils/text/byte_size_text.dart';
+import 'package:path/path.dart' as p;
 
 /// גודל הקובץ המרבי ב-FAT32: 4GiB פחות בייט.
 const int fat32MaxFileBytes = 0xFFFFFFFF;
@@ -25,10 +28,13 @@ abstract final class ExpansionFallback {
 /// גודל דחוס וגודל אחרי חילוץ של נכס אחד.
 typedef ArchiveSize = ({int compressed, int extracted});
 
+/// seforim.db כפי שנמדד בגרסה הנוכחית — הקובץ הגדול בספרייה.
+const int measuredDatabaseBytes = 3738877952;
+
 /// הנכסים של הורדה ראשונית בגדלים שנמדדו (DB, תלמוד, קטלוג, מילון), לבדיקת
 /// הסף לפני שהגדלים האמיתיים ידועים.
 const List<ArchiveSize> measuredLibraryDownload = [
-  (compressed: 1807000000, extracted: 3738877952),
+  (compressed: 1807000000, extracted: measuredDatabaseBytes),
   (compressed: 472000000, extracted: 473500000),
   (compressed: 6000000, extracted: 37600000),
   (compressed: 57000000, extracted: 57000000),
@@ -166,3 +172,35 @@ String? insufficientSpaceMessage(List<VolumeSpaceNeed> needs) {
 /// עצמה תיכשל אם הוא בכל זאת גדול מדי.
 bool exceedsFat32FileLimit(int? largestFileBytes) =>
     largestFileBytes != null && largestFileBytes > fat32MaxFileBytes;
+
+/// כרך בלי תמיכה בקבצים גדולים (FAT32) נחסם רק כשהקובץ הגדול חורג.
+bool volumeCanHoldLibrary({
+  required bool supportsLargeFiles,
+  required int? largestFileBytes,
+}) => supportsLargeFiles || !exceedsFat32FileLimit(largestFileBytes);
+
+/// גודל seforim.db שבתיקיית הספרים, או [measuredDatabaseBytes] כשאינו קיים.
+Future<int> installedDatabaseBytes(String booksPath) async {
+  if (booksPath.isEmpty) return measuredDatabaseBytes;
+  final db = File(p.join(booksPath, DatabaseConstants.databaseFileName));
+  try {
+    return await db.length();
+  } on FileSystemException {
+    return measuredDatabaseBytes;
+  }
+}
+
+final _androidInternalPath = RegExp(
+  r'^/(data|storage/emulated|storage/self|sdcard)(/|$)',
+);
+
+/// מזהה כונן להשוואה. באנדרואיד `/data` ו-`/storage/emulated` הם אותו אחסון
+/// פנימי, אך df מדווח עליהם מערכות קבצים שונות (FUSE מעל `/data/media`).
+String? comparableVolumeId(
+  String path,
+  String? volumeId, {
+  required bool isAndroid,
+}) {
+  if (volumeId == null || !isAndroid) return volumeId;
+  return _androidInternalPath.hasMatch(path) ? 'android-internal' : volumeId;
+}

@@ -103,7 +103,11 @@ class LibraryPackageImporter {
     final needs = [
       VolumeSpaceNeed(
         label: 'הספרייה',
-        volumeId: books.volumeId,
+        volumeId: comparableVolumeId(
+          booksTarget,
+          books.volumeId,
+          isAndroid: Platform.isAndroid,
+        ),
         requiredBytes: withSafetyMargin(libraryNeed),
         freeBytes: books.freeBytes,
       ),
@@ -120,7 +124,11 @@ class LibraryPackageImporter {
           label: Platform.isAndroid
               ? 'אינדקס החיפוש (אחסון פנימי)'
               : 'אינדקס החיפוש',
-          volumeId: indexSpace.volumeId,
+          volumeId: comparableVolumeId(
+            indexTarget,
+            indexSpace.volumeId,
+            isAndroid: Platform.isAndroid,
+          ),
           requiredBytes: withSafetyMargin(indexNeed),
           freeBytes: indexSpace.freeBytes,
         ),

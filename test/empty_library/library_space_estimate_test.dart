@@ -141,8 +141,61 @@ void main() {
       expect(exceedsFat32FileLimit(4500000000), isTrue);
     });
 
+    test('כרטיס FAT32 בבורר המיקום נחסם רק כשה-DB חורג', () {
+      expect(
+        volumeCanHoldLibrary(
+          supportsLargeFiles: false,
+          largestFileBytes: _currentDbBytes,
+        ),
+        isTrue,
+      );
+      expect(
+        volumeCanHoldLibrary(
+          supportsLargeFiles: false,
+          largestFileBytes: 4500000000,
+        ),
+        isFalse,
+      );
+      expect(
+        volumeCanHoldLibrary(
+          supportsLargeFiles: true,
+          largestFileBytes: 4500000000,
+        ),
+        isTrue,
+      );
+    });
+
+    test('גודל ה-DB המותקן, או הגודל שנמדד כשאין ספרייה', () async {
+      final books = Directory.systemTemp.createTempSync('installed_db');
+      addTearDown(() => books.deleteSync(recursive: true));
+      expect(await installedDatabaseBytes(''), measuredDatabaseBytes);
+      expect(await installedDatabaseBytes(books.path), measuredDatabaseBytes);
+      File(p.join(books.path, 'seforim.db')).writeAsBytesSync([1, 2, 3]);
+      expect(await installedDatabaseBytes(books.path), 3);
+    });
+
     test('גודל לא ידוע אינו חוסם', () {
       expect(exceedsFat32FileLimit(null), isFalse);
+    });
+  });
+
+  group('comparableVolumeId', () {
+    test('באנדרואיד /data ו-/storage/emulated הם אותו כונן', () {
+      String? id(String path, String df) =>
+          comparableVolumeId(path, df, isAndroid: true);
+      expect(
+        id('/data/user/0/com.otzaria/cache', '/dev/block/dm-5'),
+        id('/storage/emulated/0/Android/data/com.otzaria/files', '/dev/fuse'),
+      );
+      expect(
+        id('/storage/1234-ABCD/Android/data/com.otzaria', '/dev/fuse'),
+        '/dev/fuse',
+      );
+    });
+
+    test('מחוץ לאנדרואיד, או כש-df נכשל — ללא שינוי', () {
+      expect(comparableVolumeId('/data/x', 'C:', isAndroid: false), 'C:');
+      expect(comparableVolumeId('/data/x', null, isAndroid: true), isNull);
     });
   });
 

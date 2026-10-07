@@ -15,8 +15,8 @@ class AndroidStorageOption {
   final int freeBytes;
   final bool isRemovable;
 
-  /// false = הכרך מפורמט ב-FAT32 (מגבלת 4GB לקובץ) ולא יכול להכיל את
-  /// seforim.db; ה-UI מציג את המיקום כלא-נתמך.
+  /// false = הכרך מפורמט ב-FAT32 (מגבלת 4GiB-1 לקובץ); נחסם רק כשקובץ
+  /// בספרייה חורג (ראה `volumeCanHoldLibrary`).
   final bool supportsLargeFiles;
 
   const AndroidStorageOption({
