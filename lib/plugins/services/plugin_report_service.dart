@@ -254,13 +254,8 @@ class PluginReportService {
   static PluginReportRecord _decode(PendingReport row) =>
       PluginReportRecord.fromJson(row.payload);
 
-  Future<List<int>> _rowIdsOf(String kind, String reportId) async {
-    final rows = await _reports.listByKind(kind);
-    return rows
-        .where((row) => row.payload['reportId'] == reportId)
-        .map((row) => row.id)
-        .toList();
-  }
+  Future<List<int>> _rowIdsOf(String kind, String reportId) =>
+      _reports.idsWhere(kind, 'reportId', reportId);
 
   /// מנסה לשלוח את הדיווחים השמורים; עוצר בכשל זמני ראשון, ומסיר מהתור
   /// דיווחים שנדחו סופית. מחזיר את מספר הדיווחים שנשלחו.

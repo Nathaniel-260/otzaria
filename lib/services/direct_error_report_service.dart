@@ -230,13 +230,8 @@ class DirectErrorReportService {
   static DirectErrorReport _decode(PendingReport row) =>
       DirectErrorReport.fromJson(row.payload);
 
-  Future<List<int>> _rowIdsOf(String kind, String reportId) async {
-    final rows = await _reports.listByKind(kind);
-    return rows
-        .where((row) => row.payload['id'] == reportId)
-        .map((row) => row.id)
-        .toList();
-  }
+  Future<List<int>> _rowIdsOf(String kind, String reportId) =>
+      _reports.idsWhere(kind, 'id', reportId);
 
   Future<PendingReport?> _rowOf(String kind, String reportId) =>
       _reports.findByPayloadId(kind, reportId);

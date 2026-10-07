@@ -371,13 +371,8 @@ class AppReportService {
     return payload;
   }
 
-  Future<List<int>> _rowIdsOf(String kind, String reportId) async {
-    final rows = await _reports.listByKind(kind);
-    return rows
-        .where((row) => row.payload['reportId'] == reportId)
-        .map((row) => row.id)
-        .toList();
-  }
+  Future<List<int>> _rowIdsOf(String kind, String reportId) =>
+      _reports.idsWhere(kind, 'reportId', reportId);
 
   Future<void> _enqueueIfNeeded(AppReport report) async {
     if ((await _rowIdsOf(sentKind, report.reportId)).isNotEmpty) return;
