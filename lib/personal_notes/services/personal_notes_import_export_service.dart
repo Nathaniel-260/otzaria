@@ -45,16 +45,6 @@ class PersonalNotesImportExportService {
     };
   }
 
-  Future<void> exportToFile({
-    required String path,
-    required List<PersonalNote> notes,
-    String? description,
-  }) async {
-    final payload = buildExport(notes: notes, description: description);
-    final file = File(path);
-    await file.writeAsString(jsonEncode(payload));
-  }
-
   /// בונה ייצוא טקסט קריא למשתמש (להבדיל מהגיבוי שהוא JSON גולמי).
   ///
   /// העיצוב הוויזואלי (מודגש/נטוי/קו חוצה וכו') לא נשמר — זו גרסה לקריאה
@@ -268,17 +258,6 @@ class PersonalNotesImportExportService {
         .replaceAll('&', '&amp;')
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
-  }
-
-  /// מייצא את ההערות לקובץ טקסט קריא (.txt).
-  Future<void> exportToTextFile({
-    required String path,
-    required List<PersonalNote> notes,
-    String? description,
-  }) async {
-    final text = buildPlainTextExport(notes: notes, description: description);
-    final file = File(path);
-    await file.writeAsString(text);
   }
 
   String _formatDate(DateTime date) {
