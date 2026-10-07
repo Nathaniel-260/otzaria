@@ -7,7 +7,6 @@ import 'book_has_links_dao.dart';
 import 'category_dao.dart';
 import 'connection_type_dao.dart';
 import 'docx_text_cache_dao.dart';
-import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'line_dh_dao.dart';
 import 'line_ref_dao.dart';
@@ -72,7 +71,6 @@ class MyDatabase {
   CategoryDao? _categoryDao;
   ConnectionTypeDao? _connectionTypeDao;
   DocxTextCacheDao? _docxTextCacheDao;
-  GenerationDao? _generationDao;
   LineDao? _lineDao;
   LineDhDao? _lineDhDao;
   LineRefDao? _lineRefDao;
@@ -118,11 +116,6 @@ class MyDatabase {
   DocxTextCacheDao get docxTextCacheDao {
     _ensureDaosInitialized();
     return _docxTextCacheDao!;
-  }
-
-  GenerationDao get generationDao {
-    _ensureDaosInitialized();
-    return _generationDao!;
   }
 
   LineDao get lineDao {
@@ -452,7 +445,6 @@ class MyDatabase {
     _categoryDao = CategoryDao(this);
     _connectionTypeDao = ConnectionTypeDao(this);
     _docxTextCacheDao = DocxTextCacheDao(this);
-    _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _lineDhDao = LineDhDao(this);
     _lineRefDao = LineRefDao(this);
