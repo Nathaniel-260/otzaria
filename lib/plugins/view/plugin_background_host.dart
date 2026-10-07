@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:otzaria/update/app_release_version.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path/path.dart' as p;
 
@@ -987,7 +988,7 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner> {
               'version': widget.plugin.version,
             },
             'app': {
-              'version': packageInfo.version,
+              'version': canonicalAppVersion(packageInfo),
               'platform': Platform.operatingSystem,
               // שפת הממשק הפעילה (he-IL לתאימות; 'language' — קוד השפה)
               ...pluginLocalePayload(

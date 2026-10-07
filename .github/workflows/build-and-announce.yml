@@ -3227,6 +3227,14 @@ jobs:
       ref: ${{ needs.bump_version.outputs.sha }}
     secrets: inherit
 
+  trigger_app_store_deploy:
+    if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && needs.build_android.result == 'success' && github.event_name != 'release' && github.event_name != 'pull_request'"
+    needs: [bump_version, check_version, build_android]
+    uses: ./.github/workflows/deploy-app-store.yml
+    with:
+      ref: ${{ needs.bump_version.outputs.sha }}
+    secrets: inherit
+
   # --- הכרזה על גרסה שפורסמה ---
   announce_release:
     needs: [bump_version, create_release]
