@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -546,6 +547,43 @@ void main() {
     expect(sent.images, isEmpty);
     expect(sent.toJson().containsKey('images'), isFalse);
   });
+
+  test(
+    'גוף הבקשה (כולל צילומי מסך) מקודד מחוץ ל-UI isolate (issue #2008)',
+    () async {
+      Map<String, dynamic>? sentBody;
+      final service = build(
+        MockClient((request) async {
+          sentBody = jsonDecode(utf8.decode(request.bodyBytes));
+          return _json(200, {'issueNumber': 1});
+        }),
+      );
+      final report = _report().copyWith(
+        diagnostics: {'probe': const _EncodingIsolateProbe()},
+        images: [
+          AppReportImage(
+            bytes: Uint8List.fromList([1, 2, 3]),
+            fileName: 'screenshot.png',
+            mimeType: 'image/png',
+          ),
+        ],
+      );
+
+      expect((await service.send(report)).isSent, isTrue);
+      final attachments = sentBody!['attachments'] as Map;
+      expect(attachments['images'], hasLength(1));
+      expect(
+        (attachments['diagnostics'] as Map)['probe'],
+        allOf(isNotNull, isNot(Isolate.current.debugName)),
+      );
+    },
+  );
+}
+
+class _EncodingIsolateProbe {
+  const _EncodingIsolateProbe();
+
+  String? toJson() => Isolate.current.debugName;
 }
 
 class _MemoryCacheProvider extends CacheProvider {
