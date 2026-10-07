@@ -20,6 +20,7 @@ import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/find_ref/repository/reference_books_cache.dart';
 import 'package:otzaria/indexing/utils/book_facet_metadata_cache.dart';
 import 'package:otzaria/indexing/utils/book_fingerprint_worker.dart';
+import 'package:otzaria/indexing/utils/indexing_crash_canary.dart';
 import 'package:otzaria/indexing/utils/pdf_extraction_prefetcher.dart';
 import 'package:otzaria/indexing/models/catalogue_order_resolver.dart';
 import 'package:otzaria/indexing/models/indexing_run_result.dart';
@@ -152,6 +153,7 @@ class IndexingRepository {
     final message = sourceError.toString();
     final normalized = message.toLowerCase();
     final kind = switch (sourceError) {
+      IndexingCrashedBefore _ => IndexingFailureKind.crashedApp,
       final RangeError rangeError
           when rangeError.invalidValue == -1 && rangeError.end == 3 =>
         IndexingFailureKind.pdfUnsupported,
@@ -394,6 +396,7 @@ class IndexingRepository {
     }
 
     _tantivyDataProvider.isIndexing.value = true;
+    IndexingCrashCanary.start(_tantivyDataProvider.activeIndexPath);
     bool cancelled = false;
     // כשל כתיבה מרוקן את חוצץ ה-writer; commit אחריו היה חותם מצב חלקי.
     bool writeBufferDiscarded = false;
@@ -401,7 +404,12 @@ class IndexingRepository {
 
     // חילוץ ה-PDF איטי בסדר גודל מאינדוקס ספר טקסט, ולכן חילוצי ה-PDF הבאים
     // רצים מראש ברקע בזמן שהמנוע מאנדקס את הספרים שלפניהם.
-    final prefetcher = PdfExtractionPrefetcher(extract: extractPdfPagesGuarded);
+    final prefetcher = PdfExtractionPrefetcher(
+      extract: extractPdfPagesGuarded,
+      maxInFlight: IndexingCrashCanary.current?.recovering ?? false
+          ? 0
+          : PdfExtractionPrefetcher.defaultMaxInFlight,
+    );
     var processedBooks = 0;
     var actuallyIndexed = 0;
     var indexedSinceCommit = 0;
@@ -501,6 +509,7 @@ class IndexingRepository {
               break bookLoop;
             }
           }
+          IndexingCrashCanary.current?.end(buildIndexedBookFilePath(readyBook));
         }
 
         var bookWasIndexed = false;
@@ -642,6 +651,7 @@ class IndexingRepository {
           }
         }
 
+        IndexingCrashCanary.current?.end(buildIndexedBookFilePath(book));
         await Future.delayed(Duration.zero);
       }
 
@@ -677,6 +687,7 @@ class IndexingRepository {
       }
     } finally {
       prefetcher.dispose();
+      IndexingCrashCanary.current?.finish();
       _tantivyDataProvider.isIndexing.value = false;
       await LibraryLineSource.reportLibraryFallbacks();
     }
@@ -705,6 +716,7 @@ class IndexingRepository {
     // אחת בלבד. במסלול הרגיל (ספר מ-DB) התוכן נקרא כבייטים גולמיים
     // (UTF-8 כפי שמאוחסן ב-SQLite) ונמסר ל-addTextBookBytes — בלי פענוח
     // ל-String וקידוד חוזר על הגשר (~180ms/MB שנמדדו בלוגים).
+    _beginBook(book);
     final loadStopwatch = Stopwatch()..start();
     final source = await loadTextBookSource(book);
     final bytes = source.bytes;
@@ -1031,6 +1043,14 @@ class IndexingRepository {
     }
   }
 
+  // ספר שהפיל את התהליך פעמיים ברצף נזרק, ומסומן ככשל קבוע במקום לנסותו לעד.
+  void _beginBook(Book book) {
+    if (IndexingCrashCanary.current?.begin(buildIndexedBookFilePath(book)) ==
+        false) {
+      throw const IndexingCrashedBefore();
+    }
+  }
+
   /// עוטפת את [_extractPdfPages] כך שהתוצאה לעולם אינה זריקה: שגיאת פתיחה
   /// נשמרת בתוצאה (הקורא מכריע בין sidecar להפצתה), ומשך החילוץ נמדד כאן —
   /// כך גם חילוץ שרץ מראש (prefetch) מדווח את זמנו האמיתי.
@@ -1038,6 +1058,7 @@ class IndexingRepository {
   Future<PdfExtraction> extractPdfPagesGuarded(PdfBook book) async {
     final stopwatch = Stopwatch()..start();
     try {
+      _beginBook(book);
       final extracted = await _extractPdfPages(book);
       return (
         pages: extracted.pages,
@@ -1769,6 +1790,7 @@ class IndexingRepository {
         indexedBooks: 0,
       );
     }
+    IndexingCrashCanary.start(_tantivyDataProvider.activeIndexPath);
 
     // הספרייה המלאה, ולא רשימת הספרים שמאונדקסת, כדי שהסדר יהיה גלובלי.
     final catalogueOrder = buildCatalogueOrderResolver(library);
@@ -1875,6 +1897,7 @@ class IndexingRepository {
           }
         }
 
+        IndexingCrashCanary.current?.end(buildIndexedBookFilePath(book));
         await Future.delayed(Duration.zero);
       }
 
@@ -1898,6 +1921,7 @@ class IndexingRepository {
         _stampCatalogueOrderAfterCommit();
       }
     } finally {
+      IndexingCrashCanary.current?.finish();
       _tantivyDataProvider.isIndexing.value = false;
       await LibraryLineSource.reportLibraryFallbacks();
     }

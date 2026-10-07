@@ -18,6 +18,7 @@ import 'package:otzaria/core/user_state/user_state_database.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
+import 'package:otzaria/indexing/utils/indexing_crash_canary.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/services/plugin_crash_guard.dart';
@@ -295,6 +296,7 @@ class AppWindowListener extends WindowListener {
       // כמה חלונות יכולים להיסגר יחד בלי ששום חלון יריץ כיבוי תהליך;
       // מנקים canaries לפני ההכרעה מי האחרון כדי שלא יישארו בטעות.
       PluginCrashGuard.markCleanShutdownSync();
+      IndexingCrashCanary.current?.finish();
       StartupCrashCounter.markStableSync();
 
       // מכריעים פעם אחת: ספירה חוזרת אחרי ה-flush עלולה להשלים חצי כיבוי.
