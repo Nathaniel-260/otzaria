@@ -405,7 +405,7 @@ const List<ComponentSpec> kKnownComponents = [
     assets: [AssetSpec(pattern: r'^[^\\/]+\.apk$')],
   ),
   // המתקינים הרגילים של Windows פורסים את החלקים שלצדם (installer/otzaria.iss),
-  // ובאנדרואיד "ייבוא מתיקייה" באפליקציה (lib/empty_library/services/library_package).
+  // ובאנדרואיד "ייבוא מתיקיית קובצי הספרייה" באפליקציה (lib/empty_library/services/library_package).
   ComponentSpec(
     id: 'library-full',
     name: 'ספרייה מלאה',
@@ -428,13 +428,13 @@ const List<ComponentSpec> kKnownComponents = [
     compatibilityFromLibraryIndexProvenance: true,
     outputNote:
         'אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows '
-        'המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים "ייבוא מתיקייה" '
-        'באוצריא אחרי התקנת ה-APK.',
+        'המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים "ייבוא מתיקיית קובצי '
+        'הספרייה" באוצריא אחרי התקנת ה-APK.',
     outputNoteEn:
         'Otzaria extracts the library from the files in this folder without '
         'an internet connection: on Windows the installer does it during '
-        'installation; on Android, install the APK and choose "Import from '
-        'folder" in Otzaria.',
+        'installation; on Android, install the APK and choose "Import from the '
+        'Library Files Folder" in Otzaria.',
     assets: [
       AssetSpec(
         pattern: r'^otzaria-.+-library\.tar\.zst\.manifest\.json$',

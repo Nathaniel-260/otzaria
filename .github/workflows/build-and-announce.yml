@@ -1989,7 +1989,7 @@ jobs:
           df -h
 
   # ה-APK עם חלקי חבילת הספרייה והאינדקס שנבנו ב-Linux x86_64 — בדיוק הקבצים
-  # ש"ייבוא מתיקייה" באוצריא קורא (lib/empty_library/services/library_package).
+  # ש"ייבוא מתיקיית קובצי הספרייה" באוצריא קורא (lib/empty_library/services/library_package).
   build_android_full:
     if: "!cancelled() && needs.build_android.result == 'success' && needs.build_linux.result == 'success'"
     needs: [bump_version, build_android, build_linux]

@@ -451,8 +451,8 @@
         "otzaria-android"
       ],
       "downloadSize": 3015,
-      "outputNote": "אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים \"ייבוא מתיקייה\" באוצריא אחרי התקנת ה-APK.",
-      "outputNoteEn": "Otzaria extracts the library from the files in this folder without an internet connection: on Windows the installer does it during installation; on Android, install the APK and choose \"Import from folder\" in Otzaria.",
+      "outputNote": "אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים \"ייבוא מתיקיית קובצי הספרייה\" באוצריא אחרי התקנת ה-APK.",
+      "outputNoteEn": "Otzaria extracts the library from the files in this folder without an internet connection: on Windows the installer does it during installation; on Android, install the APK and choose \"Import from the Library Files Folder\" in Otzaria.",
       "assets": [
         {
           "kind": "split",
