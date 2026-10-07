@@ -123,6 +123,37 @@ void main() {
     expect(links.calls, ['cancel']);
   });
 
+  testWidgets('מסד שעבר את התקרה: הודעה בלי איפוס', (tester) async {
+    links.tooLargeSlugs.value = {'dbA'};
+    await pump(tester);
+    expect(
+      find.text('הקישורים החיצוניים לא נטענו — יותר מדי שורות'),
+      findsOneWidget,
+    );
+    expect(find.text('האינדקס מעודכן'), findsNothing);
+    expect(find.text('איפוס'), findsNothing);
+  });
+
+  testWidgets('לחיצה כפולה על איפוס שולחת בקשה אחת עד שהמצב משתנה', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.tap(find.text('איפוס'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('בנה מחדש'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('איפוס'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(find.text('בנה מחדש'), findsNothing);
+    expect(links.calls, ['rebuild:dbA']);
+
+    links.buildProgress.value = const {
+      'dbA': ExternalLinkBuildProgress(done: 1, total: 2),
+    };
+    await tester.pump();
+    expect(find.text('עצור'), findsOneWidget);
+  });
+
   group('לא הושלם', () {
     setUp(() => links.incompleteSlugs.value = {'dbA', 'dbB'});
 
@@ -131,6 +162,15 @@ void main() {
       expect(find.text('אינדקס הקישורים לא הושלם'), findsOneWidget);
       await tester.tap(find.text('המשך בנייה'));
       await tester.pumpAndSettle();
+      expect(links.calls, ['resume:dbA', 'resume:dbB']);
+    });
+
+    testWidgets('לחיצה כפולה על המשך בנייה שולחת בקשה אחת', (tester) async {
+      await pump(tester);
+      await tester.tap(find.text('המשך בנייה'));
+      await tester.pump();
+      await tester.tap(find.text('המשך בנייה'), warnIfMissed: false);
+      await tester.pump();
       expect(links.calls, ['resume:dbA', 'resume:dbB']);
     });
 
