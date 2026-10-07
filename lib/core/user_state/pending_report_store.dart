@@ -84,6 +84,13 @@ class PendingReportStore {
     return rows.map(_decodeRow).toList();
   }
 
+  /// מזהי השורות מסוג [kind] שהשדה [field] בתוכן שלהן שווה ל-[value].
+  Future<List<int>> idsWhere(String kind, String field, Object? value) async =>
+      [
+        for (final r in await listByKind(kind))
+          if (r.payload[field] == value) r.id,
+      ];
+
   /// מחפש את הרשומה הראשונה מסוג [kind] שמזהה התוכן שלה הוא [reportId].
   Future<PendingReport?> findByPayloadId(String kind, String reportId) async {
     final db = await _database.database;
