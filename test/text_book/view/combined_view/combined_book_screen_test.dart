@@ -65,34 +65,13 @@ void main() {
       connectionType: 'COMMENTARY',
     );
 
-    test('מעביר את מפרש הקישור לראש הבחירה הפעילה', () {
+    test('מוסיף מפרש שאינו פעיל לסוף הבחירה', () {
       expect(
         activatePreviewCommentator(
           activeCommentators: const ['שפתי כהן'],
           link: link,
         ),
-        ['טורי זהב', 'שפתי כהן'],
-      );
-    });
-
-    test('מעביר מפרש פעיל מאוחר לראש בלי לשכפל אותו', () {
-      expect(
-        activatePreviewCommentator(
-          activeCommentators: const ['שפתי כהן', 'טורי זהב', 'באר היטב'],
-          link: link,
-        ),
-        ['טורי זהב', 'שפתי כהן', 'באר היטב'],
-      );
-    });
-
-    test('אינו משנה את הרשימה כשהמפרש כבר ראשון', () {
-      const active = ['טורי זהב'];
-      expect(
-        activatePreviewCommentator(
-          activeCommentators: active,
-          link: link,
-        ),
-        same(active),
+        ['שפתי כהן', 'טורי זהב'],
       );
     });
 

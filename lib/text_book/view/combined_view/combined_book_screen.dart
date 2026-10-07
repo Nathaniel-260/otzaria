@@ -147,14 +147,10 @@ List<String> activatePreviewCommentator({
   required Link link,
 }) {
   final title = utils.getTitleFromPath(link.path2);
-  if (title.isEmpty ||
-      (activeCommentators.isNotEmpty && activeCommentators.first == title)) {
+  if (title.isEmpty || activeCommentators.contains(title)) {
     return activeCommentators;
   }
-  return [
-    title,
-    ...activeCommentators.where((commentator) => commentator != title),
-  ];
+  return [...activeCommentators, title];
 }
 
 @visibleForTesting
@@ -528,20 +524,18 @@ class _CombinedViewState extends State<CombinedView> {
       if (LinkTypes.isDependentTextLink(link.connectionType)) {
         final state = _textBookBloc.state;
         if (state is TextBookLoaded) {
+          final commentators = activatePreviewCommentator(
+            activeCommentators: state.activeCommentators,
+            link: link,
+          );
+          if (!identical(commentators, state.activeCommentators)) {
+            _addTextBookEventIfOpen(
+              UpdateCommentators(commentators, displayOrderOnly: true),
+            );
+          }
           if (widget.showCommentaryAsExpansionTiles) {
-            // במצב מפרשים-מתחת: מוודאים שהמפרש פעיל אם צריך, ושומרים את
-            // שמו ואת מפתח הקטע לגלילה מיידית ב-_CommentaryCard.
-            // חשוב: לא משנים סדר — שינוי סדר גורם לריבילד+ריצוד.
             final title = utils.getTitleFromPath(link.path2);
             if (title.isNotEmpty) {
-              if (!state.activeCommentators.contains(title)) {
-                _addTextBookEventIfOpen(
-                  UpdateCommentators([
-                    ...state.activeCommentators,
-                    title,
-                  ], displayOrderOnly: true),
-                );
-              }
               if (sourceLine != null) {
                 final target = (
                   lineIndex: sourceLine,
@@ -559,19 +553,7 @@ class _CombinedViewState extends State<CombinedView> {
             }
             return;
           }
-          final commentators = activatePreviewCommentator(
-            activeCommentators: state.activeCommentators,
-            link: link,
-          );
-          if (!identical(commentators, state.activeCommentators)) {
-            _addTextBookEventIfOpen(
-              UpdateCommentators(commentators, displayOrderOnly: true),
-            );
-          }
-          // מפרשים בצד: הפאנל הוא ווידג'ט אחר בעץ, ולכן הבקשה עוברת דרך
-          // ההורה. `activatePreviewCommentator` מביא את המפרש לראש הרשימה,
-          // אבל בלי בקשה מפורשת הקטע המקושר עדיין לא היה מוצג כשיש למפרש
-          // כמה קטעים על אותה שורה — הרשימה הייתה נעצרת על הראשון.
+          // מפרשים בצד: הפאנל הוא ווידג'ט אחר בעץ, ולכן הבקשה עוברת דרך ההורה.
           _requestPaneCommentaryScroll(link, sourceLine);
         }
         if (widget.showCommentaryAsExpansionTiles) {
