@@ -5074,7 +5074,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             return _buildLayoutModeDropdown(context, state);
           },
         ),
-        icon: OtzariaIcons.book_open_medium_line_24_regular,
+        icon: OtzariaIcons.book_open_medium_lines_24_regular,
         tooltip: 'מצב תצוגה',
         actionId: ToolbarActionId.viewMode,
         onPressed: null,
@@ -5204,7 +5204,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                   return [
                     ActionButtonData(
                       widget: const SizedBox.shrink(),
-                      icon: OtzariaIcons.link_book_empty_24_regular,
+                      icon: OtzariaIcons.link_book_24_regular,
                       tooltip: 'העתק קישור ישיר לספר זה',
                       onPressed: () => copyLinkToClipboard(
                         buildPdfBookLink(
@@ -5578,7 +5578,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
   Widget _buildLayoutModeDropdown(BuildContext context, PdfBookLoaded state) {
     final isBookViewMode = state.layoutMode.isBookView;
     final iconData = isBookViewMode
-        ? OtzariaIcons.book_open_medium_line_24_regular
+        ? OtzariaIcons.book_open_medium_lines_24_regular
         : OtzariaIcons.book_24_regular;
 
     return AppPopupMenuButton<PdfLayoutMode>(
@@ -5638,7 +5638,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
             // בחירה חוזרת בתצוגת ספר משמרת את כיוון הזוגות שנבחר.
             value: isBookViewMode ? state.layoutMode : PdfLayoutMode.bookView,
             text: 'תצוגת ספר',
-            icon: OtzariaIcons.book_open_medium_line_24_regular,
+            icon: OtzariaIcons.book_open_medium_lines_24_regular,
             isSelected: isBookViewMode,
           ),
           if (isBookViewMode)

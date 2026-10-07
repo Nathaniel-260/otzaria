@@ -606,7 +606,7 @@ class _CommentatorsSelectionPanelState
                       padding: EdgeInsets.only(top: 24.0),
                       child: OtzariaEmptyState(
                         isCompact: true,
-                        icon: OtzariaIcons.search_in_the_library_24_regular,
+                        icon: OtzariaIcons.search_in_library_24_regular,
                         title: 'לא נמצאו מפרשים תואמים',
                       ),
                     );

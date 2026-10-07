@@ -1225,11 +1225,11 @@ packages:
     dependency: "direct main"
     description:
       path: "."
-      ref: "5a614a7046c17e4321af31066cd9f0feae7c2e47"
-      resolved-ref: "5a614a7046c17e4321af31066cd9f0feae7c2e47"
+      ref: "5225cd36c59097fe1f24a39fb60f9c2c0e15e47c"
+      resolved-ref: "5225cd36c59097fe1f24a39fb60f9c2c0e15e47c"
       url: "https://github.com/Otzaria/otzaria_icons"
     source: git
-    version: "0.5.0"
+    version: "0.6.0"
   otzaria_search_engine:
     dependency: "direct main"
     description:

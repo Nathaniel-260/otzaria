@@ -252,8 +252,8 @@ class NavPanelToggleButton extends StatelessWidget {
           flipX: mirror,
           child: Icon(
             isOpen
-                ? OtzariaIcons.text_continuous_24_filled
-                : OtzariaIcons.text_continuous_24_regular,
+                ? OtzariaIcons.text_continuous_rtl_24_filled
+                : OtzariaIcons.text_continuous_rtl_24_regular,
             size: 24,
           ),
         ),

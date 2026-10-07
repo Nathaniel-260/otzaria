@@ -829,7 +829,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
                         focusNode: _searchFocusNode,
                         controller: _searchController,
                         hintText: 'חפש בתוך המפרשים המוצגים...',
-                        icon: OtzariaIcons.search_in_the_library_24_regular,
+                        icon: OtzariaIcons.search_in_library_24_regular,
                         // Enter מנווט לתוצאה הבאה ומחזיר את הפוקוס לשדה; בחירת
                         // הכל בקבלת פוקוס הייתה מוחקת את השאילתה בתו הבא.
                         selectAllOnFocus: false,

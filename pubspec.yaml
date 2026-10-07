@@ -64,7 +64,7 @@ dependencies:
   otzaria_icons:
     git:
       url: https://github.com/Otzaria/otzaria_icons
-      ref: 5a614a7046c17e4321af31066cd9f0feae7c2e47
+      ref: 5225cd36c59097fe1f24a39fb60f9c2c0e15e47c
   file_picker: 12.3.0
   provider: ^6.1.5+1
   multi_split_view: ^3.6.2
