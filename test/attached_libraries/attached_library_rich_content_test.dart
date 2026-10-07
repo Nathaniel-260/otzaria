@@ -19,6 +19,7 @@ import 'package:otzaria/migration/database/untrusted_database.dart';
 import 'package:otzaria/personal_notes/personal_notes_system.dart';
 import 'package:otzaria/plugins/services/plugin_ref_line_resolver.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/data/repository/text_book_repository.dart';
@@ -184,6 +185,36 @@ void main() {
         summary!.targets.map((t) => t.targetTitle),
         contains(SeforimFixtureIds.rashiTitle),
       );
+    });
+
+    test('תוכן קישור שומר כותרת מצורפת שמסתיימת בסיומת', () async {
+      final dbPath = fullAttached('כותרות');
+      final db = sqlite3.sqlite3.open(dbPath);
+      const title = '${SeforimFixtureIds.rashiTitle}.txt';
+      db.execute('UPDATE book SET title = ? WHERE id = ?', [
+        title,
+        SeforimFixtureIds.rashiId,
+      ]);
+      db.close();
+      final library = await attach(dbPath);
+      await buildCatalog();
+      final manager = LibraryProviderManager.instance;
+      manager.seedMappingsForTesting(mapping: {}, providers: [provider]);
+      for (final target in [title, '$title.txt', '/תיקייה/$title.text']) {
+        expect(
+          await manager.getLinkContent(
+            Link(
+              heRef: title,
+              index1: 1,
+              path2: target,
+              index2: 1,
+              connectionType: 'commentary',
+              targetSource: library.source!,
+            ),
+          ),
+          startsWith('כותרות: '),
+        );
+      }
     });
 
     test('רשימת המפרשים ומפרשים בטווח שורות', () async {

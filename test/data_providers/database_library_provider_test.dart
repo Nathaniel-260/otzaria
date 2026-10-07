@@ -8,6 +8,11 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
+import 'package:otzaria/data/data_providers/book_composite_key.dart';
+import 'package:otzaria/data/data_providers/library_provider_manager.dart';
+import 'package:otzaria/data/data_providers/db_read_worker.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart'
+    show getTitleFromPath;
 import 'package:otzaria/data/data_providers/user_books_database_holder.dart';
 import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
@@ -1894,11 +1899,18 @@ void main() {
             "INSERT INTO line (id, bookId, lineIndex, content) VALUES (10, 1, 0, 'סעיף א'), (11, 1, 1, 'סעיף ב')",
           );
 
-          final link = inlineLinkFromPreviewUrl(
-            'otzaria://inline-link?path='
-            '${Uri.encodeComponent('שמירת שבת כהלכתה - א.txt')}&index=2',
-          )!;
-          expect(await provider.getLinkContent(link), 'סעיף ב');
+          final manager = LibraryProviderManager.instance;
+          addTearDown(manager.resetForTesting);
+          manager.seedMappingsForTesting(mapping: {}, providers: [provider]);
+          for (final suffix in ['.txt', '.text', '.TXT']) {
+            final link = inlineLinkFromPreviewUrl(
+              'otzaria://inline-link?path='
+              '${Uri.encodeComponent('שמירת שבת כהלכתה - א$suffix')}&index=2',
+            )!;
+            final before = DbReadWorker.sentMessageCount;
+            expect(await manager.getLinkContent(link), 'סעיף ב');
+            expect(DbReadWorker.sentMessageCount, greaterThan(before));
+          }
         } finally {
           await Settings.setValue<String>(
             SettingsRepository.keyLibraryPath,
@@ -2180,6 +2192,21 @@ void main() {
         // יוצר את סכימת ה-DB הרשמי ונסגר מיד — provider.initialize פותח את
         // אותו קובץ, וחיבור פתוח מקביל גורם ל-"database is locked".
         await repository.ensureInitialized();
+        final officialDb = await database.database;
+        officialDb.execute(
+          "INSERT INTO source (id, name) VALUES (1, 'official-test')",
+        );
+        officialDb.execute(
+          "INSERT INTO category (id, title, level) VALUES (1, 'כללי', 0)",
+        );
+        officialDb.execute(
+          "INSERT INTO book (id, categoryId, sourceId, title, totalLines) "
+          "VALUES (1, 1, 1, 'הערות לבדיקה', 2)",
+        );
+        officialDb.execute(
+          "INSERT INTO line (id, bookId, lineIndex, content) "
+          "VALUES (1, 1, 0, 'כותרת רשמית'), (2, 1, 1, 'תוכן רשמי')",
+        );
         database.close();
 
         await Settings.setValue<String>(
@@ -2249,6 +2276,67 @@ void main() {
 
         await provider.initialize();
 
+        final manager = LibraryProviderManager.instance;
+        addTearDown(manager.resetForTesting);
+        for (final suffix in ['.txt', '.text']) {
+          final titleFile = File(
+            path.join(tempDir.path, 'הערות לבדיקה$suffix.txt'),
+          );
+          await titleFile.writeAsString('כותרת מקורית\nתוכן של $suffix');
+          final title = getTitleFromPath(titleFile.path);
+          expect(title, 'הערות לבדיקה$suffix');
+          await userBooksRepository.insertBook(
+            migration_models.Book(
+              categoryId: userCategoryId,
+              sourceId: userSourceId,
+              title: title,
+              filePath: titleFile.path,
+              fileType: 'txt',
+            ),
+          );
+          final key = BookCompositeKey.create(
+            title: title,
+            categoryId: userCategoryId,
+            fileType: 'txt',
+            source: BookSource.user,
+          );
+          // גם כששם מנורמל ממופה לספק, ה-Link המקורי קובע את הכותרת.
+          for (final mapping in [
+            <BookCompositeKey, DatabaseLibraryProvider>{},
+            {key: provider},
+            {
+              key: provider,
+              BookCompositeKey.create(
+                title: 'הערות לבדיקה',
+                categoryId: userCategoryId,
+                source: BookSource.user,
+              ): provider,
+            },
+          ]) {
+            manager.seedMappingsForTesting(
+              mapping: mapping,
+              providers: [provider],
+            );
+            for (final source in [BookSource.user, BookSource.official]) {
+              expect(
+                await manager.getLinkContent(
+                  Link(
+                    heRef: title,
+                    index1: 1,
+                    path2: title,
+                    index2: 2,
+                    connectionType: 'commentary',
+                    targetSource: source,
+                    targetCategoryId: userCategoryId,
+                    targetFileType: 'txt',
+                  ),
+                ),
+                source.isUser ? 'תוכן של $suffix' : 'תוכן רשמי',
+              );
+            }
+          }
+        }
+
         final single = await provider.getLinkContent(
           Link(
             heRef: 'הערות',
@@ -2260,6 +2348,20 @@ void main() {
           ),
         );
         expect(single, 'שורה שנייה');
+
+        expect(
+          await provider.getLinkContent(
+            Link(
+              heRef: 'הערות',
+              index1: 1,
+              path2: 'הערות לבדיקה.txt',
+              index2: 3,
+              connectionType: 'commentary',
+              targetSource: BookSource.user,
+            ),
+          ),
+          'שגיאה: אינדקס מחוץ לטווח',
+        );
 
         final range = await provider.getLinkContent(
           Link(
