@@ -30,16 +30,6 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/utils/move_directory.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-// ── דיאלוג מאוחד להגדרת/עדכון מיקום הספרייה ────────────────────────────────
-//
-// כרטיס "פעולה" בוחר את *מקור* הקבצים: הורדה מהאינטרנט, תיקייה שבה נמצאים
-// קובצי הספרייה, ובמצב עדכון גם העברת תוכן הספרייה הקיימת. מקטע "תיקיית היעד"
-// בוחר *לאן* הקבצים ילכו — תחת התיקייה שתיבחר נוצרות "books" ו-"index".
-// "שימוש בספרייה קיימת במקומה" הוא היוצא מן הכלל: אין העתקה ואין יעד — הנתיב
-// שנבחר נשמר כמות שהוא, והאינדקס נקבע תחת השורש שלו.
-// כשיש ספרייה קיימת והיעד נשאר במקום הנוכחי — עדכון במקום עם גיבוי בטוח;
-// כשהיעד שונה — רלוקציה: הקבצים נכתבים ליעד החדש, והישנים נמחקים בהצלחה.
-
 /// דיאלוג מאוחד להגדרת/עדכון מיקום הספרייה. יוצר [EmptyLibraryBloc] משלו
 /// ומחזיר `true` אם הספרייה הוגדרה/עודכנה/הועברה בהצלחה.
 /// [currentLibraryPath] ריק → מצב הגדרה ראשונית; אחרת מצב עדכון/רלוקציה.
@@ -579,11 +569,13 @@ class _LibrarySetupDialogContentState
           if (context.mounted) Navigator.of(context).pop(true);
           return;
         }
-        // בלי השורש השמור, ברירת המחדל וזיהוי כרטיס שהוסר מצביעים לאחסון הפנימי.
-        if (_storageChoices != null) {
+        // גילוי חסר אינו בחירה באחסון פנימי — שומרים רק יעד שאומת.
+        for (final choice in _storageChoices ?? const []) {
+          if (choice.root != _targetRoot) continue;
           await AppPaths.setAndroidLibraryRoot(
-            _targetOnSdCard ? _targetRoot : null,
+            choice.isRemovable ? choice.root : null,
           );
+          break;
         }
         final relocating = _isRelocating;
         // יעד שורש חדש (הגדרה או רלוקציה) — האינדקס יושב תחת אותו שורש.

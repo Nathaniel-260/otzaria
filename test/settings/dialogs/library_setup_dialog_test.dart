@@ -134,13 +134,17 @@ class _CountingFilePickerPlatform extends FilePickerPlatform
 class _RecordingDownloadBloc extends EmptyLibraryBloc {
   _RecordingDownloadBloc() : super(downloadSpaceChecker: (_) async => null);
   final targets = <String?>[];
+  EmptyLibraryState? completionState;
 
   @override
   void add(EmptyLibraryEvent event) {
     if (event is! DownloadLibraryRequested) return super.add(event);
     targets.add(event.targetPath);
     // ignore: invalid_use_of_visible_for_testing_member
-    emit(EmptyLibraryDirectorySelected(selectedPath: event.targetPath!));
+    emit(
+      completionState ??
+          EmptyLibraryDirectorySelected(selectedPath: event.targetPath!),
+    );
   }
 }
 
@@ -338,6 +342,88 @@ void main() {
       await _openSetup(tester, defaultTargetPath: internalRoot);
       await confirm(tester);
       expect(bloc.targets, [p.join(internalRoot, 'books')]);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        '',
+      );
+    });
+
+    for (final discovery in ['ממתין', 'נכשל', 'ללא הכרטיס']) {
+      testWidgets('גילוי $discovery: התקנה לאותו SD שומרת את השורש', (
+        tester,
+      ) async {
+        await Settings.setValue<String>(
+          SettingsRepository.keyAndroidLibraryRoot,
+          sdRoot,
+        );
+        debugAndroidStorageChoices = () => switch (discovery) {
+          'ממתין' =>
+            Completer<List<({bool isRemovable, String root})>>().future,
+          'נכשל' => Future.error(StateError('גילוי האחסון נכשל')),
+          _ => Future.value(const [(isRemovable: false, root: internalRoot)]),
+        };
+        await _openSetup(tester, defaultTargetPath: sdRoot);
+        await confirm(tester);
+        expect(bloc.targets, [p.join(sdRoot, 'books')]);
+        expect(
+          Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+          sdRoot,
+        );
+      });
+    }
+
+    testWidgets('בחירה מפורשת באחסון פנימי מנקה את שורש ה-SD בהצלחה', (
+      tester,
+    ) async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyAndroidLibraryRoot,
+        sdRoot,
+      );
+      await _openSetup(tester, defaultTargetPath: sdRoot);
+      await tapUse(tester, 'אחסון פנימי');
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+      await confirm(tester);
+      expect(bloc.targets, [p.join(internalRoot, 'books')]);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        '',
+      );
+    });
+
+    testWidgets('כשל התקנה אחרי בחירה פנימית אינו משנה את שורש ה-SD', (
+      tester,
+    ) async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyAndroidLibraryRoot,
+        sdRoot,
+      );
+      await _openSetup(tester, defaultTargetPath: sdRoot);
+      await tapUse(tester, 'אחסון פנימי');
+      bloc.completionState = const EmptyLibraryError(
+        errorMessage: 'ההתקנה נכשלה',
+      );
+      await confirm(tester);
+      expect(bloc.targets, [p.join(internalRoot, 'books')]);
+      expect(find.text('ההתקנה נכשלה'), findsOneWidget);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+    });
+
+    testWidgets('ביטול אחרי בחירת SD אינו שומר את הבחירה', (tester) async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyAndroidLibraryRoot,
+        '',
+      );
+      await _openSetup(tester, defaultTargetPath: internalRoot);
+      await tapUse(tester, 'כרטיס SD');
+      _actionOnPressed(tester, 'ביטול')!();
+      await tester.pumpAndSettle();
+      expect(bloc.targets, isEmpty);
       expect(
         Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
         '',
