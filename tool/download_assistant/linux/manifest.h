@@ -38,6 +38,7 @@ typedef struct {
   char *part_of;           /* "" when absent: shown and picked as part of it */
   char *output_folder;     /* "" when absent: relative folder in the output */
   char *output_note;       /* "" when absent: said on the finish page */
+  char *name_en, *description_en, *output_note_en; /* "" when absent */
   GPtrArray *assets;       /* OtzAsset* */
 } OtzComponent;
 
@@ -54,6 +55,13 @@ OtzManifest *otz_manifest_parse(const char *data, gsize length, GError **error);
 OtzManifest *otz_manifest_from_json(const OtzJson *root, GError **error);
 void otz_manifest_free(OtzManifest *manifest);
 G_DEFINE_AUTOPTR_CLEANUP_FUNC(OtzManifest, otz_manifest_free)
+
+/* The English text when asked for and present, otherwise the Hebrew. */
+const char *otz_component_name(const OtzComponent *component, gboolean english);
+const char *otz_component_description(const OtzComponent *component,
+                                      gboolean english);
+const char *otz_component_output_note(const OtzComponent *component,
+                                      gboolean english);
 
 const OtzComponent *otz_manifest_find(const OtzManifest *manifest,
                                       const char *id);

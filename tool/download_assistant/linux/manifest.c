@@ -36,6 +36,9 @@ static void free_component(gpointer data) {
   g_free(component->part_of);
   g_free(component->output_folder);
   g_free(component->output_note);
+  g_free(component->name_en);
+  g_free(component->description_en);
+  g_free(component->output_note_en);
   g_ptr_array_unref(component->assets);
   g_free(component);
 }
@@ -92,6 +95,24 @@ static gboolean is_sha256(const char *text) {
     if (!g_ascii_isxdigit(*p)) return FALSE;
   }
   return TRUE;
+}
+
+static const char *pick(const char *hebrew, const char *english, gboolean want) {
+  return want && *english != '\0' ? english : hebrew;
+}
+
+const char *otz_component_name(const OtzComponent *component, gboolean english) {
+  return pick(component->name, component->name_en, english);
+}
+
+const char *otz_component_description(const OtzComponent *component,
+                                      gboolean english) {
+  return pick(component->description, component->description_en, english);
+}
+
+const char *otz_component_output_note(const OtzComponent *component,
+                                      gboolean english) {
+  return pick(component->output_note, component->output_note_en, english);
 }
 
 char *otz_asset_url(const OtzAsset *asset, const char *file_name) {
@@ -178,6 +199,9 @@ static gboolean parse_component(const OtzJson *json, OtzComponent **out,
   component->part_of = dup_optional(json, "partOf");
   component->output_folder = dup_optional(json, "outputFolder");
   component->output_note = dup_optional(json, "outputNote");
+  component->name_en = dup_optional(json, "nameEn");
+  component->description_en = dup_optional(json, "descriptionEn");
+  component->output_note_en = dup_optional(json, "outputNoteEn");
   const OtzJson *required = otz_json_get(json, "required");
   component->required =
       required != NULL && required->type == OTZ_JSON_BOOL && required->boolean;

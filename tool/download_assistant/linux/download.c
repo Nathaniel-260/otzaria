@@ -254,7 +254,8 @@ static gboolean plan_asset(OtzJob *job, const char *dir, const OtzAsset *asset,
 
 OtzJob *otz_job_new(const OtzManifest *manifest, GPtrArray *selected_ids,
                     const OtzTarget *target, const char *cache_dir,
-                    const char *base_dir, GError **error) {
+                    const char *base_dir, const char *subfolder_name,
+                    GError **error) {
   OtzJob *job = g_new0(OtzJob, 1);
   g_mutex_init(&job->lock);
   job->platform = g_strdup(target->platform);
@@ -267,6 +268,10 @@ OtzJob *otz_job_new(const OtzManifest *manifest, GPtrArray *selected_ids,
   job->output_notes = otz_planned_output_notes(manifest, selected_ids);
   g_autofree char *subfolder =
       otz_planned_output_subfolder(job->output_files, target->platform);
+  if (*subfolder != '\0' && subfolder_name != NULL) {
+    g_free(subfolder);
+    subfolder = g_strdup(subfolder_name);
+  }
   job->output_dir = *subfolder != '\0'
                         ? g_build_filename(base_dir, subfolder, NULL)
                         : g_strdup(base_dir);

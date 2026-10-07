@@ -2,8 +2,8 @@
 # "מסייע ההורדה ל-Linux". Links only GTK3 and what it pulls (GLib/GIO, Pango,
 # Cairo, GDK) plus libc: Otzaria's own packages depend on nothing more.
 #
-#   make                 build/Otzaria-Download-Assistant
-#   make test            unit tests (fixtures, JSON, HTTP, markers, assembly)
+#   make                 build/Otzaria-Download-Assistant (fetches the pinned art once)
+#   make test            unit tests (fixtures, JSON, HTTP, markers, assembly, texts)
 #   make check-needed    fail when the binary links anything unexpected
 #   make dist DIST_ARCH=x64|arm64
 #
@@ -18,6 +18,7 @@ GTK_CFLAGS := $(shell $(PKG_CONFIG) --cflags gtk+-3.0)
 GTK_LIBS := $(shell $(PKG_CONFIG) --libs gtk+-3.0)
 GIO_CFLAGS := $(shell $(PKG_CONFIG) --cflags gio-2.0)
 GIO_LIBS := $(shell $(PKG_CONFIG) --libs gio-2.0)
+GLIB_COMPILE_RESOURCES ?= $(shell $(PKG_CONFIG) --variable=glib_compile_resources gio-2.0)
 
 CFLAGS ?= -O2 -g
 override CFLAGS += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
@@ -26,8 +27,8 @@ override CFLAGS += -std=gnu11 -Wall -Wextra -Wno-unused-parameter \
 override LDFLAGS += -Wl,--as-needed
 
 CORE := otz_common.c json.c manifest.c selection.c http.c release.c paths.c \
-  download.c assemble.c
-APP := $(CORE) ui.c main.c
+  download.c assemble.c texts.c
+APP := $(CORE) widgets.c ui.c main.c
 HEADERS := $(wildcard *.h)
 
 BIN := $(BUILD)/Otzaria-Download-Assistant
@@ -47,8 +48,31 @@ $(BUILD)/app/%.o: %.c $(HEADERS) $(BUILD)/build_info.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) -c $< -o $@
 
-$(BIN): $(APP:%.c=$(BUILD)/app/%.o)
-	$(CC) $(LDFLAGS) -o $@ $^ $(GTK_LIBS)
+# The art is not in the repository: fetch_art.sh brings the pinned, SHA-256 checked
+# version, embedded as a GResource so the binary stays a single file.
+ART := $(BUILD)/art
+PIN := ../../../installer/assistant_art.pin.json
+
+$(ART)/.pinned-sha256: $(PIN) fetch_art.sh
+	sh fetch_art.sh $(ART)
+	@touch $@
+
+$(BUILD)/art.gresource.xml: $(ART)/.pinned-sha256
+	@{ echo '<?xml version="1.0" encoding="UTF-8"?>'; \
+	  echo '<gresources><gresource prefix="/org/otzaria/assistant">'; \
+	  for f in $(ART)/*.png; do echo "<file>$$(basename $$f)</file>"; done; \
+	  echo '</gresource></gresources>'; } > $@
+
+$(BUILD)/art_resources.c: $(BUILD)/art.gresource.xml
+	$(GLIB_COMPILE_RESOURCES) --sourcedir=$(ART) --generate-source --c-name=otz_art \
+	  --target=$@ $<
+
+$(BUILD)/app/art_resources.o: $(BUILD)/art_resources.c
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -w $(GIO_CFLAGS) -c $< -o $@
+
+$(BIN): $(APP:%.c=$(BUILD)/app/%.o) $(BUILD)/app/art_resources.o
+	$(CC) $(LDFLAGS) -o $@ $^ $(GTK_LIBS) -lm
 
 $(BUILD)/core/test_main.o: tests/test_main.c $(HEADERS) $(BUILD)/build_info.h
 	@mkdir -p $(dir $@)

@@ -14,8 +14,10 @@
 #include "json.h"
 #include "manifest.h"
 #include "otz_common.h"
+#include "paths.h"
 #include "release.h"
 #include "selection.h"
+#include "texts.h"
 
 /* ------------------------------------------------------------- helpers */
 
@@ -798,11 +800,11 @@ static void test_asset_url_and_sizes(void) {
                   "otzaria-0.10.3+143-linux.deb");
   g_assert_true(otz_http_check_url(url, NULL));
   g_autofree char *gb = otz_human_size(G_GINT64_CONSTANT(2012390081));
-  g_assert_cmpstr(gb, ==, "1.8 ג׳יגה");
+  g_assert_cmpstr(gb, ==, "1.8\xC2\xA0GB");
   g_autofree char *mb = otz_human_size(42127056);
-  g_assert_cmpstr(mb, ==, "40 מגה");
+  g_assert_cmpstr(mb, ==, "40\xC2\xA0MB");
   g_autofree char *kb = otz_human_size(1);
-  g_assert_cmpstr(kb, ==, "1 קילו");
+  g_assert_cmpstr(kb, ==, "1\xC2\xA0KB");
 }
 
 /* ------------------------------------------------------------- job */
@@ -851,7 +853,8 @@ static void job_fixture_init(JobFixture *f, const char *const *ids) {
 static OtzJob *job_fixture_job(JobFixture *f) {
   OtzTarget target = {"linux", "x64", ""};
   g_autoptr(GError) error = NULL;
-  OtzJob *job = otz_job_new(f->manifest, f->ids, &target, f->cache, f->out, &error);
+  OtzJob *job =
+      otz_job_new(f->manifest, f->ids, &target, f->cache, f->out, NULL, &error);
   g_assert_no_error(error);
   return job;
 }
@@ -938,7 +941,7 @@ static void test_job_output_folder(void) {
   g_ptr_array_add(ids, (gpointer) "data");
   OtzTarget target = {"linux", "x64", "deb"};
   g_autoptr(OtzJob) job =
-      otz_job_new(manifest, ids, &target, cache, out, &error);
+      otz_job_new(manifest, ids, &target, cache, out, NULL, &error);
   g_assert_no_error(error);
   g_assert_true(otz_job_run(job, NULL, &error));
   g_assert_no_error(error);
@@ -1074,6 +1077,132 @@ static void test_http_long_header(void) {
   g_string_free(ok, TRUE);
 }
 
+/* An English interface names the multi-file folder in English; Hebrew keeps
+ * the contract's name. */
+static void test_job_subfolder_name(void) {
+  static const char *const ids[] = {"hello", "other", NULL};
+  JobFixture f;
+  job_fixture_init(&f, ids);
+  OtzTarget target = {"linux", "x64", ""};
+  g_autoptr(GError) error = NULL;
+  g_autoptr(OtzJob) hebrew =
+      otz_job_new(f.manifest, f.ids, &target, f.cache, f.out, NULL, &error);
+  g_assert_no_error(error);
+  g_autofree char *contract = g_build_filename(f.out, "אוצריא להתקנה ל-Linux", NULL);
+  g_assert_cmpstr(otz_job_output_dir(hebrew), ==, contract);
+  g_autoptr(OtzJob) english = otz_job_new(f.manifest, f.ids, &target, f.cache,
+                                          f.out, "Otzaria setup for Linux", &error);
+  g_assert_no_error(error);
+  g_autofree char *named = g_build_filename(f.out, "Otzaria setup for Linux", NULL);
+  g_assert_cmpstr(otz_job_output_dir(english), ==, named);
+
+  static const char *const single_ids[] = {"hello", NULL};
+  g_ptr_array_set_size(f.ids, 0);
+  g_ptr_array_add(f.ids, (gpointer)single_ids[0]);
+  g_autoptr(OtzJob) single = otz_job_new(f.manifest, f.ids, &target, f.cache,
+                                         f.out, "Otzaria setup for Linux", &error);
+  g_assert_no_error(error);
+  g_assert_cmpstr(otz_job_output_dir(single), ==, f.out);
+  job_fixture_clear(&f);
+}
+
+/* nameEn/descriptionEn/outputNoteEn, and the Hebrew when one is missing. */
+static void test_manifest_english_text(void) {
+  static const char *json =
+      "{\"schemaVersion\":1,\"components\":["
+      "{\"id\":\"a\",\"name\":\"א\",\"nameEn\":\"A\",\"description\":\"ב\","
+      "\"outputNote\":\"ג\",\"outputNoteEn\":\"C\",\"type\":\"application\","
+      "\"assets\":[{\"kind\":\"single\",\"repository\":\"Otzaria/otzaria\","
+      "\"releaseTag\":\"1\",\"name\":\"hello.bin\",\"size\":5,\"sha256\":\"" HELLO_SHA
+      "\"}]}]}";
+  g_autoptr(GError) error = NULL;
+  g_autoptr(OtzManifest) manifest = otz_manifest_parse(json, strlen(json), &error);
+  g_assert_no_error(error);
+  const OtzComponent *a = otz_manifest_find(manifest, "a");
+  g_assert_cmpstr(otz_component_name(a, TRUE), ==, "A");
+  g_assert_cmpstr(otz_component_name(a, FALSE), ==, "א");
+  g_assert_cmpstr(otz_component_description(a, TRUE), ==, "ב");
+  g_assert_cmpstr(otz_component_output_note(a, TRUE), ==, "C");
+  g_autofree char *hebrew = otz_fallback_output_dir(FALSE);
+  g_autofree char *english = otz_fallback_output_dir(TRUE);
+  g_assert_true(g_str_has_suffix(hebrew, "/אוצריא-להתקנה"));
+  g_assert_true(g_str_has_suffix(english, "/Otzaria setup"));
+}
+
+/* "No internet" is only a request that never reached a server. */
+static void test_offline_errors(void) {
+  g_autoptr(GError) dns = g_error_new_literal(G_RESOLVER_ERROR,
+                                              G_RESOLVER_ERROR_NOT_FOUND, "dns");
+  g_autoptr(GError) unreachable = g_error_new_literal(
+      G_IO_ERROR, G_IO_ERROR_NETWORK_UNREACHABLE, "unreachable");
+  g_autoptr(GError) refused = g_error_new_literal(
+      G_IO_ERROR, G_IO_ERROR_CONNECTION_REFUSED, "refused");
+  g_autoptr(GError) http = g_error_new_literal(OTZ_ERROR, OTZ_ERROR_HTTP, "404");
+  g_autoptr(GError) limited =
+      g_error_new_literal(OTZ_ERROR, OTZ_ERROR_RATE_LIMITED, "403");
+  g_autoptr(GError) cancelled =
+      g_error_new_literal(G_IO_ERROR, G_IO_ERROR_CANCELLED, "cancelled");
+  g_assert_true(otz_error_is_offline(dns));
+  g_assert_true(otz_error_is_offline(unreachable));
+  g_assert_true(otz_error_is_offline(refused));
+  g_assert_false(otz_error_is_offline(http));
+  g_assert_false(otz_error_is_offline(limited));
+  g_assert_false(otz_error_is_offline(cancelled));
+  g_assert_false(otz_error_is_offline(NULL));
+}
+
+static void placeholders(const char *text, int counts[4]) {
+  memset(counts, 0, sizeof(int) * 4);
+  for (const char *at = strchr(text, '%'); at != NULL; at = strchr(at + 1, '%'))
+    if (at[1] >= '1' && at[1] <= '3') counts[at[1] - '0']++;
+}
+
+/* Every text exists in both languages with the same %1..%3. */
+static void test_texts_complete(void) {
+  for (int key = 0; key < S_COUNT; key++) {
+    otz_set_english(FALSE);
+    const char *hebrew = otz_tr(key);
+    otz_set_english(TRUE);
+    const char *english = otz_tr(key);
+    g_assert_cmpstr(hebrew, !=, "");
+    g_assert_cmpstr(english, !=, "");
+    int he[4], en[4];
+    placeholders(hebrew, he);
+    placeholders(english, en);
+    for (int i = 1; i <= 3; i++) g_assert_cmpint(he[i] > 0, ==, en[i] > 0);
+  }
+  otz_set_english(FALSE);
+}
+
+static void test_texts_format(void) {
+  otz_set_english(TRUE);
+  g_autofree char *step = otz_trf(S_STEP_OF, "2", "5", NULL);
+  g_assert_cmpstr(step, ==, "Step 2 of 5");
+  g_autofree char *item = otz_trf(S_DOWNLOADING_ITEM, "A %2", "1", "3", NULL);
+  g_assert_cmpstr(item, ==, "Downloading: A %2 (1 of 3)");
+  g_autofree char *hours = otz_duration_text(2 * 3600 + 20 * 60);
+  g_assert_cmpstr(hours, ==, "2 hours 20 minutes");
+  g_autofree char *short_time = otz_duration_text(30);
+  g_assert_cmpstr(short_time, ==, "less than a minute");
+  g_assert_cmpstr(otz_tr_message("לא ניתן לקרוא את רשימת הקבצים של אוצריא."), ==,
+                  "Can't read the list of Otzaria files.");
+  g_autofree char *plain = otz_ltr("37\xC2\xA0MB");
+  g_assert_cmpstr(plain, ==, "37\xC2\xA0MB");
+
+  otz_set_english(FALSE);
+  g_autofree char *minutes = otz_duration_text(44 * 60);
+  g_assert_cmpstr(minutes, ==, "44 דקות");
+  g_autofree char *hour = otz_duration_text(3600 + 60);
+  g_assert_cmpstr(hour, ==, "שעה ו-דקה");
+  g_autofree char *isolated = otz_ltr("37\xC2\xA0MB");
+  g_assert_cmpstr(isolated, ==, "\xE2\x81\xA6" "37\xC2\xA0MB\xE2\x81\xA9");
+  /* RLM opens each line and follows ", ". */
+  g_autofree char *bidi = otz_bidi("Windows, Linux או Android\nשורה");
+  g_assert_cmpstr(bidi, ==,
+                  "\xE2\x80\x8FWindows,\xE2\x80\x8F Linux או Android\n\xE2\x80\x8Fשורה");
+  g_assert_cmpstr(otz_tr_message("other"), ==, "other");
+}
+
 int main(int argc, char **argv) {
   g_test_init(&argc, &argv, NULL);
   g_test_add_func("/selection/fixtures", test_fixtures);
@@ -1106,5 +1235,10 @@ int main(int argc, char **argv) {
   g_test_add_func("/job/output-folder", test_job_output_folder);
   g_test_add_func("/job/partial-bound-to-asset", test_job_partial_bound_to_asset);
   g_test_add_func("/job/space", test_space_verdict);
+  g_test_add_func("/job/subfolder-name", test_job_subfolder_name);
+  g_test_add_func("/manifest/english-text", test_manifest_english_text);
+  g_test_add_func("/release/offline-errors", test_offline_errors);
+  g_test_add_func("/texts/complete", test_texts_complete);
+  g_test_add_func("/texts/format", test_texts_format);
   return g_test_run();
 }
