@@ -234,7 +234,9 @@ class NavPanelCollapsibleSearch extends StatefulWidget {
 
 class _NavPanelCollapsibleSearchState extends State<NavPanelCollapsibleSearch> {
   late bool _isOpen = widget.delegate.controller.text.isNotEmpty;
-  bool _focusOnOpen = false;
+  FocusNode? _ownFocusNode;
+  FocusNode get _focusNode =>
+      widget.delegate.focusNode ?? (_ownFocusNode ??= FocusNode());
 
   final _contentKey = GlobalKey();
   final _toggles = <BuildContext>{};
@@ -309,29 +311,26 @@ class _NavPanelCollapsibleSearchState extends State<NavPanelCollapsibleSearch> {
   @override
   void dispose() {
     widget.delegate.controller.removeListener(_onTextChanged);
+    _ownFocusNode?.dispose();
     super.dispose();
   }
 
   // סינון שהוחל מבחוץ (שחזור טאב) חייב שדה גלוי — אחרת הרשימה מסוננת בלי הסבר.
   void _onTextChanged() {
     if (!_isOpen && widget.delegate.controller.text.isNotEmpty) {
-      setState(() {
-        _isOpen = true;
-        _focusOnOpen = false;
-      });
+      setState(() => _isOpen = true);
     }
   }
 
+  // autofocus מוותר כשיש פוקוס אחר (טקסט הספר) — לכן מבקשים במפורש.
   void _open() {
-    setState(() {
-      _isOpen = true;
-      _focusOnOpen = true;
-    });
+    setState(() => _isOpen = true);
+    _focusNode.requestFocus();
   }
 
   void _close() {
     final delegate = widget.delegate;
-    final hadFocus = delegate.focusNode?.hasFocus ?? false;
+    final hadFocus = _focusNode.hasFocus;
     if (delegate.controller.text.isNotEmpty) {
       delegate.controller.clear();
       delegate.onClear?.call();
@@ -366,9 +365,7 @@ class _NavPanelCollapsibleSearchState extends State<NavPanelCollapsibleSearch> {
               onKeyEvent: _handleKey,
               child: OtzariaSearchField(
                 controller: delegate.controller,
-                focusNode: delegate.focusNode,
-                // autofocus נקרא רק בהרכבת השדה — שדה ששוחזר פתוח אינו חוטף פוקוס.
-                autofocus: _focusOnOpen,
+                focusNode: _focusNode,
                 hintText: delegate.hintText,
                 onChanged: delegate.onChanged,
                 onSubmitted: delegate.onSubmitted,
