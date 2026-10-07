@@ -78,7 +78,7 @@ class AndroidStorageService {
       .where((volumePath) => volumePath != primaryPath)
       .toList(growable: false);
 
-  /// האם הכרך שעליו יושב [dirPath] תומך בקבצים מעל 4GB (seforim.db גדול מכך).
+  /// האם הכרך שעליו יושב [dirPath] תומך בקבצים מעל 4GiB-1 (FAT32 אינו תומך).
   /// fail-open: כשלא ניתן לקבוע מחזיר true — הכשל האמיתי יעלה בכתיבה עצמה.
   static Future<bool> volumeSupportsLargeFiles(String dirPath) async {
     if (!Platform.isAndroid) return true;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:math' as math;
 import 'package:bloc/bloc.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
@@ -18,6 +19,7 @@ import 'package:otzaria/empty_library/services/android_storage_service.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
+import 'package:otzaria/empty_library/services/library_space_estimate.dart';
 import 'package:otzaria/library_update/services/library_access_gate.dart';
 import 'package:otzaria/library_update/services/companion_assets_service.dart';
 import 'package:otzaria/search/magic_dictionary_downloader.dart';
@@ -25,6 +27,7 @@ import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/download_eta_estimator.dart';
 import 'package:otzaria/utils/download_sidecar.dart';
 import 'package:otzaria/utils/file/archive_extractor.dart';
+import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/download_space.dart';
 import 'package:otzaria/utils/file/tar_zst_extractor.dart';
 import 'package:otzaria/utils/move_directory.dart';
@@ -1166,15 +1169,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     }
   }
 
-  /// מחזיר את הנתיב הראשון בעץ ההורים שקיים בפועל, לצורך בדיקת df.
-  static String _findExistingAncestor(String dirPath) {
-    var dir = Directory(dirPath);
-    while (!dir.existsSync() && dir.parent.path != dir.path) {
-      dir = dir.parent;
-    }
-    return dir.path;
-  }
-
   /// בודק אם נתיב נגיש לספריית sqlite3 native ב-Android.
   ///
   /// ב-Android Scoped Storage, רק אחסון פנימי (/data/) ואחסון חיצוני
@@ -1201,54 +1195,20 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     );
   }
 
-  /// מחזיר מידע df עבור נתיב נתון: filesystem ומקום פנוי בבייטים.
-  /// מחזיר freeBytes = -1 אם לא ניתן לקבוע.
-  static Future<_DfInfo> _getDfInfo(String dirPath) async {
-    if (!Platform.isAndroid) {
-      return const _DfInfo(filesystem: null, freeBytes: -1);
-    }
-    try {
-      // -k (בלוקים של 1024B) נתמך גם ב-toybox של אנדרואיד וגם ב-coreutils.
-      // הדגל -B1 של GNU אינו קיים ב-toybox ומחזיר exit!=0, מה שהשבית בעבר
-      // את כל בדיקת המקום הפנוי באנדרואיד (freeBytes נשאר -1 תמיד).
-      final result = await Process.run('df', [
-        '-k',
-        dirPath,
-      ], runInShell: false);
-      if (result.exitCode != 0) {
-        return const _DfInfo(filesystem: null, freeBytes: -1);
-      }
-      final lines = result.stdout.toString().trim().split('\n');
-      if (lines.length < 2) {
-        return const _DfInfo(filesystem: null, freeBytes: -1);
-      }
-      // שורת הנתונים של df -k: Filesystem 1K-blocks Used Available Use% Mount
-      final parts = lines.last.trim().split(RegExp(r'\s+'));
-      if (parts.length < 4) {
-        return const _DfInfo(filesystem: null, freeBytes: -1);
-      }
-      final availableKb = int.tryParse(parts[3]);
-      return _DfInfo(
-        filesystem: parts[0],
-        freeBytes: availableKb == null ? -1 : availableKb * 1024,
-      );
-    } catch (_) {
-      return const _DfInfo(filesystem: null, freeBytes: -1);
-    }
-  }
-
-  /// עוטף את _getDfInfo להחזרת מקום פנוי בלבד (לשימוש קיים).
+  /// מקום פנוי באחסון הפנימי, או -1 כשלא ניתן לקבוע.
   static Future<int> _getFreeInternalSpace(String dirPath) async =>
-      (await _getDfInfo(dirPath)).freeBytes;
+      (await getDiskSpaceInfo(dirPath)).freeBytes;
 
-  /// בודק אם יש מספיק מקום פנוי להורדה ולחילוץ הספרייה.
+  /// בודק שיש מקום להורדה ולחילוץ, לפי הגדלים האמיתיים של [assets] כשהם
+  /// ידועים ולפי [measuredLibraryDownload] לפני כן.
   ///
   /// [downloadSize] הוא השטח הנוסף להורדה ולחיבור, בניכוי קבצים למחזור.
-  /// כשאינו ידוע, אומדן 1.5GB משמש לבדיקת הסף הראשונית.
-  ///
-  /// מחזיר הודעת שגיאה אם אין מספיק מקום, או null אם הכל תקין.
-  /// מטפל גם בתרחיש שבו temp ותיקיית הספרייה חולקים אותו volume.
-  Future<String?> _checkSpaceForDownload({int? downloadSize}) async {
+  /// מחזיר הודעת שגיאה, או null כשהכול תקין.
+  Future<String?> _checkSpaceForDownload({
+    int? downloadSize,
+    List<_DownloadAsset>? assets,
+    String? libraryPath,
+  }) async {
     final checker = downloadSpaceChecker;
     if (checker != null) return checker(downloadSize);
     if (!Platform.isAndroid) return null;
@@ -1265,53 +1225,108 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           'יש להכניס את הכרטיס ולהפעיל מחדש את האפליקציה.';
     }
 
-    // האומדן הראשוני מוחלף בשטח ההורדה והחיבור אחרי פתרון הנכסים.
-    final int kDownloadSize = downloadSize ?? 1610612736; // אומדן 1.5 GB
-    const int kExtractSize = 6979321856; // 6.5 GB
+    final sizes = <ArchiveSize>[];
+    int? largestFile;
+    // נכס בלי Content-Length היה נספר כאפס — אז הגדלים שנמדדו בטוחים יותר.
+    if (assets == null || assets.any((asset) => asset.compressedSize <= 0)) {
+      sizes.addAll(measuredLibraryDownload);
+    } else {
+      for (final asset in assets) {
+        final compressed = asset.compressedSize;
+        final contentSize = asset.isCompressed
+            ? await _probeFrameContentSize(asset)
+            : compressed;
+        final extracted = extractedSizeOf(
+          compressed,
+          frameContentSize: contentSize,
+          fallbackRatio: _fallbackExpansion(asset),
+        );
+        sizes.add((compressed: compressed, extracted: extracted));
+        if (!asset.isTar && contentSize == extracted) {
+          largestFile = math.max(largestFile ?? 0, extracted);
+        }
+      }
+    }
+    final downloadNeed =
+        downloadSize ?? sizes.fold<int>(0, (sum, s) => sum + s.compressed);
 
-    final tempPath = Directory.systemTemp.path;
-    final libraryPath =
-        _defaultLibraryPathOverride ?? await AppPaths.getDefaultLibraryPath();
-    final checkPath = _findExistingAncestor(libraryPath);
+    final target =
+        libraryPath ??
+        _defaultLibraryPathOverride ??
+        await AppPaths.getDefaultLibraryPath();
 
-    if (!await AndroidStorageService.volumeSupportsLargeFiles(libraryPath)) {
+    if (exceedsFat32FileLimit(largestFile) &&
+        !await AndroidStorageService.volumeSupportsLargeFiles(target)) {
       return 'כרטיס ה-SD מפורמט ב-FAT32, שאינו תומך בקבצים מעל 4GB — '
-          'וקובץ הספרייה גדול מכך.\n'
+          'וקובץ הספרייה (${formatMegabytesLtr(largestFile!, fractionDigits: 0)}) '
+          'גדול מכך.\n'
           'יש לבחור באחסון הפנימי, או לפרמט את הכרטיס ל-exFAT.';
     }
 
-    final tempInfo = await _getDfInfo(tempPath);
-    final extractInfo = await _getDfInfo(checkPath);
-
-    String gb(int bytes) => (bytes / 1024 / 1024 / 1024).toStringAsFixed(1);
-
+    final temp = await getDiskSpaceInfo(Directory.systemTemp.path);
+    final library = await getDiskSpaceInfo(target);
     final sameVolume =
-        tempInfo.filesystem != null &&
-        extractInfo.filesystem != null &&
-        tempInfo.filesystem == extractInfo.filesystem;
+        temp.volumeId != null && temp.volumeId == library.volumeId;
+    // על אותו כונן הארכיונים נמחקים אחד-אחד בזמן החילוץ, ולכן רק השיא נספר.
+    return insufficientSpaceMessage([
+      if (sameVolume)
+        VolumeSpaceNeed(
+          label: 'הורדה וחילוץ הספרייה',
+          volumeId: library.volumeId,
+          requiredBytes: withSafetyMargin(
+            downloadNeed + peakExtractionGrowth(sizes),
+          ),
+          freeBytes: library.freeBytes,
+        )
+      else ...[
+        VolumeSpaceNeed(
+          label: 'קבצי ההורדה הזמניים',
+          volumeId: null,
+          requiredBytes: withSafetyMargin(downloadNeed),
+          freeBytes: temp.freeBytes,
+        ),
+        VolumeSpaceNeed(
+          label: 'תיקיית הספרייה',
+          volumeId: null,
+          requiredBytes: withSafetyMargin(
+            sizes.fold<int>(0, (sum, s) => sum + s.extracted),
+          ),
+          freeBytes: library.freeBytes,
+        ),
+      ],
+    ]);
+  }
 
-    if (sameVolume) {
-      // שני הנתיבים על אותו volume: צריך מקום לשניהם יחד.
-      final free = tempInfo.freeBytes;
-      if (free > 0 && free < kDownloadSize + kExtractSize) {
-        return 'אין מספיק מקום פנוי להורדה ולחילוץ הספרייה.\n'
-            'נדרש: לפחות ${gb(kDownloadSize + kExtractSize)} GB, פנוי: ${gb(free)} GB.\n'
-            'יש לפנות מקום ולנסות שוב.';
-      }
-    } else {
-      // volumes נפרדים: בדיקה לכל אחד בנפרד
-      if (tempInfo.freeBytes > 0 && tempInfo.freeBytes < kDownloadSize) {
-        return 'אין מספיק מקום פנוי להורדת הקבצים הדחוסים.\n'
-            'נדרש: לפחות ${gb(kDownloadSize)} GB, פנוי: ${gb(tempInfo.freeBytes)} GB.\n'
-            'יש לפנות מקום ולנסות שוב.';
-      }
-      if (extractInfo.freeBytes > 0 && extractInfo.freeBytes < kExtractSize) {
-        return 'אין מספיק מקום פנוי לחילוץ הספרייה.\n'
-            'נדרש: לפחות ${gb(kExtractSize)} GB, פנוי: ${gb(extractInfo.freeBytes)} GB.\n'
-            'יש לפנות מקום ולנסות שוב.';
-      }
+  static double _fallbackExpansion(_DownloadAsset asset) {
+    if (asset.isTar) return ExpansionFallback.pdfArchive;
+    if (asset.outputFileName ==
+        DatabaseConstants.externalCatalogDatabaseFileName) {
+      return ExpansionFallback.catalog;
     }
-    return null;
+    return ExpansionFallback.database;
+  }
+
+  /// גודל התוכן מכותרת ה-frame, בקריאת הבייטים הראשונים בלבד. הקריאה נעצרת
+  /// אחרי הכותרת גם כשה-Range אבד ב-redirect של כתובת חלק.
+  Future<int?> _probeFrameContentSize(_DownloadAsset asset) async {
+    final url = asset.split?.parts.first.downloadUrl ?? asset.resolvedUrl;
+    if (url == null) return null;
+    try {
+      final request = http.Request('GET', Uri.parse(url))
+        ..headers['Range'] = 'bytes=0-${zstdFrameHeaderMaxBytes - 1}';
+      final response = await _httpClient
+          .send(request)
+          .timeout(downloadConnectTimeout);
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        await response.stream.listen((_) {}).cancel();
+        return null;
+      }
+      return await readZstdFrameContentSize(
+        response.stream,
+      ).timeout(downloadConnectTimeout);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _onCheckDiskSpaceRequested(
@@ -1635,6 +1650,8 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       }
       final spaceError = await _checkSpaceForDownload(
         downloadSize: grandTotal > 0 ? downloadNeeded : null,
+        assets: assets.where((asset) => !asset.skipped).toList(),
+        libraryPath: libraryPath,
       );
       if (spaceError != null) {
         _downloadDisabledReason = spaceError;
@@ -2086,13 +2103,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     _httpClient.close();
     return super.close();
   }
-}
-
-/// תוצאת קריאת df עבור נתיב נתון.
-class _DfInfo {
-  const _DfInfo({required this.filesystem, required this.freeBytes});
-  final String? filesystem;
-  final int freeBytes;
 }
 
 /// מתאר קובץ דחוס יחיד בחבילת ההורדה הראשונית (ספרייה / תלמוד / קטלוגים).

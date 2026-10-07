@@ -4,6 +4,8 @@ import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
+import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
+import 'package:otzaria/empty_library/services/library_space_estimate.dart';
 import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/zstd_patch_decoder.dart';
 import 'package:path/path.dart' as p;
@@ -39,19 +41,16 @@ class StagedLibraryPackage {
   final String? indexDir;
 }
 
-/// מקום פנוי שאינו מספיק לפריסה.
+/// מקום פנוי שאינו מספיק לפריסה, לכל מיקום שחסר בו.
 class InsufficientSpaceException implements Exception {
-  const InsufficientSpaceException(this.requiredBytes, this.freeBytes);
+  const InsufficientSpaceException(this.shortfalls);
 
-  final int requiredBytes;
-  final int freeBytes;
+  final List<VolumeSpaceNeed> shortfalls;
 
   @override
-  String toString() {
-    String gb(int bytes) => (bytes / (1 << 30)).toStringAsFixed(1);
-    return 'אין מספיק מקום פנוי לפריסת הספרייה.\n'
-        'נדרש: לפחות ${gb(requiredBytes)} GB, פנוי: ${gb(freeBytes)} GB.';
-  }
+  String toString() =>
+      'אין מספיק מקום פנוי לפריסת הספרייה.\n'
+      '${shortfalls.map((n) => n.describe()).join('\n')}';
 }
 
 /// פורס את קובצי הספרייה שהמסייע הוריד (ראה [scanLibraryPackages]) לתיקיות
@@ -70,10 +69,6 @@ class LibraryPackageImporter {
   final LibraryIndexHost _indexHost;
   final Future<DiskSpaceInfo> Function(String path) _diskSpace;
 
-  // הערכה: seforim.db נדחס פי ארבעה בערך, וקובצי האינדקס כמעט אינם נדחסים.
-  static const _libraryExpansion = 4;
-  static const _indexExpansion = 2;
-
   /// היכן יישב האינדקס: באנדרואיד תמיד באחסון הפנימי (Tantivy נועל ב-flock,
   /// ש-FUSE של כרטיס SD אינו תומך בו); אחרת ליד תיקיית הספרים.
   static Future<String> indexTargetFor(String booksTarget) async =>
@@ -91,32 +86,69 @@ class LibraryPackageImporter {
       : '$indexTarget.import';
 
   /// זורק [InsufficientSpaceException] כשהמקום הפנוי ידוע ואינו מספיק.
+  /// ה-staging יושב ליד כל יעד ומועבר אליו בשינוי שם, ולכן כל כונן צריך
+  /// רק את הגודל אחרי החילוץ; האינדקס באנדרואיד נבדק באחסון הפנימי.
   Future<void> checkSpace(
     LibraryPackageSet packages,
     String booksTarget,
     String? indexTarget,
   ) async {
     final index = packages.index;
-    final libraryNeed = packages.library.compressedSize * _libraryExpansion;
-    final indexNeed = index == null || indexTarget == null
-        ? 0
-        : index.compressedSize * _indexExpansion;
+    final libraryNeed = await _extractedSize(
+      packages.folder,
+      packages.library,
+      ExpansionFallback.database,
+    );
     final books = await _diskSpace(booksTarget);
-    final indexSpace = indexNeed == 0 ? books : await _diskSpace(indexTarget!);
-    final sameVolume =
-        books.volumeId != null && books.volumeId == indexSpace.volumeId;
-    void require(DiskSpaceInfo info, int need) {
-      if (info.freeBytes >= 0 && info.freeBytes < need) {
-        throw InsufficientSpaceException(need, info.freeBytes);
-      }
+    final needs = [
+      VolumeSpaceNeed(
+        label: 'הספרייה',
+        volumeId: books.volumeId,
+        requiredBytes: withSafetyMargin(libraryNeed),
+        freeBytes: books.freeBytes,
+      ),
+    ];
+    if (index != null && indexTarget != null) {
+      final indexNeed = await _extractedSize(
+        packages.folder,
+        index,
+        ExpansionFallback.searchIndex,
+      );
+      final indexSpace = await _diskSpace(indexTarget);
+      needs.add(
+        VolumeSpaceNeed(
+          label: Platform.isAndroid
+              ? 'אינדקס החיפוש (אחסון פנימי)'
+              : 'אינדקס החיפוש',
+          volumeId: indexSpace.volumeId,
+          requiredBytes: withSafetyMargin(indexNeed),
+          freeBytes: indexSpace.freeBytes,
+        ),
+      );
     }
+    final shortfalls = spaceShortfalls(needs);
+    if (shortfalls.isNotEmpty) throw InsufficientSpaceException(shortfalls);
+  }
 
-    if (sameVolume) {
-      require(books, libraryNeed + indexNeed);
-    } else {
-      require(books, libraryNeed);
-      require(indexSpace, indexNeed);
+  /// הגודל אחרי חילוץ מכותרת ה-frame שבתחילת החלק הראשון; אומדן כשאינה קריאה.
+  static Future<int> _extractedSize(
+    PackageFolder folder,
+    LibraryPackage package,
+    double fallbackRatio,
+  ) async {
+    int? contentSize;
+    try {
+      contentSize = await readZstdFrameContentSize(
+        folder.openRead(package.parts.first.entry),
+      );
+    } on Exception {
+      // קריאה שנכשלה תיכשל שוב בפריסה עם הודעה משלה; כאן מספיק האומדן.
     }
+    return extractedSizeOf(
+      package.compressedSize,
+      frameContentSize: contentSize,
+      fallbackRatio: fallbackRatio,
+    );
   }
 
   /// פורס ל-staging. בכשל או בביטול ה-staging נמחק והחריגה עולה.
