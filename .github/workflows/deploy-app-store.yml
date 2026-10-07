@@ -105,6 +105,10 @@ jobs:
           IOS_BUILD_NAME=$(python3 tool/version/app_store_build_name.py pubspec.yaml tool/version/version.json)
           flutter build ios --release --no-codesign --build-name="$IOS_BUILD_NAME" --dart-define=BIO_OBF_KEY=${{ secrets.BIO_OBF_KEY }}
 
+      # שלב "Remove synced zstd" של zstandard_ios מוחק את המקורות בסוף הבנייה הראשונה
+      - name: Restore zstd sources for archive
+        run: bash "$(cd ios/.symlinks/plugins/zstandard_ios && pwd -P)/scripts/sync_zstd.sh"
+
       - name: Write App Store Connect API key and signing files
         run: |
           echo "${{ secrets.ASC_KEY_P8_BASE64 }}" | base64 --decode > "$RUNNER_TEMP/asc_key.p8"
