@@ -42,8 +42,11 @@ public struct PreparationPlan: Equatable {
 
     public var totalDownloadSize: Int64 { downloads.reduce(0) { $0 + $1.size } }
 
+    /// `english` — שמות הרכיבים והסברי הסיום באנגלית. `subfolderName` מחליף את שם תת-התיקייה
+    /// של החוזה (ממשק באנגלית, כמו ב-Windows); הקבצים עצמם אינם משתנים.
     public static func make(
-        manifest: ReleaseManifest, selectedIds: [String], target: AssistantTarget
+        manifest: ReleaseManifest, selectedIds: [String], target: AssistantTarget,
+        english: Bool = false, subfolderName: String? = nil
     ) throws -> PreparationPlan {
         let selected = Set(selectedIds)
         var downloads: [DownloadItem] = []
@@ -65,23 +68,24 @@ public struct PreparationPlan: Equatable {
 
         for component in manifest.components where selected.contains(component.id) {
             let folder = component.outputFolder
+            let caption = component.displayName(english: english)
             for asset in component.assets {
                 if asset.isSplit {
                     let parts = try asset.parts.map {
-                        try item($0.name, $0.size, $0.sha256, asset, component.name)
+                        try item($0.name, $0.size, $0.sha256, asset, caption)
                     }
                     parts.forEach(add)
                     if shouldAssembleSplitAsset(asset, target.platform) {
                         actions.append(.assemble(
                             name: asset.name, size: asset.size, sha256: asset.sha256,
-                            caption: component.name, parts: parts, folder: folder
+                            caption: caption, parts: parts, folder: folder
                         ))
                     } else {
                         actions.append(contentsOf: parts.map { OutputAction.place($0, folder: folder) })
                         if target.platform != "windows" { kept.append(asset.name) }
                     }
                 } else {
-                    let single = try item(asset.name, asset.size, asset.sha256, asset, component.name)
+                    let single = try item(asset.name, asset.size, asset.sha256, asset, caption)
                     add(single)
                     actions.append(.place(single, folder: folder))
                 }
@@ -93,9 +97,10 @@ public struct PreparationPlan: Equatable {
             downloads: downloads,
             actions: actions,
             outputFiles: files,
-            outputSubfolder: plannedOutputSubfolder(files, target.platform),
+            outputSubfolder: subfolderName.map { files.count > 1 ? $0 : "" }
+                ?? plannedOutputSubfolder(files, target.platform),
             keptSplitAssets: kept,
-            outputNotes: plannedOutputNotes(manifest, selectedIds)
+            outputNotes: plannedOutputNotes(manifest, selectedIds, english: english)
         )
     }
 }
