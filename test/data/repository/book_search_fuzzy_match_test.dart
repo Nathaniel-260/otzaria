@@ -622,6 +622,20 @@ void main() {
       expect(entry.source, BookSource.user);
     });
 
+    test(
+      'ספר היברובוקס עם id מתנגש לא יורש דור וכינוי של ספר רשמי (issue #2087)',
+      () {
+        final entry = buildBookSearchEntry(
+          0,
+          ExternalLibraryBook(title: 'אבני נזר - חלק ז', id: 7, link: ''),
+          acronymsFor: acronymsFor,
+          eraOrderForId: eraOrderForId,
+        );
+        expect(entry.acronyms, isEmpty);
+        expect(entry.eraOrder, 5);
+      },
+    );
+
     test('ספר רשמי עם אותו id כן מקבל את הכינוי והדור מהמאגר', () {
       final officialBook = TextBook(id: 7, title: 'משנה תורה');
       final entry = buildBookSearchEntry(
