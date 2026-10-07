@@ -286,6 +286,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
   String? _cachedGroupingSignature;
+  List<Link>? _cachedGroupingSource;
   Future<List<CommentaryGroup>>? _cachedGroupsFuture;
 
   // הרשימה השטוחה: פריט נפרד לכל כותרת מפרש ולכל קטע — כך הרשימה נבנית
@@ -439,6 +440,8 @@ class CommentaryListBaseState extends State<CommentaryListBase>
   }
 
   Future<List<CommentaryGroup>> _getCachedGroups(List<Link> links) {
+    if (identical(links, _cachedGroupingSource)) return _cachedGroupsFuture!;
+    _cachedGroupingSource = links;
     final signature = _buildGroupingSignature(links);
     if (_cachedGroupingSignature == signature && _cachedGroupsFuture != null) {
       return _cachedGroupsFuture!;
