@@ -141,6 +141,36 @@ void main() {
       expect(find.text('מפרש בדיקה ב').hitTestable(), findsOneWidget);
     },
   );
+
+  testWidgets('בנייה מחדש עם אותם קישורים לא מחזירה את שלד הטעינה (perf)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MultiBlocProvider(
+          providers: [
+            BlocProvider<TextBookBloc>.value(value: textBookBloc),
+            BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          ],
+          child: const Scaffold(
+            body: CommentaryListBase(
+              openBookCallback: _noopOpenBook,
+              fontSize: 18,
+              showSearch: true,
+              shrinkWrap: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // הכיווץ בונה מחדש עם אותה רשימת קישורים; future קיבוץ חדש היה מציג
+    // שלד טעינה בפריים הבא במקום הכותרת.
+    await tester.tap(find.text('מפרש בדיקה'));
+    await tester.pump();
+    expect(find.text('מפרש בדיקה'), findsOneWidget);
+  });
 }
 
 void _noopOpenBook(dynamic _) {}
