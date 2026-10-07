@@ -14,9 +14,10 @@ Uint8List _bundledFont(String name) =>
 // ---------------------------------------------------------------------------
 
 /// Builds a 44-byte cmap table with one format-4 subtable, 2 segments.
-/// [hebrewRange]: segment covers U+0590–05FF (Hebrew); otherwise U+0041–005A (Latin).
-ByteData _buildCmapTable({required bool hebrewRange}) {
-  final int sc = hebrewRange ? 0x0590 : 0x0041;
+/// [hebrewRange]: segment covers U+0020–05FF (space through Hebrew), or only
+/// U+0590–05FF when [withSpace] is false; otherwise U+0041–005A (Latin).
+ByteData _buildCmapTable({required bool hebrewRange, bool withSpace = true}) {
+  final int sc = hebrewRange ? (withSpace ? 0x0020 : 0x0590) : 0x0041;
   final int ec = hebrewRange ? 0x05FF : 0x005A;
 
   // cmap format-4 subtable (2 segments = real + 0xFFFF terminator)
@@ -54,8 +55,8 @@ ByteData _buildCmapTable({required bool hebrewRange}) {
 }
 
 /// Builds a minimal SFNT with only the cmap table from [_buildCmapTable].
-Uint8List _buildSfnt({required bool hebrewRange}) {
-  final cmap = _buildCmapTable(hebrewRange: hebrewRange);
+Uint8List _buildSfnt({required bool hebrewRange, bool withSpace = true}) {
+  final cmap = _buildCmapTable(hebrewRange: hebrewRange, withSpace: withSpace);
 
   // SFNT offset table (12) + 1 table record (16) = 28; cmap starts at 28
   const int cmapOffset = 28;
@@ -701,6 +702,19 @@ void main() {
       ]);
 
       expect(scan.fonts.single.value, 'noname');
+    });
+
+    test('גופן עברי בלי גליף רווח אינו נכלל ב-UI (issue #2007)', () {
+      final scan = AppFonts.debugBuildScan([
+        MapEntry(
+          r'C:\fonts\pft-vilna.ttf',
+          _buildSfnt(hebrewRange: true, withSpace: false),
+        ),
+      ]);
+
+      expect(scan.fonts, isEmpty);
+      expect(scan.families, isEmpty);
+      expect(scan.aliases, isEmpty);
     });
 
     test('הרשימה ממוינת לפי שם', () {
