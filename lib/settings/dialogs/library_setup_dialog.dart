@@ -97,8 +97,8 @@ Future<void> _probeRead(File file) async {
   await handle.close();
 }
 
-/// סורק תיקיית מקור: חבילת מסייע ההורדה, או קובצי הספרייה עצמם (גם בתת-תיקייה
-/// [kLibraryDbSubfolder]).
+/// סורק תיקיית מקור: חבילת מסייע ההורדה, או קובצי הספרייה עצמם (ראה
+/// [scanLibrarySource]).
 @visibleForTesting
 Future<LibraryFolderScan> scanLibraryFolder(PackageFolder folder) async {
   final LibrarySourceScan source;

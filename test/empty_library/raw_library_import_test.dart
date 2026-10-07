@@ -50,6 +50,9 @@ class _MemoryFolder extends PackageFolder {
   ];
 
   @override
+  Future<List<String>> folderNames() async => children.keys.toList();
+
+  @override
   Future<PackageFolder?> child(String name) async => children[name];
 
   @override
@@ -283,6 +286,85 @@ void main() {
       LibraryComponent.lexicon,
     });
     expectNoLeftovers();
+  });
+
+  group('בחירת תיקיית האב של כרכי חבילת אנדרואיד', () {
+    test('חלקי החבילה נמצאים בתת-התיקייה otzaria-android-full', () async {
+      final parent = await Directory.systemTemp.createTemp('otzaria-parent-');
+      addTearDown(() => parent.delete(recursive: true));
+      final bundle = await Directory(
+        p.join(parent.path, kAndroidFullBundlePrefix),
+      ).create();
+      writeSplitAsset(
+        bundle,
+        'otzaria-0.9.98-library.tar.zst',
+        Uint8List(300),
+        partSize: 100,
+      );
+      writeSplitAsset(
+        bundle,
+        'otzaria-0.9.98-library-index.tar.zst',
+        Uint8List(100),
+        partSize: 100,
+      );
+
+      final scan = await scanLibrarySource(DirectoryPackageFolder(parent.path));
+
+      final packages = scan.packages.packages!;
+      expect(packages.index, isNotNull);
+      expect((packages.folder as DirectoryPackageFolder).path, bundle.path);
+      expect(scan.components, contains(LibraryComponent.searchIndex));
+    });
+
+    test('נכסים גולמיים ב-library_db שבתוך תת-תיקיית הכרך (SAF)', () async {
+      final folder = _MemoryFolder(
+        'Download',
+        children: {
+          '$kAndroidFullBundlePrefix-part1': _MemoryFolder(
+            'bundle',
+            children: {
+              kLibraryDbSubfolder: _MemoryFolder(
+                'library_db',
+                files: {dbName: utf8.encode('db')},
+              ),
+            },
+          ),
+          'other': _MemoryFolder(
+            'other',
+            files: {
+              DatabaseConstants.lexicalDatabaseFileName: [1],
+            },
+          ),
+        },
+      );
+
+      final scan = await scanLibrarySource(folder);
+
+      expect(scan.components, {LibraryComponent.libraryDb});
+    });
+
+    test('כמה תיקיות חבילה, או תוכן בשורש: אין ירידה לתת-תיקייה', () async {
+      final nested = _MemoryFolder('b', files: {dbName: utf8.encode('db')});
+      final ambiguous = _MemoryFolder(
+        'Download',
+        children: {
+          kAndroidFullBundlePrefix: nested,
+          '$kAndroidFullBundlePrefix (1)': nested,
+        },
+      );
+      final withRoot = _MemoryFolder(
+        'Download',
+        files: {
+          DatabaseConstants.lexicalDatabaseFileName: [1],
+        },
+        children: {kAndroidFullBundlePrefix: nested},
+      );
+
+      expect((await scanLibrarySource(ambiguous)).isEmpty, isTrue);
+      expect((await scanLibrarySource(withRoot)).components, {
+        LibraryComponent.lexicon,
+      });
+    });
   });
 
   test('חלק חסר: הסריקה מדווחת את שם הקובץ ואין DB לייבוא', () async {

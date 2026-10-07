@@ -126,6 +126,9 @@ class _MemoryFolder extends PackageFolder {
   ];
 
   @override
+  Future<List<String>> folderNames() async => children.keys.toList();
+
+  @override
   Future<PackageFolder?> child(String name) async => children[name];
 
   @override

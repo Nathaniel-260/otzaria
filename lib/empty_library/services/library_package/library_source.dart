@@ -107,6 +107,8 @@ class LibrarySourceScan {
   final LibraryPackageScan packages;
   final RawLibraryScan raw;
 
+  bool get isEmpty => packages.isEmpty && raw.isEmpty;
+
   /// הרכיבים שהייבוא יתקין.
   Set<LibraryComponent> get components {
     final set = packages.packages;
@@ -122,7 +124,24 @@ class LibrarySourceScan {
   }
 }
 
+/// כרכי ה-ZIP של חבילת אנדרואיד המלאה נפתחים לתיקייה בשם הזה.
+const kAndroidFullBundlePrefix = 'otzaria-android-full';
+
+/// סורק את [folder], ואם אין בו דבר — את תת-תיקיית החבילה היחידה שבו, כי
+/// המשתמש בוחר לעיתים את התיקייה שאליה חילץ את הכרכים.
 Future<LibrarySourceScan> scanLibrarySource(PackageFolder folder) async {
+  final scan = await _scanSource(folder);
+  if (!scan.isEmpty) return scan;
+  final bundles = [
+    for (final name in await folder.folderNames())
+      if (name.startsWith(kAndroidFullBundlePrefix)) name,
+  ];
+  if (bundles.length != 1) return scan;
+  final bundle = await folder.child(bundles.single);
+  return bundle == null ? scan : _scanSource(bundle);
+}
+
+Future<LibrarySourceScan> _scanSource(PackageFolder folder) async {
   final packages = await scanLibraryPackages(folder);
   return LibrarySourceScan(
     folder: folder,

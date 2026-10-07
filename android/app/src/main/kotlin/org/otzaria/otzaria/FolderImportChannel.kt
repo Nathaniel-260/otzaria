@@ -95,6 +95,9 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
             "listFiles" -> runInBackground(result) {
                 listTopFiles(treeUriOf(call), call.argument<String>("parentId"))
             }
+            "listFolders" -> runInBackground(result) {
+                listChildFolders(treeUriOf(call), call.argument<String>("parentId"))
+            }
             "childFolder" -> runInBackground(result) {
                 childFolderId(
                     treeUriOf(call),
@@ -219,6 +222,24 @@ class FolderImportChannel(private val activity: Activity, messenger: BinaryMesse
                 }
             }
         return files
+    }
+
+    /** שמות תתי-התיקיות שישירות תחת [parentId] (שורש העץ כשהוא null). */
+    private fun listChildFolders(treeUri: Uri, parentId: String?): List<String> {
+        val names = mutableListOf<String>()
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(
+            treeUri,
+            parentId ?: DocumentsContract.getTreeDocumentId(treeUri),
+        )
+        activity.contentResolver.query(childrenUri, CHILD_COLUMNS, null, null, null)
+            ?.use { cursor ->
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(1)
+                    if (name == null || !isSafeName(name)) continue
+                    if (cursor.getString(2) == Document.MIME_TYPE_DIR) names.add(name)
+                }
+            }
+        return names
     }
 
     /** מזהה תת-התיקייה [name] שתחת [parentId] (שורש העץ כשהוא null), או null. */

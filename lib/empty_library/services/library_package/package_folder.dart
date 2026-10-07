@@ -21,6 +21,9 @@ abstract class PackageFolder {
   /// הקבצים שבשורש התיקייה (בלי תתי-תיקיות).
   Future<List<PackageFileEntry>> list();
 
+  /// שמות תתי-התיקיות שישירות בתיקייה.
+  Future<List<String>> folderNames();
+
   /// תת-התיקייה [name], או null כשאינה קיימת.
   Future<PackageFolder?> child(String name);
 
@@ -52,6 +55,12 @@ class DirectoryPackageFolder extends PackageFolder {
     }
     return entries;
   }
+
+  @override
+  Future<List<String>> folderNames() async => [
+    await for (final entity in Directory(path).list(followLinks: true))
+      if (entity is Directory) p.basename(entity.path),
+  ];
 
   @override
   Future<PackageFolder?> child(String name) async {
@@ -101,6 +110,14 @@ class SafPackageFolder extends PackageFolder {
         ),
     ];
   }
+
+  @override
+  Future<List<String>> folderNames() async =>
+      await _channel.invokeListMethod<String>('listFolders', {
+        'uri': treeUri,
+        'parentId': documentId,
+      }) ??
+      const [];
 
   @override
   Future<PackageFolder?> child(String name) async {
