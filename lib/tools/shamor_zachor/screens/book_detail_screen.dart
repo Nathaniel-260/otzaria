@@ -838,6 +838,9 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                       message: col.label,
                       child: Checkbox(
                         visualDensity: VisualDensity.compact,
+                        materialTapTargetSize: level > 0
+                            ? MaterialTapTargetSize.shrinkWrap
+                            : null,
                         value: pageProgress.getProperty(columnName),
                         onChanged: (val) => _updateProgress(
                           progressProvider,

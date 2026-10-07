@@ -101,7 +101,6 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      // לפני התיקון כל 2000 ההלכות (8000+ תיבות) נבנו בכל לחיצה.
       final built = find.byType(Checkbox, skipOffstage: false);
       expect(built.evaluate().length, lessThan(300));
 
@@ -115,4 +114,73 @@ void main() {
       expect(find.text('שנה 1'), findsOneWidget);
     },
   );
+
+  for (final hideBookHeading in [false, true]) {
+    testWidgets(
+      'שורות משנה שומרות על צפיפותן (כותרת ספר מוסתרת: $hideBookHeading)',
+      (tester) async {
+        BookSection section(
+          String title,
+          int level, [
+          List<BookSection> children = const [],
+        ]) => BookSection(
+          id: title,
+          title: title,
+          level: level,
+          startPage: 0,
+          endPage: 0,
+          children: children,
+        );
+        final sections = [
+          section('הקדמה', 1),
+          section('פרק', 1, [section('הלכה', 2)]),
+        ];
+        final book = BookDetails(
+          id: 7,
+          contentType: 'text',
+          parts: const [],
+          sections: hideBookHeading ? [section('ספר', 0, sections)] : sections,
+        );
+        final progress = ShamorZachorProgressProvider(
+          progressService: _MemoryProgressService(),
+        );
+        addTearDown(progress.dispose);
+        await progress.ensureLoaded();
+
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<ShamorZachorDataProvider>(
+                create: (_) => _ReadyDataProvider(),
+              ),
+              ChangeNotifierProvider<ShamorZachorProgressProvider>.value(
+                value: progress,
+              ),
+            ],
+            child: MaterialApp(
+              home: Directionality(
+                textDirection: TextDirection.rtl,
+                child: Scaffold(
+                  body: BookDetailScreen(
+                    topLevelCategoryKey: 'הלכה',
+                    categoryName: 'הלכה',
+                    bookName: 'ספר',
+                    bookId: 7,
+                    bookDetails: book,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        Finder leafRow(String title) => find
+            .ancestor(of: find.text(title), matching: find.byType(Row))
+            .first;
+        expect(tester.getSize(leafRow('הקדמה')).height, 40);
+        expect(tester.getSize(leafRow('הלכה')).height, 32);
+      },
+    );
+  }
 }
