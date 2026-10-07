@@ -33,6 +33,7 @@ HEADERS := $(wildcard *.h)
 
 BIN := $(BUILD)/Otzaria-Download-Assistant
 TEST_BIN := $(BUILD)/test_runner
+UI_TEST_BIN := $(BUILD)/ui_test_runner
 FIXTURES := $(abspath ../fixtures)
 
 all: $(BIN)
@@ -84,6 +85,15 @@ $(TEST_BIN): $(CORE:%.c=$(BUILD)/core/%.o) $(BUILD)/core/test_main.o
 test: $(TEST_BIN) test-build-info
 	$(TEST_BIN)
 
+$(UI_TEST_BIN): tests/test_ui.c ui.c $(CORE:%.c=$(BUILD)/app/%.o) $(BUILD)/app/widgets.o $(BUILD)/app/art_resources.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) -DOTZ_FIXTURES_DIR='"$(FIXTURES)"' -o $@ $< \
+	  $(filter %.o,$^) $(LDFLAGS) $(GTK_LIBS) -lm
+
+test-ui: $(UI_TEST_BIN)
+	@for scale in 1 2; do \
+	  GDK_SCALE=$$scale xvfb-run -a -s "-screen 0 1920x1080x24" $(UI_TEST_BIN) || exit $$?; \
+	done
+
 # The same tests under AddressSanitizer/UBSan, in a separate build directory.
 SANITIZE := -fsanitize=address,undefined -fno-omit-frame-pointer
 test-asan:
@@ -118,4 +128,4 @@ dist: $(BIN)
 clean:
 	rm -rf $(BUILD)
 
-.PHONY: all test test-asan test-build-info check-needed dist clean FORCE
+.PHONY: all test test-asan test-build-info check-needed dist clean FORCE test-ui

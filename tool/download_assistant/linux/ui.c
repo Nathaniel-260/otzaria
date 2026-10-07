@@ -75,7 +75,7 @@ struct Ui {
   gboolean english;
   gboolean snapshot;
 
-  GtkWidget *window, *overlay, *host, *page;
+  GtkWidget *window, *overlay, *scroll, *host, *page;
   GtkWidget *shade, *dialog;
   GtkWidget *focus;
   UiAction primary, escape;
@@ -491,7 +491,7 @@ static void close_dialog(Ui *ui) {
   gtk_widget_destroy(ui->dialog);
   gtk_widget_destroy(ui->shade);
   ui->dialog = ui->shade = NULL;
-  gtk_widget_set_sensitive(ui->host, TRUE);
+  gtk_widget_set_sensitive(ui->scroll, TRUE);
   if (ui->focus != NULL) gtk_widget_grab_focus(ui->focus);
 }
 
@@ -516,7 +516,7 @@ static void show_dialog(Ui *ui, const char *title, const char *text,
                         UiAction cancel) {
   close_dialog(ui);
   ui->dialog_open = TRUE;
-  gtk_widget_set_sensitive(ui->host, FALSE);
+  gtk_widget_set_sensitive(ui->scroll, FALSE);
   ui->shade = otz_shade();
   gtk_overlay_add_overlay(GTK_OVERLAY(ui->overlay), ui->shade);
   ui->dialog = otz_dialog_card();
@@ -2092,10 +2092,23 @@ static void build_window(Ui *ui) {
   g_autoptr(GdkPixbuf) icon = otz_app_icon();
   if (icon != NULL) gtk_window_set_icon(GTK_WINDOW(ui->window), icon);
 
+  GdkDisplay *display = gdk_display_get_default();
+  GdkDevice *pointer = gdk_seat_get_pointer(gdk_display_get_default_seat(display));
+  int x = 0, y = 0;
+  if (pointer != NULL) gdk_device_get_position(pointer, NULL, &x, &y);
+  GdkMonitor *monitor = gdk_display_get_monitor_at_point(display, x, y);
+  GdkRectangle workarea;
+  gdk_monitor_get_workarea(monitor, &workarea);
+  /* Leave room for the title bar and window decorations. */
+  int height = MIN(OTZ_CONTENT_HEIGHT, MAX(1, workarea.height - 64));
   ui->overlay = gtk_overlay_new();
-  gtk_widget_set_size_request(ui->overlay, OTZ_WINDOW_WIDTH, OTZ_CONTENT_HEIGHT);
+  gtk_widget_set_size_request(ui->overlay, OTZ_WINDOW_WIDTH, height);
+  ui->scroll = gtk_scrolled_window_new(NULL, NULL);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(ui->scroll), GTK_POLICY_NEVER,
+                                 GTK_POLICY_AUTOMATIC);
   ui->host = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_container_add(GTK_CONTAINER(ui->overlay), ui->host);
+  gtk_container_add(GTK_CONTAINER(ui->scroll), ui->host);
+  gtk_container_add(GTK_CONTAINER(ui->overlay), ui->scroll);
   gtk_container_add(GTK_CONTAINER(ui->window), ui->overlay);
   g_signal_connect(ui->window, "key-press-event", G_CALLBACK(on_key), ui);
   g_signal_connect(ui->window, "delete-event", G_CALLBACK(on_delete), ui);
