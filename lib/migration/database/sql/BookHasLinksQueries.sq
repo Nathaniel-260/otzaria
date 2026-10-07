@@ -1,11 +1,5 @@
 -- Queries for the book_has_links table
 
--- Get link status for a book
-selectByBookId:
-SELECT bookId, hasSourceLinks, hasTargetLinks
-FROM book_has_links
-WHERE bookId = ?;
-
 -- Get all books that have source links
 selectBooksWithSourceLinks:
 SELECT b.*
@@ -45,11 +39,6 @@ SELECT COUNT(*)
 FROM book_has_links
 WHERE hasSourceLinks = 1 OR hasTargetLinks = 1;
 
--- Insert or update a book's link status
-upsert:
-INSERT OR REPLACE INTO book_has_links (bookId, hasSourceLinks, hasTargetLinks)
-VALUES (?, ?, ?);
-
 -- Update a book's source link status
 updateSourceLinks:
 UPDATE book_has_links
@@ -68,17 +57,3 @@ UPDATE book_has_links
 SET hasSourceLinks = ?,
     hasTargetLinks = ?
 WHERE bookId = ?;
-
--- Insert a new book link status
-insert:
-INSERT INTO book_has_links (bookId, hasSourceLinks, hasTargetLinks)
-VALUES (?, ?, ?);
-
--- Delete a book's link status
-delete:
-DELETE FROM book_has_links
-WHERE bookId = ?;
-
--- Get the last inserted row ID
-lastInsertRowId:
-SELECT last_insert_rowid();

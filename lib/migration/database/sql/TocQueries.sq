@@ -52,9 +52,6 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 updateLineId:
 UPDATE tocEntry SET lineId = ? WHERE id = ?;
 
-updateLineIndex:
-UPDATE tocEntry SET lineIndex = ? WHERE id = ?;
-
 updateIsLastChild:
 UPDATE tocEntry SET isLastChild = ? WHERE id = ?;
 
@@ -66,6 +63,3 @@ DELETE FROM tocEntry WHERE id = ?;
 
 deleteByBookId:
 DELETE FROM tocEntry WHERE bookId = ?;
-
-lastInsertRowId:
-SELECT last_insert_rowid();
