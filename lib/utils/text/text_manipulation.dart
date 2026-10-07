@@ -1,5 +1,5 @@
 import 'dart:collection';
-import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -1267,20 +1267,11 @@ List<List<int>> computeHighlightRanges(
   return ranges;
 }
 
+/// שם הקובץ שאחרי `/` או `\` האחרון, בלי הסיומת שאחרי הנקודה האחרונה.
 String getTitleFromPath(String path) {
-  path = path
-      .replaceAll('/', Platform.pathSeparator)
-      .replaceAll('\\', Platform.pathSeparator);
-  final fileName = path.split(Platform.pathSeparator).last;
-
-  // אם אין נקודה בשם הקובץ, נחזיר את השם כמו שהוא
-  final lastDotIndex = fileName.lastIndexOf('.');
-  if (lastDotIndex == -1) {
-    return fileName;
-  }
-
-  // נסיר רק את הסיומת (החלק האחרון אחרי הנקודה האחרונה)
-  return fileName.substring(0, lastDotIndex);
+  final start = max(path.lastIndexOf('/'), path.lastIndexOf('\\')) + 1;
+  final dot = path.lastIndexOf('.');
+  return dot < start ? path.substring(start) : path.substring(start, dot);
 }
 
 /// קידומת המזהה ספר "הערות על XX" — הערות הכתובות על ספר אחר.
