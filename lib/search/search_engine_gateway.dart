@@ -978,23 +978,6 @@ class SearchEngineGateway {
     }
   }
 
-  Stream<List<SearchResult>> searchStream(
-    SearchEngineOperations engine,
-    SearchEngineRequest request, {
-    required int chunkSize,
-  }) {
-    request = _withHolyNames(request);
-    engine.primeHighlightPattern(request);
-    switch (request.searchMode) {
-      case SearchMode.exact:
-        return engine.searchExactStream(request, chunkSize: chunkSize);
-      case SearchMode.advanced:
-        return engine.searchAdvancedStream(request, chunkSize: chunkSize);
-      case SearchMode.fuzzy:
-        return engine.searchFuzzyStream(request, chunkSize: chunkSize);
-    }
-  }
-
   /// Stream משולב (תוצאות + ספירה כוללת + ספירה לפי ספר במעבר אחד);
   /// ראה [SearchEngineOperations.searchStreamWithCounts].
   Stream<SearchStreamUpdate> searchStreamWithCounts(

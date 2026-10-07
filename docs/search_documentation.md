@@ -482,7 +482,7 @@
    • במצב fuzzy: גם כתיב מלא/חסר אוטומטי
         ↓
 3. ה-query נשלח דרך אותו מסלול חיפוש רגיל
-   • searchTexts / searchTextsStream
+   • searchTexts / searchTextsStreamWithCounts
    • עם facets, streaming ו-pagination רגילים
 ```
 

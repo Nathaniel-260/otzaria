@@ -115,39 +115,6 @@ void main() {
       expect(engine.lastRequest!.limit, 5);
       expect(engine.lastRequest!.offset, 2);
     });
-
-    test('searchTextsStream מעביר chunkSize ומחזיר chunks מהמנוע', () async {
-      final first = _result(id: 1, text: 'ראשון');
-      final second = _result(id: 2, text: 'שני');
-      final engine = _RecordingSearchEngineOperations(
-        streamChunks: [
-          [first],
-          [second],
-        ],
-      );
-      final repository = SearchRepository(engineProvider: () async => engine);
-
-      final chunks = await repository
-          .searchTextsStream(
-            'חכמה',
-            const ['/ספרים'],
-            100,
-            chunkSize: 7,
-            searchMode: SearchMode.fuzzy,
-            distance: 2,
-            order: ResultsOrder.catalogue,
-          )
-          .toList();
-
-      expect(engine.calls, [_EngineCall.searchFuzzyStream]);
-      expect(engine.lastChunkSize, 7);
-      expect(engine.lastRequest!.limit, 100);
-      expect(engine.lastRequest!.order, ResultsOrder.catalogue);
-      expect(chunks, [
-        [first],
-        [second],
-      ]);
-    });
   });
 }
 
@@ -175,14 +142,8 @@ enum _EngineCall {
 // extends (ולא implements) כדי לרשת את מימושי ברירת המחדל של הממשק —
 // למשל searchStreamWithCounts, שמורכב מהמתודות שה-fake כבר מממש.
 class _RecordingSearchEngineOperations extends SearchEngineOperations {
-  _RecordingSearchEngineOperations({
-    List<List<SearchResult>>? streamChunks,
-  }) : streamChunks = streamChunks ?? const [];
-
   final List<_EngineCall> calls = [];
-  final List<List<SearchResult>> streamChunks;
   SearchEngineRequest? lastRequest;
-  int? lastChunkSize;
 
   void _record(_EngineCall call, SearchEngineRequest request) {
     calls.add(call);
@@ -243,10 +204,6 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     required int chunkSize,
   }) async* {
     _record(_EngineCall.searchExactStream, request);
-    lastChunkSize = chunkSize;
-    for (final chunk in streamChunks) {
-      yield chunk;
-    }
   }
 
   @override
@@ -255,10 +212,6 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     required int chunkSize,
   }) async* {
     _record(_EngineCall.searchAdvancedStream, request);
-    lastChunkSize = chunkSize;
-    for (final chunk in streamChunks) {
-      yield chunk;
-    }
   }
 
   @override
@@ -267,10 +220,6 @@ class _RecordingSearchEngineOperations extends SearchEngineOperations {
     required int chunkSize,
   }) async* {
     _record(_EngineCall.searchFuzzyStream, request);
-    lastChunkSize = chunkSize;
-    for (final chunk in streamChunks) {
-      yield chunk;
-    }
   }
 
   @override
