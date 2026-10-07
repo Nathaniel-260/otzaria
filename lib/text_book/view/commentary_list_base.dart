@@ -88,6 +88,21 @@ bool shouldFocusScrollOnPointerDown(int buttons) =>
 String? captureSelectedTextForMenu(ValueListenable<String?> saved) =>
     saved.value;
 
+/// מסיר מ-[states] מפרשים שאין להם עוד קישור ב-[links].
+@visibleForTesting
+void pruneCommentaryExpansionStates(
+  Map<String, bool> states,
+  List<Link> links,
+) {
+  if (states.isEmpty) return;
+  final missing = states.keys.toSet();
+  for (final link in links) {
+    missing.remove(utils.getTitleFromPath(link.path2));
+    if (missing.isEmpty) return;
+  }
+  states.removeWhere((key, value) => missing.contains(key));
+}
+
 /// מפתחות צ׳יפי סוגי המפרשים שקיימים בפועל בקישורי הקטע, בסדר
 /// [LinkTypes.commentaryFilterTypes]. סוג בלי קישורים אינו מקבל צ׳יפ.
 @visibleForTesting
@@ -276,6 +291,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
   final Map<String, bool> _expansionStates =
       {}; // מעקב אחרי מצב כל קבוצת מפרשים
   String? _cachedGroupingSignature;
+  List<Link>? _cachedGroupingSource;
   Future<List<CommentaryGroup>>? _cachedGroupsFuture;
 
   // הרשימה השטוחה: פריט נפרד לכל כותרת מפרש ולכל קטע — כך הרשימה נבנית
@@ -429,6 +445,8 @@ class CommentaryListBaseState extends State<CommentaryListBase>
   }
 
   Future<List<CommentaryGroup>> _getCachedGroups(List<Link> links) {
+    if (identical(links, _cachedGroupingSource)) return _cachedGroupsFuture!;
+    _cachedGroupingSource = links;
     final signature = _buildGroupingSignature(links);
     if (_cachedGroupingSignature == signature && _cachedGroupsFuture != null) {
       return _cachedGroupsFuture!;
@@ -2080,11 +2098,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
                     });
                   }
 
-                  _expansionStates.removeWhere(
-                    (key, value) => !data.any(
-                      (link) => key == utils.getTitleFromPath(link.path2),
-                    ),
-                  );
+                  pruneCommentaryExpansionStates(_expansionStates, data);
 
                   // מיירט גם את CopySelectionTextIntent, ולא רק את צירוף
                   // המקשים: בלעדיו Ctrl+C נופל להעתקת ברירת המחדל של Flutter,
