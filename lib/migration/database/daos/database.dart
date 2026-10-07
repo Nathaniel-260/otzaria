@@ -16,7 +16,6 @@ import 'pdf_anchor_cache_dao.dart';
 import 'pdf_outline_cache_dao.dart';
 import 'pub_date_dao.dart';
 import 'pub_place_dao.dart';
-import 'search_dao.dart';
 import 'toc_dao.dart';
 import 'toc_text_dao.dart';
 import 'topic_dao.dart';
@@ -82,7 +81,6 @@ class MyDatabase {
   PdfOutlineCacheDao? _pdfOutlineCacheDao;
   PubDateDao? _pubDateDao;
   PubPlaceDao? _pubPlaceDao;
-  SearchDao? _searchDao;
   TocDao? _tocDao;
   TocTextDao? _tocTextDao;
   TopicDao? _topicDao;
@@ -165,11 +163,6 @@ class MyDatabase {
   PubPlaceDao get pubPlaceDao {
     _ensureDaosInitialized();
     return _pubPlaceDao!;
-  }
-
-  SearchDao get searchDao {
-    _ensureDaosInitialized();
-    return _searchDao!;
   }
 
   TocDao get tocDao {
@@ -468,7 +461,6 @@ class MyDatabase {
     _pdfOutlineCacheDao = PdfOutlineCacheDao(this);
     _pubDateDao = PubDateDao(this);
     _pubPlaceDao = PubPlaceDao(this);
-    _searchDao = SearchDao(this);
     _tocDao = TocDao(this);
     _tocTextDao = TocTextDao(this);
     _topicDao = TopicDao(this);

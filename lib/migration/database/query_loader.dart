@@ -44,7 +44,6 @@ class QueryLoader {
       'PdfOutlineCacheQueries.sq',
       'PubDateQueries.sq',
       'PubPlaceQueries.sq',
-      'SearchQueries.sq',
       'SourceQueries.sq',
       'TocQueries.sq',
       'TocTextQueries.sq',
