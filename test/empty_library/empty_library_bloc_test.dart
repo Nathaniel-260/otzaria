@@ -1261,6 +1261,74 @@ void main() {
       },
     );
 
+    test('כשל הרשאה בכתיבה ליעד אינו מוחק את ה-temp שהורד (#2097)', () async {
+      final tempDir = await Directory.systemTemp.createTemp(
+        'otzaria-target-denied-',
+      );
+      addTearDown(() async {
+        if (await tempDir.exists()) await tempDir.delete(recursive: true);
+      });
+      await _cleanDownloadTemps();
+      addTearDown(_cleanDownloadTemps);
+      await Settings.init(cacheProvider: _MemoryCacheProvider());
+      await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
+
+      const seforimUrl = 'https://example.com/releases/seforim.db.zst';
+      final seforimTemp = File(
+        path.join(Directory.systemTemp.path, 'otzaria_seforim.db.zst'),
+      );
+      final client = MockClient((request) async {
+        if (request.url.path.endsWith('/releases/latest')) {
+          return http.Response(
+            jsonEncode({
+              'assets': [
+                {'name': 'seforim.db.zst', 'browser_download_url': seforimUrl},
+              ],
+            }),
+            200,
+            headers: const {'content-type': 'application/json'},
+          );
+        }
+        if (request.url.toString() == seforimUrl) {
+          return http.Response.bytes(
+            List.filled(100, 4),
+            200,
+            headers: const {'etag': 'seforim-v1'},
+          );
+        }
+        if (request.url.host == 'github.com') {
+          return http.Response.bytes(List.filled(10, 7), 200);
+        }
+        return http.Response('not found', 404);
+      });
+
+      final bloc = EmptyLibraryBloc(
+        httpClient: client,
+        defaultLibraryPathOverride: tempDir.path,
+        extractCompressedDatabase: (archivePath, outputPath, onProgress) async {
+          if (path.basename(archivePath) == 'otzaria_seforim.db.zst') {
+            throw PathAccessException(
+              outputPath,
+              const OSError('Operation not permitted', 1),
+              'Cannot open file',
+            );
+          }
+          await File(outputPath).writeAsBytes(const [1], flush: true);
+        },
+        extractTarArchive: (archivePath, outputDir, onProgress) async {},
+      );
+      addTearDown(bloc.close);
+      final failed = bloc.stream.where((s) => s is EmptyLibraryError).first;
+      bloc.add(DownloadLibraryRequested());
+      await failed.timeout(const Duration(seconds: 5));
+      expect(
+        seforimTemp.existsSync(),
+        isTrue,
+        reason:
+            'היעד אינו כתיב, הארכיון תקין — ניסיון חוזר לא צריך להוריד מחדש',
+      );
+    });
+
     test(
       '206 עם Content-Range מ-offset לא צפוי → בקשה שנייה בלי Range, קובץ תקין מ-0',
       () async {

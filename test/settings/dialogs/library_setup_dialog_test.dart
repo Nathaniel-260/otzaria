@@ -11,6 +11,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
+import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
@@ -18,6 +20,7 @@ import 'package:otzaria/empty_library/services/library_package/library_source.da
 import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
 import 'package:otzaria/empty_library/services/library_package/raw_asset_extractor.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/settings/widgets/settings_card.dart';
 import 'package:otzaria/utils/file/disk_free_space.dart';
 import 'package:otzaria/utils/file/zstd_patch_decoder.dart';
 import 'package:otzaria/settings/dialogs/library_setup_dialog.dart';
@@ -106,6 +109,39 @@ class _FolderFilePickerPlatform extends FilePickerPlatform
     LinuxOptions linuxOptions = const LinuxOptions(),
     WebOptions webOptions = const WebOptions(),
   }) async => folder;
+}
+
+/// בורר תיקייה שסופר קריאות — באנדרואיד מקטע היעד אסור שיפתח אותו.
+class _CountingFilePickerPlatform extends FilePickerPlatform
+    with MockPlatformInterfaceMixin {
+  int calls = 0;
+
+  @override
+  Future<String?> getDirectoryPath({
+    String? dialogTitle,
+    String? initialDirectory,
+    AndroidOptions androidOptions = const AndroidOptions(),
+    WindowsOptions windowsOptions = const WindowsOptions(),
+    LinuxOptions linuxOptions = const LinuxOptions(),
+    WebOptions webOptions = const WebOptions(),
+  }) async {
+    calls++;
+    return '/storage/3134-3638/Audiobooks/otzaria';
+  }
+}
+
+/// מקליט בקשות הורדה ומדווח הצלחה מיד, בלי רשת.
+class _RecordingDownloadBloc extends EmptyLibraryBloc {
+  _RecordingDownloadBloc() : super(downloadSpaceChecker: (_) async => null);
+  final targets = <String?>[];
+
+  @override
+  void add(EmptyLibraryEvent event) {
+    if (event is! DownloadLibraryRequested) return super.add(event);
+    targets.add(event.targetPath);
+    // ignore: invalid_use_of_visible_for_testing_member
+    emit(EmptyLibraryDirectorySelected(selectedPath: event.targetPath!));
+  }
 }
 
 /// תיקייה בזיכרון במקום עץ SAF של אנדרואיד.
@@ -213,6 +249,99 @@ void main() {
     testWidgets('כפתור "אישור" מושבת כשאין יעד', (tester) async {
       await _openSetup(tester, defaultTargetPath: '');
       expect(_actionOnPressed(tester, 'אישור'), isNull);
+    });
+  });
+
+  group('מקטע היעד באנדרואיד (#2097)', () {
+    const internalRoot = '/data/user/0/app/files';
+    const sdRoot = '/storage/3134-3638/Android/data/app/files';
+    late _CountingFilePickerPlatform picker;
+    late _RecordingDownloadBloc bloc;
+
+    setUp(() async {
+      await Settings.init(cacheProvider: MemoryCacheProvider());
+      picker = _CountingFilePickerPlatform();
+      FilePickerPlatform.instance = picker;
+      debugAndroidStorageChoices = () async => const [
+        (isRemovable: false, root: internalRoot),
+        (isRemovable: true, root: sdRoot),
+      ];
+      debugCreateLibrarySetupBloc = () => bloc = _RecordingDownloadBloc();
+    });
+    tearDown(() {
+      debugAndroidStorageChoices = null;
+      debugCreateLibrarySetupBloc = null;
+    });
+
+    Finder inTile(String tileTitle, Finder matching) => find.descendant(
+      of: find.ancestor(
+        of: find.text(tileTitle),
+        matching: find.byType(SettingsActionTile),
+      ),
+      matching: matching,
+    );
+
+    Future<void> tapUse(WidgetTester tester, String tileTitle) async {
+      final button = inTile(tileTitle, find.byType(ActionButton));
+      await tester.ensureVisible(button);
+      tester.widget<ActionButton>(button).onPressed!();
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> confirm(WidgetTester tester) async {
+      _actionOnPressed(tester, 'אישור')!();
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('אין בורר תיקיות חופשי, רק אחסון פנימי וכרטיס SD', (
+      tester,
+    ) async {
+      await _openSetup(tester, defaultTargetPath: internalRoot);
+      expect(find.text('בחירת מיקום'), findsNothing);
+      expect(find.text('שנה מיקום'), findsNothing);
+      expect(inTile('אחסון פנימי', find.text('נבחר')), findsOneWidget);
+      expect(inTile('כרטיס SD', find.byType(ActionButton)), findsOneWidget);
+      expect(picker.calls, 0);
+    });
+
+    testWidgets('בחירת כרטיס SD מעדכנת את היעד בלי לפתוח בורר', (
+      tester,
+    ) async {
+      await _openSetup(tester, defaultTargetPath: internalRoot);
+      await tapUse(tester, 'כרטיס SD');
+      expect(inTile('כרטיס SD', find.text('נבחר')), findsOneWidget);
+      expect(inTile('אחסון פנימי', find.byType(ActionButton)), findsOneWidget);
+      expect(find.textContaining('ניקוי מטמון'), findsOneWidget);
+      expect(picker.calls, 0);
+    });
+
+    testWidgets('אישור עם כרטיס SD: הורדה אל sdRoot/books ושמירת השורש', (
+      tester,
+    ) async {
+      await _openSetup(tester, defaultTargetPath: internalRoot);
+      await tapUse(tester, 'כרטיס SD');
+      await confirm(tester);
+      expect(bloc.targets, [p.join(sdRoot, 'books')]);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        sdRoot,
+      );
+    });
+
+    testWidgets('אישור עם אחסון פנימי מנקה שורש SD שנשמר קודם', (
+      tester,
+    ) async {
+      await Settings.setValue<String>(
+        SettingsRepository.keyAndroidLibraryRoot,
+        sdRoot,
+      );
+      await _openSetup(tester, defaultTargetPath: internalRoot);
+      await confirm(tester);
+      expect(bloc.targets, [p.join(internalRoot, 'books')]);
+      expect(
+        Settings.getValue<String>(SettingsRepository.keyAndroidLibraryRoot),
+        '',
+      );
     });
   });
 
