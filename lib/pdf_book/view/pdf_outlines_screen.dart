@@ -5,15 +5,45 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/search/utils/find_match_utils.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 
-/// מחזירה האם כותרת סימנייה תואמת לשאילתת החיפוש, עם נורמליזציה כמו באיתור
-/// (הסרת ניקוד וגרשיים) כך שכותרות עבריות יימצאו גם ללא תווים אלו.
-bool pdfOutlineTitleMatchesQuery(String title, String rawQuery) {
+typedef PdfOutlineSearchEntry = ({
+  PdfOutlineNode node,
+  int level,
+  String normalizedTitle,
+});
+
+/// כל צמתי העץ בסדר התצוגה, עם הכותרת מנורמלת כמו באיתור (בלי ניקוד וגרשיים).
+@visibleForTesting
+List<PdfOutlineSearchEntry> flattenPdfOutlineForSearch(
+  List<PdfOutlineNode> outline,
+) {
+  final entries = <PdfOutlineSearchEntry>[];
+  void walk(List<PdfOutlineNode> nodes, int level) {
+    for (final node in nodes) {
+      final title = normalizeFindText(node.title);
+      entries.add((node: node, level: level, normalizedTitle: title));
+      walk(node.children, level + 1);
+    }
+  }
+
+  walk(outline, 0);
+  return entries;
+}
+
+@visibleForTesting
+List<PdfOutlineSearchEntry> filterPdfOutline(
+  List<PdfOutlineSearchEntry> entries,
+  String rawQuery,
+) {
   final normalizedQuery = normalizeFindText(rawQuery);
-  if (normalizedQuery.isEmpty) return true;
-  return findNormalizedTextMatches(
-    normalizedQuery: normalizedQuery,
-    normalizedPrimaryText: normalizeFindText(title),
-  );
+  if (normalizedQuery.isEmpty) return entries;
+  return entries
+      .where(
+        (e) => findNormalizedTextMatches(
+          normalizedQuery: normalizedQuery,
+          normalizedPrimaryText: e.normalizedTitle,
+        ),
+      )
+      .toList();
 }
 
 class OutlineView extends StatefulWidget {
@@ -70,6 +100,10 @@ class _OutlineViewState extends State<OutlineView>
   PdfOutlineNode? _activeNode;
   final Map<PdfOutlineNode, bool> _expanded = {};
   final Map<PdfOutlineNode, ExpansibleController> _controllers = {};
+
+  // הסינון רץ בכל הקשה ובכל מעבר עמוד, ולכן הכותרות מנורמלות פעם אחת לעץ.
+  List<PdfOutlineNode>? _searchEntriesSource;
+  List<PdfOutlineSearchEntry> _searchEntries = const [];
 
   @override
   bool get wantKeepAlive => true;
@@ -318,26 +352,15 @@ class _OutlineViewState extends State<OutlineView>
     );
   }
 
-  Widget _buildFilteredOutlineList(List<PdfOutlineNode>? outline) {
-    List<({PdfOutlineNode node, int level})> allNodes = [];
-    void getAllNodes(List<PdfOutlineNode>? outline, int level) {
-      if (outline == null) return;
-      for (var node in outline) {
-        allNodes.add((node: node, level: level));
-        getAllNodes(node.children, level + 1);
-      }
+  Widget _buildFilteredOutlineList(List<PdfOutlineNode> outline) {
+    if (!identical(_searchEntriesSource, outline)) {
+      _searchEntriesSource = outline;
+      _searchEntries = flattenPdfOutlineForSearch(outline);
     }
-
-    getAllNodes(widget.outline, 0);
-
-    final filteredNodes = allNodes
-        .where(
-          (item) => pdfOutlineTitleMatchesQuery(
-            item.node.title,
-            searchController.text,
-          ),
-        )
-        .toList();
+    final filteredNodes = filterPdfOutline(
+      _searchEntries,
+      searchController.text,
+    );
 
     return NavTreeFocusGroup(
       child: SingleChildScrollView(
