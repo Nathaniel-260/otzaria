@@ -137,6 +137,35 @@ void main() {
     expect(alone.left, books.left);
   });
 
+  testWidgets('סגירת חלון הספרים מזיזה את הקישורים למקומו וחוזרת', (
+    tester,
+  ) async {
+    cubit.upsert(_booksItem);
+    await pump(tester);
+    startBuild();
+    await tester.pump();
+    final booksSpot = tester.getRect(find.byKey(_booksCard));
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(_booksCard),
+        matching: find.byTooltip('סגור'),
+      ),
+    );
+    await tester.pump();
+    expect(tester.getRect(find.byKey(_linksCard)).left, booksSpot.left);
+
+    cubit.remove('indexing');
+    cubit.upsert(_booksItem);
+    await tester.pump();
+    expect(find.byKey(_booksCard), findsOneWidget);
+    expect(tester.getRect(find.byKey(_booksCard)).left, booksSpot.left);
+    expect(
+      tester.getRect(find.byKey(_linksCard)).left,
+      greaterThan(booksSpot.right),
+    );
+  });
+
   testWidgets('סגירת חלון הספרים אינה סוגרת את חלון הקישורים', (tester) async {
     cubit.upsert(_booksItem);
     await pump(tester);

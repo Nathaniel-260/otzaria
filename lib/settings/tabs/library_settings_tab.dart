@@ -663,8 +663,10 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     SettingsState state,
     LibraryState libraryState,
   ) {
-    final showLinkIndex = context.select<AttachedLibrariesBloc, bool>(
-      (bloc) => hasExternalLinkLibrary(bloc.state.libraries),
+    final linkSlugs = context.select<AttachedLibrariesBloc, String>(
+      (bloc) => externalLinkLibraries(
+        bloc.state.libraries,
+      ).map((library) => library.slug).join(','),
     );
     return [
       SettingsActionTile.switchTile(
@@ -805,7 +807,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           );
         },
       ),
-      if (showLinkIndex) const ExternalLinkIndexTile(),
+      if (linkSlugs.isNotEmpty)
+        ExternalLinkIndexTile(slugs: linkSlugs.split(',')),
     ];
   }
 }

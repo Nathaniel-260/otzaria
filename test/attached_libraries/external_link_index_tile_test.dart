@@ -44,24 +44,24 @@ void main() {
       home: Scaffold(
         body: Directionality(
           textDirection: TextDirection.rtl,
-          child: ExternalLinkIndexTile(links: links),
+          child: ExternalLinkIndexTile(slugs: const ['dbA'], links: links),
         ),
       ),
     ),
   );
 
   test('השורה מוצגת רק למסד תקין עם קישורים חיצוניים', () {
-    expect(hasExternalLinkLibrary([_library()]), isTrue);
-    expect(hasExternalLinkLibrary(const []), isFalse);
+    expect(externalLinkLibraries([_library()]), hasLength(1));
+    expect(externalLinkLibraries(const []), isEmpty);
     expect(
-      hasExternalLinkLibrary([_library(status: AttachedLibraryStatus.invalid)]),
-      isFalse,
+      externalLinkLibraries([_library(status: AttachedLibraryStatus.invalid)]),
+      isEmpty,
     );
     expect(
-      hasExternalLinkLibrary([
+      externalLinkLibraries([
         _library(capabilities: const {AttachedLibraryCapability.toc}),
       ]),
-      isFalse,
+      isEmpty,
     );
   });
 
@@ -70,6 +70,23 @@ void main() {
     expect(find.text('אינדקס קישורים'), findsOneWidget);
     expect(find.text('האינדקס מעודכן'), findsOneWidget);
     expect(find.text('עצור'), findsNothing);
+  });
+
+  testWidgets('איפוס במצב מוכן: ביטול אינו קורא ל-API, אישור בונה מחדש', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.tap(find.text('איפוס'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ביטול'));
+    await tester.pumpAndSettle();
+    expect(links.calls, isEmpty);
+
+    await tester.tap(find.text('איפוס'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('בנה מחדש'));
+    await tester.pumpAndSettle();
+    expect(links.calls, ['rebuild:dbA']);
   });
 
   testWidgets('בזמן בנייה: התקדמות עם מפרידי אלפים וכפתור עצור', (
@@ -94,7 +111,7 @@ void main() {
 
     await tester.tap(find.text('עצור'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('ההתקדמות נשמרת'), findsOneWidget);
+    expect(find.text('האם לעצור את תהליך עדכון האינדקס?'), findsOneWidget);
     await tester.tap(find.text('ביטול'));
     await tester.pumpAndSettle();
     expect(links.calls, isEmpty);

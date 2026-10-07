@@ -7,23 +7,24 @@ import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 
-/// האם [libraries] כוללת מסד תקין שיש לו אינדקס קישורים חיצוניים.
-bool hasExternalLinkLibrary(List<AttachedLibrary> libraries) => libraries.any(
-  (library) =>
-      library.isOk &&
-      library.capabilities.contains(AttachedLibraryCapability.externalLinks),
-);
+/// המסדים התקינים שיש להם אינדקס קישורים חיצוניים.
+List<AttachedLibrary> externalLinkLibraries(List<AttachedLibrary> libraries) =>
+    [
+      for (final library in libraries)
+        if (library.isOk &&
+            library.capabilities.contains(
+              AttachedLibraryCapability.externalLinks,
+            ))
+          library,
+    ];
 
-/// אישור לפני עצירת הבנייה; ההתקדמות נשמרת.
+/// אישור עצירה, באותו נוסח של עצירת אינדקס החיפוש.
 Future<bool> confirmLinkIndexStop(BuildContext context) async =>
     await showWarningDialog(
       context: context,
-      title: context.settingsText('עצירת בניית האינדקס'),
-      content: context.settingsText(
-        'ההתקדמות נשמרת ואפשר להמשיך אחר כך מאותה נקודה. עד שהאינדקס יושלם המפרשים של המסד לא יוצגו על הספרים הרשמיים. לעצור?',
-      ),
+      title: context.settingsText('עצירת עדכון'),
+      content: context.settingsText('האם לעצור את תהליך עדכון האינדקס?'),
       confirmText: context.settingsText('עצור'),
-      cancelText: context.settingsText('ביטול'),
     ) ??
     false;
 
@@ -43,7 +44,10 @@ Future<bool> confirmLinkIndexRebuild(BuildContext context) async =>
 /// שורת "אינדקס קישורים" בהגדרות הספרייה: התקדמות הבנייה, עצירה, ובנייה
 /// מחדש אחרי בנייה שנקטעה.
 class ExternalLinkIndexTile extends StatelessWidget {
-  const ExternalLinkIndexTile({super.key, this.links});
+  const ExternalLinkIndexTile({super.key, required this.slugs, this.links});
+
+  /// המסדים שהאיפוס בונה מחדש.
+  final List<String> slugs;
 
   /// ברירת המחדל: [ExternalLinkRepository.instance].
   final ExternalLinkRepository? links;
@@ -88,7 +92,15 @@ class ExternalLinkIndexTile extends StatelessWidget {
                   }
                 },
               )
-            else if (incomplete.isNotEmpty) ...[
+            else if (incomplete.isEmpty)
+              ActionButton.ghost(
+                text: context.settingsText('איפוס'),
+                onPressed: () async {
+                  if (!await confirmLinkIndexRebuild(context)) return;
+                  slugs.forEach(repository.requestRebuild);
+                },
+              )
+            else ...[
               ActionButton.recommended(
                 text: context.settingsText('המשך בנייה'),
                 onPressed: () {

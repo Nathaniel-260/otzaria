@@ -826,8 +826,6 @@
   "אינדקס הקישורים לא הושלם": "The links index did not finish",
   "המשך בנייה": "Resume build",
   "בנה מחדש": "Rebuild",
-  "עצירת בניית האינדקס": "Stop building the index?",
-  "ההתקדמות נשמרת ואפשר להמשיך אחר כך מאותה נקודה. עד שהאינדקס יושלם המפרשים של המסד לא יוצגו על הספרים הרשמיים. לעצור?": "Progress is saved and you can resume later from the same point. Until the index is complete, this library's commentaries will not appear on the official books. Stop?",
   "בנייה מחדש של האינדקס": "Rebuild the index?",
   "בנייה מחדש מוחקת את ההתקדמות ומתחילה מההתחלה (כמה דקות במסד גדול). להמשיך?": "Rebuilding deletes the saved progress and starts from the beginning (a few minutes for a large library). Continue?",
   "עצור": "Stop",
