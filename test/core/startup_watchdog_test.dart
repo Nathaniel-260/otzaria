@@ -23,6 +23,16 @@ void main() {
     expect(source, contains('std::atomic_load_explicit(&g_modules'));
   });
 
+  test(
+    'ה-heartbeat ב-thread הראשי מרענן מודולים שנטענו מאוחר (issue #2064)',
+    () {
+      final start = source.indexOf('void CALLBACK HeartbeatProc(');
+      final end = source.indexOf('\n}', start);
+      expect(start, greaterThanOrEqualTo(0));
+      expect(source.substring(start, end), contains('RefreshModules();'));
+    },
+  );
+
   test('כשל timer אינו מפעיל watcher', () {
     final timer = source.indexOf('g_timer = ::SetTimer');
     final failed = source.indexOf('if (g_timer == 0)', timer);
