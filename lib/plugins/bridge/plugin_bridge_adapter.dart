@@ -119,6 +119,13 @@ import 'package:otzaria/plugins/services/plugin_file_download_service.dart';
 import 'package:otzaria/plugins/services/plugin_install_report_service.dart';
 import 'package:otzaria/plugins/services/plugin_store_link_parser.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
+import 'package:otzaria/plugins/services/plugin_book_correction_service.dart';
+import 'package:otzaria/services/direct_error_report_service.dart';
+import 'package:otzaria/models/direct_error_report.dart';
+import 'package:otzaria/services/data_collection_service.dart';
+import 'package:otzaria/data/data_providers/book_database_resolver.dart';
+import 'package:otzaria/data/data_providers/db_read_worker.dart';
+import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:otzaria/plugins/services/plugin_fs_service.dart';
 import 'package:otzaria/plugins/services/plugin_file_server.dart';
@@ -673,8 +680,10 @@ class PluginBridgeAdapter {
     PluginFileServer? fileServer,
     PluginHighlightRegistry? highlightRegistry,
     PluginReportService? reportService,
+    PluginBookCorrectionService? bookCorrectionService,
   }) : _pluginRepo = pluginRepository ?? PluginRegistryRepository(),
        _pluginReportService = reportService,
+       _pluginBookCorrectionService = bookCorrectionService,
        _notificationService = notificationService ?? NotificationService(),
        _databaseService = databaseService ?? PluginDatabaseService(),
        _highlightRegistry =
@@ -708,6 +717,17 @@ class PluginBridgeAdapter {
   PluginReportService? _pluginReportService;
   PluginReportService get _reportService =>
       _pluginReportService ??= PluginReportService();
+
+  DirectErrorReportService? _directBookReportService;
+  PluginBookCorrectionService? _pluginBookCorrectionService;
+  PluginBookCorrectionService get _bookCorrectionService {
+    if (_pluginBookCorrectionService case final service?) return service;
+    final direct = _directBookReportService ??= DirectErrorReportService();
+    return _pluginBookCorrectionService = PluginBookCorrectionService(
+      senderEmail: () => direct.senderEmail,
+      deliver: direct.submitReport,
+    );
+  }
 
   // שירות יצירת קיצורי דרך (shortcut.create) — מופע יחיד לכל adapter.
   PluginShortcutService? _pluginShortcutService;
@@ -810,6 +830,7 @@ class PluginBridgeAdapter {
     _textReaderRawContent = null;
     _textReaderProfile = null;
     _textReaderDisplayContent = null;
+    unawaited(_directBookReportService?.closeHttpClient());
     _bookIndexLibrary = null;
     _booksById = const {};
     _booksByTitle = const {};
@@ -5522,6 +5543,8 @@ class PluginBridgeAdapter {
     Map<String, dynamic> args,
   ) async {
     switch (action) {
+      case 'submitBookCorrection':
+        return _submitBookCorrection(args);
       case 'sendEmail':
         final to = args['to'] as String?;
         final subject = args['subject'] as String?;
@@ -5627,6 +5650,82 @@ class PluginBridgeAdapter {
           'error.unknown_method: Unknown action in feedback: $action',
         );
     }
+  }
+
+  Future<Map<String, dynamic>> _submitBookCorrection(
+    Map<String, dynamic> args,
+  ) async {
+    final bookId = args['bookId'];
+    final bookUid = args['bookUid'];
+    if (bookId is! String ||
+        bookId.trim().isEmpty ||
+        (bookUid != null && (bookUid is! String || bookUid.trim().isEmpty))) {
+      throw Exception('error.invalid_params: זהות הספר אינה תקינה.');
+    }
+    final library = await DataRepository.instance.library;
+    _ensureBookIndex(library);
+    final book = bookUid is String
+        ? _booksByUid[bookUid.trim()]
+        : switch (_booksByTitle[bookId]) {
+            [final book] => book,
+            _ => null,
+          };
+    if (book == null) {
+      throw Exception('error.not_found: הספר לא נמצא באופן חד־משמעי.');
+    }
+    if (book is! TextBook ||
+        !book.isOfficialLibraryBook ||
+        book.id == null ||
+        book.versionTitle != null) {
+      throw Exception(
+        'error.unsupported_context: ניתן לדווח רק על ספר טקסט רשמי.',
+      );
+    }
+    final resolved = await BookDatabaseResolver.resolveBookById(book.id!);
+    if (resolved == null ||
+        !resolved.source.isOfficial ||
+        resolved.book.isFileBacked) {
+      throw Exception(
+        'error.unsupported_context: מקור הספר אינו במסד הספרייה הרשמי.',
+      );
+    }
+    final information = await BookDetailsService().getBookInformation(book);
+    final package = await PackageInfo.fromPlatform();
+    final version = await DataCollectionService().readLibraryVersion();
+    return _bookCorrectionService.submit(
+      pluginId: plugin.pluginId,
+      args: args,
+      metadata: PluginBookReportMetadata(
+        bookId: resolved.book.id,
+        title: book.title,
+        sourceFolder: information.source ?? '',
+        filePath:
+            libraryDisplayPath(
+              information.fileDetails['נתיב הקובץ'] ?? '',
+            ) ??
+            '',
+        libraryVersion: version,
+        client: ReportClientInfo(
+          appVersion: '${package.version}+${package.buildNumber}',
+          platform: Platform.operatingSystem,
+        ),
+      ),
+      loadSource: (index) async {
+        final lines = await DbReadWorker.lines(
+          SqliteDataProvider.instance.dbPath,
+          resolved.book.id,
+          index,
+          index,
+        );
+        if (lines.length != 1) {
+          throw Exception('error.not_found: פסקת המקור אינה קיימת.');
+        }
+        return PluginBookReportSource(
+          lines.single.content,
+          heRef: lines.single.heRef,
+        );
+      },
+    );
   }
 
   // ----------------------------------------------------------------

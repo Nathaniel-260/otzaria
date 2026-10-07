@@ -48,6 +48,7 @@ const Map<String, String> apiCallToPermissionHint = {
 
   // feedback.*
   'feedback.sendEmail': 'feedback.send_email',
+  'feedback.submitBookCorrection': 'feedback.send_email',
 
   // shortcut.*
   'shortcut.create': 'ui.create_shortcut',

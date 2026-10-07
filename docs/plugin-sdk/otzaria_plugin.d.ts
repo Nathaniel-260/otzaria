@@ -1909,6 +1909,31 @@ export interface ListInstalledFontsResult {
   platform: string;
 }
 
+export interface SubmitBookCorrectionParams {
+  reportId: string;
+  bookId: string;
+  bookUid?: string;
+  sectionIndex: number;
+  endSectionIndex?: number;
+  snapshots: Array<{ index: number; text: string }>;
+  original: string;
+  proposed: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+  details?: string;
+  allowQueue?: boolean;
+  forceFreeText?: boolean;
+}
+
+export interface SubmitBookCorrectionResult {
+  status: 'sent' | 'queued';
+  reportId: string;
+  nativeReportId: string;
+  message: string;
+  duplicate: boolean;
+  correctionSupported: boolean | null;
+}
+
 export type OtzariaMethod =
   | 'app.getInfo'
   | 'app.getTheme'
@@ -2015,6 +2040,7 @@ export type OtzariaMethod =
   | 'publishedData.remove'
   | 'publishedData.listOwn'
   | 'feedback.sendEmail'
+  | 'feedback.submitBookCorrection'
   | 'feedback.report'
   | 'feedback.hasReporterEmail'
   | 'history.list'
@@ -2164,6 +2190,11 @@ export interface OtzariaGlobal {
     method: 'plugin.listInstalled',
     payload?: Record<string, unknown>
   ): Promise<OtzariaResponse<InstalledPlugin[]>>;
+
+  call(
+    method: 'feedback.submitBookCorrection',
+    payload: SubmitBookCorrectionParams
+  ): Promise<OtzariaResponse<SubmitBookCorrectionResult>>;
 
   /**
    * Call a Host API method.

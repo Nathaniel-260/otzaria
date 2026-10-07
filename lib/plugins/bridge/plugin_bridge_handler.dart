@@ -152,7 +152,8 @@ class PluginBridgeHandler {
       method == 'ui.print' ||
       method == 'ui.exportPdf' ||
       method == 'reader.printRange' ||
-      method == 'feedback.report';
+      method == 'feedback.report' ||
+      method == 'feedback.submitBookCorrection';
 
   Future<dynamic> _handleRpc(
     List<dynamic> args, {
@@ -441,6 +442,7 @@ class PluginBridgeHandler {
     'publishedData.remove': 'published_data.write',
     'publishedData.listOwn': 'published_data.write',
     'feedback.sendEmail': 'feedback.send_email',
+    'feedback.submitBookCorrection': 'feedback.send_email',
     // report נשלח רק אחרי אישור המשתמש בדיאלוג, וההסכמה שם היא גבול האבטחה;
     // hasReporterEmail מחזירה ביט קיום בלבד, בלי הכתובת עצמה.
     'feedback.report': noManifestPermission,

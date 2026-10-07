@@ -393,6 +393,95 @@ void main() {
       },
     );
 
+    group('feedback.submitBookCorrection', () {
+      const request = [
+        {'method': 'feedback.submitBookCorrection', 'payload': {}},
+      ];
+
+      test(
+        'הצהרה חסרה חוסמת את השליחה גם כשההרשאה מוענקת',
+        () async {
+          final adapter = _FakeAdapter();
+          final handler = buildHandler(
+            declaredPermissions: const [],
+            granted: true,
+            adapter: adapter,
+          );
+
+          final response = await handler.handleRpcForTesting(request) as Map;
+
+          expect(response['success'], isFalse);
+          expect(response['error']['code'], 'permission_denied');
+          expect(adapter.executeCalls, 0);
+        },
+      );
+
+      for (final grant in [false, null]) {
+        test(
+          'הרשאה מוצהרת ללא הענקה ($grant) חוסמת את השליחה',
+          () async {
+            final adapter = _FakeAdapter();
+            final handler = buildHandler(
+              declaredPermissions: const ['feedback.send_email'],
+              granted: grant,
+              adapter: adapter,
+            );
+
+            final response = await handler.handleRpcForTesting(request) as Map;
+
+            expect(response['success'], isFalse);
+            expect(response['error']['code'], 'permission_denied');
+            expect(adapter.executeCalls, 0);
+          },
+        );
+      }
+
+      test(
+        'feedback.send_email בלבד מאפשרת שליחה ושומרת את התוצאה',
+        () async {
+          const result = {'status': 'queued', 'reportId': 'stable-id'};
+          final adapter = _FakeAdapter(result: result);
+          final handler = buildHandler(
+            declaredPermissions: const ['feedback.send_email'],
+            granted: true,
+            adapter: adapter,
+          );
+
+          final response = await handler.handleRpcForTesting(request) as Map;
+
+          expect(response['success'], isTrue);
+          expect(response['data'], result);
+          expect(adapter.executeCalls, 1);
+          expect(adapter.lastDomain, 'feedback');
+          expect(adapter.lastAction, 'submitBookCorrection');
+        },
+      );
+
+      for (final code in ['error.source_changed', 'error.report_id_conflict']) {
+        test(
+          'שומרת את קוד השגיאה $code ואת ההודעה',
+          () async {
+            const message = 'הדיווח נדחה';
+            final adapter = _FakeAdapter(
+              errorToThrow: Exception('$code: $message'),
+            );
+            final handler = buildHandler(
+              declaredPermissions: const ['feedback.send_email'],
+              granted: true,
+              adapter: adapter,
+            );
+
+            final response = await handler.handleRpcForTesting(request) as Map;
+
+            expect(response['success'], isFalse);
+            expect(response['error']['code'], code);
+            expect(response['error']['message'], message);
+            expect(adapter.executeCalls, 1);
+          },
+        );
+      }
+    });
+
     test('feedback.report ללא הרשאה כלשהי במניפסט → execute נקרא', () async {
       // גבול האבטחה של report הוא דיאלוג האישור של המשתמש, ולכן היא אינה
       // דורשת הרשאת manifest — בשונה מ-feedback.sendEmail.
