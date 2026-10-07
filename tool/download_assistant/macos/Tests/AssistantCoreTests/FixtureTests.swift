@@ -103,7 +103,7 @@ final class FixtureTests: XCTestCase {
     }
 
     /// במניפסט ישן, "full-indexed" מופיעה כשחבילה מתקינה ספרייה.
-    func testFullIndexedOnlyWithAnIndexedBundle() throws {
+    func testFullIndexedPresets() throws {
         let legacy = ReleaseManifest(
             schemaVersion: manifest.schemaVersion, releaseTag: manifest.releaseTag,
             releaseVersion: manifest.releaseVersion, components: [
@@ -123,10 +123,15 @@ final class FixtureTests: XCTestCase {
             ["otzaria-windows-full-indexed", "library-full-indexed"] + semantic
         )
         XCTAssertEqual(try XCTUnwrap(presets.first { $0.id == "full" }).members, ["otzaria-windows-full"] + semantic)
-        for target in [AssistantTarget(platform: "macos"), AssistantTarget(platform: "android"),
+        for target in [AssistantTarget(platform: "macos"),
                        AssistantTarget(platform: "windows", architecture: "arm64")] {
             XCTAssertEqual(buildPresets(manifest, target).map { $0.id }, ["basic", "full"], target.platform)
         }
+        XCTAssertEqual(
+            try XCTUnwrap(buildPresets(manifest, AssistantTarget(platform: "android"))
+                .first { $0.id == "full-indexed" }).members,
+            ["otzaria-android", "library-full", "library-index"]
+        )
     }
 
     /// המסומנת מראש: "basic", אחריה "full" (לא "full-indexed" הגדולה), אחרת הראשונה.

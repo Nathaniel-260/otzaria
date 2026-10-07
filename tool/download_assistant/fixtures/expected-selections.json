@@ -631,20 +631,27 @@
       },
       "offeredComponents": [
         "otzaria-android",
-        "otzaria-android-full"
+        "library-full",
+        "library-index"
       ],
       "customChoices": [
         {
           "id": "otzaria-android",
           "downloadSize": 96,
-          "locked": false,
-          "group": "application"
+          "locked": true,
+          "group": ""
         },
         {
-          "id": "otzaria-android-full",
-          "downloadSize": 1925,
+          "id": "library-full",
+          "downloadSize": 3015,
           "locked": false,
-          "group": "application"
+          "group": ""
+        },
+        {
+          "id": "library-index",
+          "downloadSize": 600,
+          "locked": false,
+          "group": ""
         }
       ],
       "presets": [
@@ -660,15 +667,37 @@
           "outputSubfolder": ""
         },
         {
-          "id": "full",
+          "id": "full-indexed",
           "members": [
-            "otzaria-android-full"
+            "otzaria-android",
+            "library-full",
+            "library-index"
           ],
           "outputFiles": [
-            "otzaria-android-full.zip"
+            "app-release.apk",
+            "otzaria-0.10.3-library.tar.zst",
+            "otzaria-0.10.3-library-index.tar.zst"
           ],
-          "outputNotes": [],
-          "outputSubfolder": ""
+          "outputNotes": [
+            "אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים \"ייבוא מתיקייה\" באוצריא אחרי התקנת ה-APK.",
+            "אינדקס החיפוש המוכן נפרס יחד עם הספרייה, ולכן התוכנה אינה בונה אותו אחרי ההתקנה."
+          ],
+          "outputSubfolder": "אוצריא להתקנה ל-Android"
+        },
+        {
+          "id": "full",
+          "members": [
+            "otzaria-android",
+            "library-full"
+          ],
+          "outputFiles": [
+            "app-release.apk",
+            "otzaria-0.10.3-library.tar.zst"
+          ],
+          "outputNotes": [
+            "אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים \"ייבוא מתיקייה\" באוצריא אחרי התקנת ה-APK."
+          ],
+          "outputSubfolder": "אוצריא להתקנה ל-Android"
         }
       ]
     }

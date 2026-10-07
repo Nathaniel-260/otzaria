@@ -312,17 +312,21 @@ static void test_full_indexed_preset(void) {
   g_ptr_array_set_size(presets, 0);
   g_assert_cmpint(otz_default_preset_index(presets), ==, -1);
 
-  /* No other target has a bundle that installs a library. */
+  /* Android has no bundle: the APK comes with the library and the index. */
   gsize length;
   g_autofree char *fixture = read_fixture("release-manifest.json", &length);
   g_autoptr(OtzManifest) release = otz_manifest_parse(fixture, length, &error);
   g_assert_no_error(error);
   OtzTarget android = {"android", "", ""};
   g_autoptr(GPtrArray) mobile = otz_build_presets(release, &android);
-  g_assert_cmpuint(mobile->len, ==, 2);
+  g_assert_cmpuint(mobile->len, ==, 3);
   g_assert_cmpstr(((const OtzPreset *)g_ptr_array_index(mobile, 0))->id, ==,
                   OTZ_DEFAULT_PRESET_ID);
-  g_assert_cmpstr(((const OtzPreset *)g_ptr_array_index(mobile, 1))->id, ==, "full");
+  assert_preset(mobile, 1, "full-indexed",
+                (const char *const[]){"otzaria-android", "library-full",
+                                      "library-index", NULL});
+  assert_preset(mobile, 2, "full",
+                (const char *const[]){"otzaria-android", "library-full", NULL});
   OtzTarget portable = {"linux", "x64", OTZ_PORTABLE_PACKAGE_FORMAT};
   g_autoptr(GPtrArray) offline = otz_build_presets(release, &portable);
   g_assert_cmpuint(offline->len, ==, 1);

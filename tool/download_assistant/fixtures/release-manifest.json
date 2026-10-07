@@ -256,30 +256,6 @@
       ]
     },
     {
-      "id": "otzaria-android-full",
-      "name": "אוצריא ל-Android עם ספרייה מלאה",
-      "nameEn": "Otzaria for Android with the Full Library",
-      "description": "ארכיון ZIP (או כמה כרכי ZIP שמחלצים לאותה תיקייה) ובו קובץ ה-APK והספרייה המלאה, להעתקה אל המכשיר.",
-      "descriptionEn": "A ZIP archive (or several ZIP volumes extracted into the same folder) with the APK file and the full library, to copy to the device.",
-      "type": "application-bundle",
-      "required": false,
-      "origin": "built",
-      "platform": "android",
-      "installOrder": 20,
-      "dependsOn": [],
-      "downloadSize": 1925,
-      "assets": [
-        {
-          "kind": "single",
-          "repository": "Otzaria/otzaria",
-          "releaseTag": "0.10.3+143",
-          "name": "otzaria-android-full.zip",
-          "size": 1925,
-          "sha256": "73d2389d12fef256044ef62716f76871862498e20a04eebd69157f3d011ba1ee"
-        }
-      ]
-    },
-    {
       "id": "otzaria-linux-full-arm64",
       "name": "אוצריא ל-Linux עם ספרייה מלאה (ARM64)",
       "nameEn": "Otzaria for Linux with the Full Library (ARM64)",
@@ -447,11 +423,12 @@
       "dependsOn": [],
       "installedBy": [
         "otzaria-windows-x64",
-        "otzaria-windows-arm64"
+        "otzaria-windows-arm64",
+        "otzaria-android"
       ],
       "downloadSize": 3015,
-      "outputNote": "מתקין אוצריא שבתיקייה פורס את הספרייה מהחלקים שלצדו בזמן ההתקנה, בלי אינטרנט.",
-      "outputNoteEn": "The Otzaria installer in this folder extracts the library from the parts beside it without an internet connection.",
+      "outputNote": "אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים \"ייבוא מתיקייה\" באוצריא אחרי התקנת ה-APK.",
+      "outputNoteEn": "Otzaria extracts the library from the files in this folder without an internet connection: on Windows the installer does it during installation; on Android, install the APK and choose \"Import from folder\" in Otzaria.",
       "assets": [
         {
           "kind": "split",
@@ -499,7 +476,8 @@
       ],
       "installedBy": [
         "otzaria-windows-x64",
-        "otzaria-windows-arm64"
+        "otzaria-windows-arm64",
+        "otzaria-android"
       ],
       "downloadSize": 600,
       "outputNote": "אינדקס החיפוש המוכן נפרס יחד עם הספרייה, ולכן התוכנה אינה בונה אותו אחרי ההתקנה.",

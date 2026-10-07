@@ -524,9 +524,10 @@ void main() {
       expect(presets['full'], ['idx-a', 'lib-a'], reason: 'לפי גודל החבילה');
     });
 
-    test('בלי חבילה שמתקינה ספרייה אין "מלאה + אינדקס"', () {
+    test('בלי חבילה שמתקינה ספרייה אין "מלאה + אינדקס", חוץ מ-Android', () {
       final fixture = buildFixtureManifest();
       for (final target in kFixtureTargets) {
+        if (target.platform == 'android') continue;
         final ids = buildPresets(fixture, target).map((p) => p.id);
         expect(
           ids.contains('full-indexed'),
@@ -534,6 +535,22 @@ void main() {
           reason: '${target.toJson()}',
         );
       }
+    });
+
+    test('Android: ה-APK עם חבילת הספרייה והאינדקס, כמו חבילת ה-FULL', () {
+      final presets = byId(
+        buildPresets(
+          buildFixtureManifest(),
+          const AssistantTarget(platform: 'android'),
+        ),
+      );
+      expect(presets['basic'], ['otzaria-android']);
+      expect(presets['full-indexed'], [
+        'otzaria-android',
+        'library-full',
+        'library-index',
+      ]);
+      expect(presets['full'], ['otzaria-android', 'library-full']);
     });
 
     test('"מלאה" כוללת את החיפוש החכם כמו קודם', () {
@@ -676,13 +693,12 @@ void main() {
       }
     });
 
-    test('Linux, macOS ו-Android: המתקין והחבילה המלאה הם בחירה אחת', () {
+    test('Linux ו-macOS: המתקין והחבילה המלאה הם בחירה אחת', () {
       final expected = {
         3: ['otzaria-linux-deb-x64', 'otzaria-linux-full-x64'],
         4: ['otzaria-linux-rpm-x64', 'otzaria-linux-full-x64'],
         6: ['otzaria-linux-deb-arm64', 'otzaria-linux-full-arm64'],
         2: ['otzaria-macos', 'otzaria-macos-full'],
-        9: ['otzaria-android', 'otzaria-android-full'],
       };
       for (final MapEntry(key: index, value: ids) in expected.entries) {
         final choices = customChoices(manifest, kFixtureTargets[index]);
@@ -725,6 +741,7 @@ void main() {
       ]) {
         for (final target in targets) {
           for (final preset in buildPresets(m, target)) {
+            if (preset.id == 'full-indexed') continue;
             expect(
               preset.members,
               isNot(contains('library-index')),

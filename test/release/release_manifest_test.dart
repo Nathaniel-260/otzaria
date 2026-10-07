@@ -305,15 +305,11 @@ void main() {
         type: 'application',
         platform: 'android',
       );
-      expectComponent(
-        'otzaria-android-full',
-        'otzaria-android-full.zip',
-        type: 'application-bundle',
-        platform: 'android',
-      );
 
-      // ה-zip של macOS הוא ערוץ העדכון הפנימי, לא רכיב להורדה.
+      // ה-zip של macOS הוא ערוץ העדכון הפנימי, לא רכיב להורדה; כרכי ה-ZIP של
+      // Android להתקנה ידנית — במסייע ה-APK מגיע עם חלקי הספרייה עצמם.
       expect(jsonEncode(manifest), isNot(contains('"otzaria-macos.zip"')));
+      expect(jsonEncode(manifest), isNot(contains('otzaria-android-full')));
     });
 
     test('a full bundle of any platform survives being split', () {
@@ -351,25 +347,6 @@ void main() {
         (manifest['components'] as List).map((c) => (c as Map)['id']),
         isNot(contains('otzaria-linux-full-arm64')),
       );
-    });
-
-    test('Android FULL volumes are standalone ZIP assets in volume order', () {
-      writeRealisticRelease();
-      writeFile('otzaria-android-full-part10.zip', 'j' * 3);
-      writeFile('otzaria-android-full-part2.zip', 'b' * 5);
-      writeFile('otzaria-android-full-part1.zip', 'a' * 7);
-
-      final manifest = build();
-      expect(validateReleaseManifest(manifest), isEmpty);
-      final full = componentById(manifest, 'otzaria-android-full');
-      final assets = (full['assets'] as List).cast<Map<String, Object?>>();
-      expect(assets.map((a) => a['name']), [
-        'otzaria-android-full-part1.zip',
-        'otzaria-android-full-part2.zip',
-        'otzaria-android-full-part10.zip',
-      ]);
-      expect(assets.map((a) => a['kind']).toSet(), {'single'});
-      expect(full['downloadSize'], 15);
     });
 
     test('a split SeforimLibrary DB passes as an external component', () {
