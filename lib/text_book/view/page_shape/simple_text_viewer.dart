@@ -2712,6 +2712,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                                     labelForIndex: widget.labelForIndex,
                                     child: SmoothWheelScroll(
                                       child: ScrollPositionReanchor(
+                                        // עיגון הוא קפיצה, והיה מעביר את הבחירה לטקסט אחר.
+                                        enabled: _savedSelectedText == null,
                                         scrollController: _scrollController,
                                         positionsListener: _positionsListener,
                                         child: ScrollablePositionedList.builder(

@@ -38,6 +38,7 @@ import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
 import 'package:otzaria/widgets/misc/app_context_menu.dart';
 import 'package:otzaria/widgets/misc/link_context_menu_entry.dart';
+import 'package:otzaria/widgets/lists/scroll_position_reanchor.dart';
 import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
 import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/text_book/view/selection/selection_persistence.dart';
@@ -2203,14 +2204,73 @@ void main() {
     await tester.pump();
     expect(copied, ['רבי יוחנן הלכה']);
   });
+
+  testWidgets('גלילה של יותר ממסך וחזרה שומרת את הבחירה (issue #2014)', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(700, 500);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final offsetController = ScrollOffsetController();
+    await _pumpMarkedViewer(
+      tester,
+      lines: [
+        for (var i = 0; i < 80; i++)
+          // צמד האותיות של כל שורה ייחודי לה ('טא' בשורה 8).
+          'פסקה ${List.filled(6, 'מילה${String.fromCharCodes([0x5D0 + i % 22, 0x5D0 + i ~/ 22])}').join(' ')}',
+      ],
+      scrollOffsetController: offsetController,
+    );
+    String selectedText() =>
+        (SelectionContainer.maybeOf(
+                  tester.element(find.byType(SliverList).first),
+                )!
+                as MultiSelectableSelectionContainerDelegate)
+            .selectables
+            .map((s) => s.getSelectedContent()?.plainText ?? '')
+            .join();
+    Future<void> scrollBy(double offset) async {
+      unawaited(
+        offsetController.animateScroll(
+          offset: offset,
+          duration: const Duration(milliseconds: 100),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.pump(ScrollPositionReanchor.idleDelay * 2);
+    }
+
+    final line = tester.allRenderObjects
+        .whereType<RenderParagraph>()
+        .firstWhere((p) => p.text.toPlainText().contains('מילהטא'));
+    final rect = line.localToGlobal(Offset.zero) & line.size;
+    final drag = await tester.startGesture(
+      rect.centerRight - const Offset(2, 0),
+      kind: PointerDeviceKind.mouse,
+    );
+    await tester.pump();
+    await drag.moveTo(rect.centerLeft + const Offset(2, 0));
+    await tester.pump();
+    await drag.up();
+    await tester.pumpAndSettle();
+    final selected = selectedText();
+    expect(selected, contains('טא'));
+
+    await scrollBy(520);
+    await scrollBy(-520);
+
+    expect(selectedText(), selected);
+  });
 }
 
 Future<_SelectionEmittingTextBookBloc> _pumpMarkedViewer(
   WidgetTester tester, {
   String line = 'אמר רבי יוחנן הלכה',
+  List<String>? lines,
   TextDisplayPolicy? displayPolicy,
+  ScrollOffsetController? scrollOffsetController,
 }) async {
-  final lines = [line];
+  lines ??= [line];
   final anchorLink = Link(
     heRef: 'מפרש בדיקה א, ב',
     index1: 1,
@@ -2225,6 +2285,7 @@ Future<_SelectionEmittingTextBookBloc> _pumpMarkedViewer(
       content: lines,
       clearSelectedIndex: true,
       displayPolicy: displayPolicy,
+      scrollOffsetController: scrollOffsetController,
       linksByLine: {
         1: [anchorLink],
       },
