@@ -11,9 +11,9 @@ const String _kFontSampleText = 'אבגד הוזח';
 IconData? _fontCategoryIcon(FontCategory category) {
   switch (category) {
     case FontCategory.serif:
-      return OtzariaIcons.alef_behind_alef_24_regular;
+      return OtzariaIcons.alef_behind_alef_24_filled;
     case FontCategory.sansSerif:
-      return OtzariaIcons.alef_behind_alef_24_regular;
+      return OtzariaIcons.alef_behind_alef_24_filled;
     case FontCategory.unknown:
       return null;
   }

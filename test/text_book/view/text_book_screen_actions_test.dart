@@ -237,7 +237,7 @@ void main() {
 
       expect(find.byType(NavPanelToggleButton), findsOneWidget);
       expect(
-        find.byIcon(OtzariaIcons.alef_deletion_24_regular),
+        find.byIcon(OtzariaIcons.alef_delete_24_filled),
         findsOneWidget,
       );
 

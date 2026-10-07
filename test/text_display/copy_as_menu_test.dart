@@ -36,7 +36,7 @@ void main() {
       final survivor = entries.firstWhere(
         (entry) => entry.label == 'בלי ניקוד וטעמים',
       );
-      expect(survivor.icon, OtzariaIcons.alef_deletion_24_regular);
+      expect(survivor.icon, OtzariaIcons.alef_delete_24_filled);
     });
   });
 

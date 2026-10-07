@@ -188,7 +188,7 @@ class DesignSettingsTab extends StatelessWidget {
                   title: context.settingsText('שפת ההגדרות'),
                   children: [
                     SettingsActionTile.dropdownTile<String>(
-                      icon: OtzariaIcons.alef_latin_a_24_regular,
+                      icon: OtzariaIcons.alef_latin_a_24_filled,
                       title: context.settingsText('שפת ההגדרות'),
                       subtitle: context.settingsText(
                         'שפת התצוגה של מסך ההגדרות בלבד; '

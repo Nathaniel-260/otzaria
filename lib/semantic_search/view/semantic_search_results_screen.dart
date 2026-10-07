@@ -538,7 +538,7 @@ class _SemanticSearchResultsScreenState
           case SemanticResultsStatus.initial:
             if (widget.tab.options.query.trim().isNotEmpty) {
               return _emptyState(
-                icon: OtzariaIcons.search_in_the_library_24_regular,
+                icon: OtzariaIcons.search_in_library_24_regular,
                 title: context.settingsText('החיפוש לא הורץ מחדש'),
                 message: context.settingsText(
                   'כרטיסייה ששוחזרה או שוכפלה אינה מחפשת מעצמה. לחצו כדי לחפש שוב.',
@@ -552,7 +552,7 @@ class _SemanticSearchResultsScreenState
               );
             }
             return _emptyState(
-              icon: OtzariaIcons.search_in_the_library_24_regular,
+              icon: OtzariaIcons.search_in_library_24_regular,
               title: context.settingsText('לא בוצע חיפוש'),
               message: context.settingsText(
                 'תארו את העניין שאתם מחפשים ולחצו על "חפש".',

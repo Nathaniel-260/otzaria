@@ -417,7 +417,7 @@ class _PersonalNotesManagerScreenState
           center: OtzariaSearchField(
             controller: _searchController,
             focusNode: _searchFocusNode,
-            icon: OtzariaIcons.search_in_the_document_24_regular,
+            icon: OtzariaIcons.search_in_document_24_regular,
             hintText: 'חפש בהערות...',
             onSubmitted: (_) => requestKeyboardFocus(),
             onChanged: (value) {
@@ -1038,7 +1038,7 @@ class _PersonalNotesManagerScreenState
 
     if (displayNotes.isEmpty) {
       return const ToolEmptyState(
-        icon: OtzariaIcons.icon_x_24_regular,
+        icon: OtzariaIcons.cross_24_filled,
         message: 'אין הערות להצגה',
       );
     }

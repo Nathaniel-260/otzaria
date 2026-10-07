@@ -654,7 +654,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             _ShortcutTile(
               settingKey: 'key-shortcut-open-new-search',
               label: context.settingsText('חיפוש חדש בכל הספרים'),
-              icon: OtzariaIcons.search_in_the_library_24_regular,
+              icon: OtzariaIcons.search_in_library_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(
@@ -715,7 +715,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
               subtitle: context.settingsText(
                 'משמש לחיפוש מהיר במסכי ספרים פתוחים',
               ),
-              icon: OtzariaIcons.search_in_the_book_24_regular,
+              icon: OtzariaIcons.search_in_book_24_regular,
               allShortcuts: _shortcutsList,
             ),
             _ShortcutTile(

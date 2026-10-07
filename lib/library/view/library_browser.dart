@@ -906,7 +906,7 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           child: KeyedSubtree(
             key: _tourLibrarySearchKey,
             child: OtzariaSearchField(
-              icon: OtzariaIcons.search_in_the_library_24_regular,
+              icon: OtzariaIcons.search_in_library_24_regular,
               controller: focusRepository.librarySearchController,
               focusNode: focusRepository.librarySearchFocusNode,
               autofocus: shouldAutofocusLibrarySearch(defaultTargetPlatform),

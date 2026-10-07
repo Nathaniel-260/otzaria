@@ -1325,7 +1325,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
       focusNode: _searchFocusNode,
       controller: _searchController,
       hintText: 'חפש בתוך המפרשים המוצגים...',
-      icon: OtzariaIcons.search_in_the_library_24_regular,
+      icon: OtzariaIcons.search_in_library_24_regular,
       // Enter moves to the next match and keeps focus in the field; selecting
       // all on focus would erase the query on the next key.
       selectAllOnFocus: false,

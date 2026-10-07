@@ -452,7 +452,7 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
-              OtzariaIcons.otzaria_icon_2_page_line_24_regular,
+              OtzariaIcons.otzaria_icon_2_page_lines_24_regular,
               size: 64,
               color: Theme.of(
                 context,

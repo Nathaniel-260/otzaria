@@ -17,12 +17,12 @@ List<AppContextMenuEntry> buildCopyAsMenuEntries({
       <({String label, IconData icon, TextDisplayProfile profile})>[
         (
           label: 'כמו בתצוגה',
-          icon: OtzariaIcons.alef_eye_24_regular,
+          icon: OtzariaIcons.alef_eye_24_filled,
           profile: base,
         ),
         (
           label: 'עם ניקוד וטעמים',
-          icon: OtzariaIcons.alef_with_flavors_24_regular,
+          icon: OtzariaIcons.alef_niqqud_taamim_24_filled,
           profile: base.copyWith(
             nikud: MarkVisibility.show,
             teamim: TeamimVisibility.show,
@@ -30,7 +30,7 @@ List<AppContextMenuEntry> buildCopyAsMenuEntries({
         ),
         (
           label: 'עם ניקוד, בלי טעמים',
-          icon: OtzariaIcons.alef_with_score_24_regular,
+          icon: OtzariaIcons.alef_niqqud_24_filled,
           profile: base.copyWith(
             nikud: MarkVisibility.show,
             teamim: TeamimVisibility.hide,
@@ -38,7 +38,7 @@ List<AppContextMenuEntry> buildCopyAsMenuEntries({
         ),
         (
           label: 'בלי ניקוד וטעמים',
-          icon: OtzariaIcons.alef_deletion_24_regular,
+          icon: OtzariaIcons.alef_delete_24_filled,
           profile: base.copyWith(
             nikud: MarkVisibility.hide,
             teamim: TeamimVisibility.hide,
@@ -46,7 +46,7 @@ List<AppContextMenuEntry> buildCopyAsMenuEntries({
         ),
         (
           label: 'בלי ניקוד, טעמים ופיסוק',
-          icon: OtzariaIcons.alef_with_eraser_24_regular,
+          icon: OtzariaIcons.alef_eraser_24_filled,
           profile: base.copyWith(
             nikud: MarkVisibility.hide,
             teamim: TeamimVisibility.hide,
@@ -55,7 +55,7 @@ List<AppContextMenuEntry> buildCopyAsMenuEntries({
         ),
         (
           label: base.replaceHolyNames ? 'שם הוי"ה ככתבו' : 'שם הוי"ה כיקוק',
-          icon: OtzariaIcons.alef_lock_24_regular,
+          icon: OtzariaIcons.alef_lock_24_filled,
           profile: base.copyWith(
             holyName: base.replaceHolyNames
                 ? HolyNameDisplay.asIs
@@ -88,7 +88,7 @@ AppContextMenuEntry buildCopyAsMenuEntry({
   final hasSelection = selectedText != null && selectedText.trim().isNotEmpty;
   return AppContextMenuEntry(
     label: 'העתק כ...',
-    icon: OtzariaIcons.alef_copy_24_regular,
+    icon: OtzariaIcons.alef_copy_24_filled,
     enabled: hasSelection,
     children: buildCopyAsMenuEntries(
       base: base,
