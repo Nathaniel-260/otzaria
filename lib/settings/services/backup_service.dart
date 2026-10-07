@@ -434,7 +434,7 @@ class BackupService {
 
         result.add({
           'bookId': bookInfo.bookId,
-          'notes': notes.map((note) => _noteToBackupJson(note)).toList(),
+          'notes': notes.map((note) => note.toJson()).toList(),
         });
       } catch (e) {
         _logger.warning(
@@ -444,28 +444,6 @@ class BackupService {
     }
 
     return result;
-  }
-
-  /// Convert PersonalNote to backup JSON format
-  static Map<String, dynamic> _noteToBackupJson(PersonalNote note) {
-    return {
-      'id': note.id,
-      'bookId': note.bookId,
-      'lineNumber': note.lineNumber,
-      'displayTitle': note.displayTitle,
-      'anchorText': note.anchorText,
-      'anchorPrefix': note.anchorPrefix,
-      'anchorSuffix': note.anchorSuffix,
-      'anchorStart': note.anchorStart,
-      'anchorEnd': note.anchorEnd,
-      'lastKnownLineNumber': note.lastKnownLineNumber,
-      'status': note.status.name,
-      'content': note.content,
-      'contentPlain': note.contentPlain,
-      'contentFormat': note.contentFormat.name,
-      'createdAt': note.createdAt.toIso8601String(),
-      'updatedAt': note.updatedAt.toIso8601String(),
-    };
   }
 
   // [EDITING DISABLED]
@@ -1173,7 +1151,7 @@ class BackupService {
           for (final noteData in notesList) {
             try {
               final json = noteData as Map<String, dynamic>;
-              var note = _noteFromBackupJson(json);
+              var note = PersonalNote.fromJson(json);
               if (!json.containsKey(_noteAnchorKey)) {
                 note = await _restoreNoteAnchoredAsBefore(database, note);
                 if (!note.isWordAnchored) anchorlessNotes++;
@@ -1228,32 +1206,6 @@ class BackupService {
       _logger.warning('Failed to preserve anchor for note ${note.id}: $e');
       return note;
     }
-  }
-
-  /// Convert backup JSON to PersonalNote
-  static PersonalNote _noteFromBackupJson(Map<String, dynamic> json) {
-    return PersonalNote(
-      id: json['id'] as String,
-      bookId: json['bookId'] as String,
-      lineNumber: json['lineNumber'] as int?,
-      displayTitle: json['displayTitle'] as String?,
-      anchorText: json['anchorText'] as String?,
-      anchorPrefix: json['anchorPrefix'] as String?,
-      anchorSuffix: json['anchorSuffix'] as String?,
-      anchorStart: json['anchorStart'] as int?,
-      anchorEnd: json['anchorEnd'] as int?,
-      lastKnownLineNumber: json['lastKnownLineNumber'] as int?,
-      status: PersonalNoteStatus.values.byName(json['status'] as String),
-      content: json['content'] as String,
-      contentPlain:
-          (json['contentPlain'] as String?) ?? (json['content'] as String),
-      contentFormat: PersonalNoteContentFormat.values.byName(
-        json['contentFormat'] as String? ??
-            PersonalNoteContentFormat.plain.name,
-      ),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      updatedAt: DateTime.parse(json['updatedAt'] as String),
-    );
   }
 
   // [EDITING DISABLED]
