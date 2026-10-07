@@ -95,6 +95,14 @@ void main() {
         same(active),
       );
     });
+
+    test('לחיצה על ציון אינה משנה את סדר המפרשים (issue #2015)', () {
+      const active = ['שפתי כהן', 'טורי זהב', 'באר היטב'];
+      expect(
+        activatePreviewCommentator(activeCommentators: active, link: link),
+        same(active),
+      );
+    });
   });
 
   group('shouldHandleCommentaryScrollTarget', () {
