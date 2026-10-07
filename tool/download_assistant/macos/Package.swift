@@ -7,6 +7,7 @@ let package = Package(
     platforms: [.macOS(.v12)],
     products: [
         .executable(name: "DownloadAssistant", targets: ["DownloadAssistant"]),
+        .executable(name: "AssistantSnapshots", targets: ["AssistantSnapshots"]),
     ],
     targets: [
         // כל הלוגיקה, בלי ממשק — כך היא נבדקת ב-XCTest בלי חלון.
@@ -19,6 +20,11 @@ let package = Package(
         .executableTarget(
             name: "DownloadAssistant",
             dependencies: ["AssistantUI"]
+        ),
+        // מצלם כל מסך ל-PNG, בעברית ובאנגלית (.github/workflows/macos-assistant-screenshots.yml).
+        .executableTarget(
+            name: "AssistantSnapshots",
+            dependencies: ["AssistantUI", "AssistantCore"]
         ),
         .testTarget(
             name: "AssistantCoreTests",
