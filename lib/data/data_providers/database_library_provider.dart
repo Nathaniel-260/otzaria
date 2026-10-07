@@ -4611,23 +4611,39 @@ class DatabaseLibraryProvider implements LibraryProvider {
     if (link.path2.isEmpty) return 'שגיאה: נתיב ריק';
     if (link.index2 <= 0) return 'שגיאה: אינדקס לא תקין';
 
-    final targetTitle = link.path2.contains('/')
-        ? _bookTitleFromLinkPath(link.path2)
-        : link.path2;
+    final normalizedTitle = _bookTitleFromLinkPath(link.path2);
+    // כותרת ללא תיקייה עשויה להסתיים בסיומת אמיתית; נסה אותה לפני שם הקובץ.
+    final targetTitles = [
+      if (!link.path2.contains('/') && link.path2 != normalizedTitle)
+        link.path2,
+      normalizedTitle,
+    ];
 
     final repository = _sqliteProvider.repository;
     if (repository == null) return 'שגיאה: מאגר לא מאותחל';
 
-    final fromWorker = await _officialLinkContentOnWorker(link, targetTitle);
-    if (fromWorker != null) return fromWorker;
+    for (final title in targetTitles) {
+      final fromWorker = await _officialLinkContentOnWorker(link, title);
+      if (fromWorker != null) return fromWorker;
+    }
 
     try {
-      final resolvedBook = await BookDatabaseResolver.resolveBook(
-        title: targetTitle,
-        categoryId: link.targetCategoryId,
-        fileType: link.targetFileType,
-        preferSource: link.targetSource,
-      );
+      ResolvedDbBookRecord? resolvedBook;
+      findBook:
+      for (final candidate
+          in await BookDatabaseResolver.loadRepositoryCandidates(
+            preferSource: link.targetSource,
+          )) {
+        for (final title in targetTitles) {
+          resolvedBook = await BookDatabaseResolver.resolveBookInCandidates(
+            title: title,
+            candidates: [candidate],
+            categoryId: link.targetCategoryId,
+            fileType: link.targetFileType,
+          );
+          if (resolvedBook != null) break findBook;
+        }
+      }
       if (resolvedBook == null) return 'שגיאה: הספר לא נמצא במסד הנתונים';
 
       // ספר file-backed (תיקייה שנוספה בלי "הוסף למסד הנתונים") — אין שורות
@@ -4642,9 +4658,8 @@ class DatabaseLibraryProvider implements LibraryProvider {
           (dbBookFormat?.isTextual ?? false)) {
         final file = File(dbBook.filePath!);
         if (!await file.exists()) return 'שגיאה: הקובץ לא נמצא';
-        // הווריאנט המלא ולא חסר-התמונות: זה שהקורא מקבל ממילא, ולכן הוא כבר
-        // במטמון. וריאנט נפרד היה מכפיל את טקסט הספר ב-`cache.db` ומציג
-        // בתצוגת המפרש תג תמונה ריק במקום התמונה.
+        // הווריאנט המלא כבר במטמון הקורא; וריאנט נפרד מכפיל את הטקסט
+        // ב-cache.db ומחליף את תמונת המפרש בתג תמונה ריק.
         final text =
             await readFileBackedBookText(file, dbBook.fileType, dbBook.title) ??
             '';
