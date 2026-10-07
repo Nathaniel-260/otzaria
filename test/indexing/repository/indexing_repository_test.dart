@@ -2904,6 +2904,73 @@ void main() {
         'id:5',
       );
     });
+
+    test('ספר עם id או מזהה חיצוני אינו בונה את נתיב הקטגוריה', () {
+      final category = _PathCountingCategory();
+      final books = [
+        TextBook(id: 5, title: 'שבת', category: category),
+        TextBook(
+          id: 5,
+          title: 'שבת',
+          category: category,
+          source: BookSource.user,
+        ),
+        TextBook(
+          id: 5,
+          title: 'שבת',
+          category: category,
+          source: BookSource.attached('lib'),
+        ),
+        PdfBook(
+          title: 'שבת',
+          path: r'C:\books\a.pdf',
+          category: category,
+          externalLibraryId: 'oh:9',
+        ),
+      ];
+
+      for (final book in books) {
+        IndexingRepository.catalogueOrderKey(book);
+      }
+
+      // המפתח נבנה לכל ספר בכל מעבר על הספרייה (אינדוקס, חיפוש, הפעלה).
+      expect(category.pathReads, 0);
+    });
+
+    test('המפתח זהה למפתח שנבנה מכל הרכיבים', () {
+      final category = _PathCountingCategory();
+      final books = <Book>[
+        TextBook(id: 5, title: 'שבת', category: category),
+        TextBook(
+          id: 7,
+          title: 'א',
+          source: BookSource.user,
+          category: category,
+        ),
+        TextBook(id: 3, title: 'ב', source: BookSource.attached('lib')),
+        TextBook(title: 'ג', externalLibraryId: 'oh:1', category: category),
+        TextBook(title: 'ד', externalLibraryId: '', category: category),
+        TextBook(title: 'ה', categoryPath: 'תנ"ך, תורה', fileType: null),
+        PdfBook(title: 'ו', path: r'C:\b\x.pdf', category: category),
+        PdfBook(title: 'ז', path: '/b/y.pdf', externalLibraryId: 'hb:2'),
+      ];
+
+      for (final book in books) {
+        expect(
+          IndexingRepository.catalogueOrderKey(book),
+          IndexingRepository.catalogueOrderKeyFromParts(
+            title: book.title,
+            externalLibraryId: book.externalLibraryId,
+            bookId: book.id,
+            source: book.source,
+            categoryKey: book.category?.path ?? book.categoryPath,
+            fileTypeKey: book.fileType ?? book.runtimeType.toString(),
+            pathKey: book is FileBook ? book.path : book.filePath,
+          ),
+          reason: book.title,
+        );
+      }
+    });
   });
 
   group('IndexingRepository.buildIndexedBookFilePath', () {
@@ -3669,4 +3736,25 @@ Library _buildLibrary({
   library.books.addAll(additionalBooks);
 
   return library;
+}
+
+class _PathCountingCategory extends Category {
+  _PathCountingCategory()
+    : super(
+        title: 'תורה',
+        description: '',
+        shortDescription: '',
+        order: 0,
+        subCategories: [],
+        books: [],
+        parent: null,
+      );
+
+  int pathReads = 0;
+
+  @override
+  String get path {
+    pathReads++;
+    return super.path;
+  }
 }
