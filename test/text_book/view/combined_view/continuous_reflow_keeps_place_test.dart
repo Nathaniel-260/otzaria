@@ -17,6 +17,8 @@ import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/view/combined_view/combined_book_screen.dart';
+import 'package:otzaria/text_book/view/widgets/continuous_reading_paragraph.dart';
+import 'package:otzaria/theme/app_colors.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../../test_helpers/memory_cache_provider.dart';
 
@@ -556,6 +558,23 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tab.index, placeBeforeWarming);
+  });
+
+  testWidgets('קישור עם mark מדגיש את השורה בתוך פסקה רציפה (issue #2057)', (
+    tester,
+  ) async {
+    final state = _state(
+      _window(0, _content.length - 1),
+    ).copyWith(permanentHighlightLine: _targetLine);
+    await _mount(tester, state, _targetLine);
+
+    final line = tester
+        .widgetList<ContinuousReadingParagraph>(
+          find.byType(ContinuousReadingParagraph),
+        )
+        .expand((paragraph) => paragraph.lines)
+        .singleWhere((line) => line.lineIndex == _targetLine);
+    expect(line.style.backgroundColor, AppColors.permanentHighlight);
   });
 }
 

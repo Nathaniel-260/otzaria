@@ -3172,7 +3172,12 @@ class _CombinedViewState extends State<CombinedView> {
       if (lineIndex < 0 || lineIndex >= widget.data.length) {
         continue;
       }
-      final backgroundColor = state.highlightedLine == lineIndex
+      // כמו ב-tile: ?mark בלי טקסט מדגיש את כל השורה.
+      final backgroundColor =
+          state.permanentHighlightLine == lineIndex &&
+              state.highlightText.isEmpty
+          ? AppColors.permanentHighlight
+          : state.highlightedLine == lineIndex
           ? colorScheme.secondaryContainer.withValues(alpha: 0.4)
           : state.selectedIndices.contains(lineIndex)
           ? AppSurfaces.paragraphSelectionBackground(colorScheme)
