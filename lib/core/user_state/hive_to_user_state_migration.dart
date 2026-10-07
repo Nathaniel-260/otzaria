@@ -63,10 +63,11 @@ class HiveToUserStateMigration {
   Future<int> run() async {
     await _database.database;
     var migrated = 0;
+    // הכרטיסיות לפני השולחנות: שורת סשן קיימת (מהשולחן הפעיל) מדלגת עליהן.
+    if (await _migrateBox(tabsBox, _migrateTabsBox)) migrated++;
     for (final box in listBoxes) {
       if (await _migrateBox(box, _migrateListBox)) migrated++;
     }
-    if (await _migrateBox(tabsBox, _migrateTabsBox)) migrated++;
     for (final box in reportBoxes) {
       if (await _migrateBox(box, _migrateReportBox)) migrated++;
     }
