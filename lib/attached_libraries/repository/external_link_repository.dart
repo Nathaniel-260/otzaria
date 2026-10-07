@@ -596,8 +596,9 @@ class ExternalLinkRepository {
     buildEconomy.value = on;
   }
 
-  /// בונה מחדש את אינדקס הקישורים של [slug] — לניסיון חוזר אחרי בנייה שנקטעה.
-  /// רץ באותה שרשרת של [sync], כך שמחיקת ה-meta אינה מקדימה סנכרון שכותב.
+  /// בונה מחדש את אינדקס הקישורים של [slug] מאפס. רץ באותה שרשרת של [sync],
+  /// כך שמחיקת ה-meta אינה מקדימה סנכרון שכותב. הממשק משתמש ב-[requestRebuild].
+  @visibleForTesting
   Future<void> rebuild(String slug) => _enqueue(() async {
     await _inIsolate(_forgetIndexMeta, (await _cacheDbPath(), slug));
     await _sync();
@@ -606,20 +607,28 @@ class ExternalLinkRepository {
   /// ממשיך בנייה שנקטעה ([cancelBuild], קריסה) מהנקודה השמורה: שורות האינדקס
   /// שכבר נכתבו נשמרות. תקף רק לאותו קובץ ואותם מסדי יעד, אחרת המסד נבנה מאפס.
   /// המשך אוטומטי בהפעלה מתבצע ב-`sync(autoResume: true)`.
-  void requestResume(String slug) => unawaited(
-    _enqueue(() => _sync(resumeSlug: slug)).then<void>(
-      (_) {},
-      onError: (Object e) => debugPrint('[ExternalLinks] resume failed: $e'),
-    ),
-  );
+  void requestResume(String slug) =>
+      _request(slug, () => _enqueue(() => _sync(resumeSlug: slug)));
 
-  /// [rebuild] מהממשק (מאפס — מוחק את הסימון והשורות): כשל נרשם ואינו הופך לשגיאה אסינכרונית לא נתפסת.
-  void requestRebuild(String slug) => unawaited(
-    rebuild(slug).then<void>(
-      (_) {},
-      onError: (Object e) => debugPrint('[ExternalLinks] rebuild failed: $e'),
-    ),
-  );
+  /// בנייה מאפס מהממשק: מוחק את הסימון והשורות של [slug].
+  void requestRebuild(String slug) => _request(slug, () => rebuild(slug));
+
+  final Set<String> _requestedSlugs = {};
+
+  /// בקשת משתמש לגבי [slug] שכבר מתבצעת (לחיצה כפולה) אינה מתחילה שוב. כשל
+  /// נרשם ואינו הופך לשגיאה אסינכרונית לא נתפסת.
+  void _request(String slug, Future<Object?> Function() task) {
+    if (!_requestedSlugs.add(slug)) return;
+    unawaited(
+      task()
+          .then<void>(
+            (_) {},
+            onError: (Object e) =>
+                debugPrint('[ExternalLinks] request "$slug" failed: $e'),
+          )
+          .whenComplete(() => _requestedSlugs.remove(slug)),
+    );
+  }
 
   /// תקרת השורות למסד אחד בבניית האינדקס — עוברת ל-isolate כארגומנט.
   @visibleForTesting
@@ -1002,13 +1011,24 @@ bool _isCurrentOrMarked(
         _buildingState(previous.$2, signature) != null ||
         previous.$2 == _tooLargeMarker(signature));
 
-/// מספר שורות `external_link` במסד המקור — היעד של דיווח ההתקדמות.
-int _countExternalLinks(ReadOnlyDbTarget source) {
+/// מספר שורות `external_link` במסד המקור — היעד של דיווח ההתקדמות — ומספר
+/// השורות שמתחת ל-[resumeFrom], שכבר נסרקו בבנייה שנקטעה.
+({int total, int before}) _countExternalLinks(
+  ReadOnlyDbTarget source,
+  (int, int)? resumeFrom,
+) {
   final db = openReadOnlyTarget(source);
   try {
-    if (!DbCapabilities.probe(db).hasExternalLinks) return 0;
-    return db.select('SELECT COUNT(*) AS c FROM external_link').first['c']
-        as int;
+    if (!DbCapabilities.probe(db).hasExternalLinks) {
+      return (total: 0, before: 0);
+    }
+    final row = db.select(
+      'SELECT COUNT(*) AS total, '
+      '${resumeFrom == null ? '0' : 'COALESCE(SUM((sourceBookId, sourceLineIndex) < (?, ?)), 0)'} '
+      'AS before FROM external_link',
+      [?resumeFrom?.$1, ?resumeFrom?.$2],
+    ).first;
+    return (total: row['total'] as int, before: row['before'] as int);
   } finally {
     db.close();
   }
@@ -1183,6 +1203,7 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
         }
       });
       var written = 0;
+      var scanned = 0;
       var total = 0;
       (int, int)? resumeFrom;
       if (resuming) {
@@ -1215,7 +1236,7 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
         final now = clock.elapsedMilliseconds;
         if (!force && now - lastReportMs < progressIntervalMs) return;
         lastReportMs = now;
-        progress.send((job.slug, force ? total : written, total));
+        progress.send((job.slug, force ? total : scanned, total));
       }
 
       final batch = <ResolvedExternalLink>[];
@@ -1230,7 +1251,9 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
       }
 
       try {
-        total = _countExternalLinks(job.source);
+        final counts = _countExternalLinks(job.source, resumeFrom);
+        total = counts.total;
+        scanned = counts.before;
         report();
         readResolvedExternalLinks(
           source: job.source,
@@ -1238,6 +1261,7 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
           targets: jobTargets,
           maxRows: maxRows - written,
           resumeFrom: resumeFrom,
+          onScanned: () => scanned++,
           onRow: (row) {
             batch.add(row);
             if (batch.length >= currentBatchSize()) flush();
@@ -1263,9 +1287,12 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
           writeMeta(job.slug, job.fingerprint, _tooLargeMarker(signature));
         });
         continue;
-      } catch (_) {
+      } catch (e) {
         // כשל בהמשך משאיר את ההתקדמות השמורה ואת הסימון כמות שהם.
-        if (resuming && resumeFrom != null) continue;
+        if (resuming && resumeFrom != null) {
+          debugPrint('[ExternalLinks] resume of "${job.slug}" failed: $e');
+          continue;
+        }
         // מסד שלא נקרא כעת — ננסה בסנכרון הבא, מאפס.
         _transaction(db, () => clear(job.slug));
         continue;

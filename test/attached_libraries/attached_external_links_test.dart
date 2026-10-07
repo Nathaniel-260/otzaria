@@ -813,6 +813,28 @@ void main() {
       expect(indexRows(library.slug), 5);
     });
 
+    /// בונה את [slug] מחדש ועוצר אותו אחרי המנה הראשונה.
+    Future<void> rebuildAndCancel(String slug) async {
+      void cancelOnStart() {
+        if (links.buildingSlugs.value.isNotEmpty) links.cancelBuild();
+      }
+
+      links.buildingSlugs.addListener(cancelOnStart);
+      await links.rebuild(slug);
+      links.buildingSlugs.removeListener(cancelOnStart);
+    }
+
+    /// ממתין לתנאי (בדיקה כל 10ms), בלי להסתמך על משכי זמן קבועים.
+    Future<void> waitFor(bool Function() condition) async {
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      while (!condition()) {
+        if (DateTime.now().isAfter(deadline)) fail('התנאי לא התקיים בזמן');
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
+    }
+
+    int doneOf(String slug) => links.buildProgress.value[slug]?.done ?? -1;
+
     test('השהיה עוצרת את ההתקדמות, והמשך ממשיך', () async {
       slowBuild();
       final library = await attach(attachedDb('ext', rows: fiveRows()));
@@ -822,12 +844,13 @@ void main() {
       var finished = false;
       final done = links.sync().whenComplete(() => finished = true);
 
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+      // המנה הראשונה נכתבה והבנייה ממתינה בהשהיה.
+      await waitFor(() => doneOf(library.slug) >= 1);
       expect(links.buildPaused.value, isTrue);
-      final frozen = links.buildProgress.value[library.slug]!.done;
-      await Future<void>.delayed(const Duration(milliseconds: 300));
-      expect(links.buildProgress.value[library.slug]!.done, frozen);
+      final frozen = doneOf(library.slug);
       expect(frozen, lessThan(5));
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+      expect(doneOf(library.slug), frozen);
       expect(finished, isFalse);
 
       links.resumeBuild();
@@ -835,6 +858,102 @@ void main() {
       expect(indexRows(library.slug), 5);
       expect(links.buildPaused.value, isFalse);
       expect(links.buildProgress.value, isEmpty);
+    });
+
+    test('עצירה בזמן השהיה מסיימת את הסנכרון ושומרת התקדמות', () async {
+      slowBuild();
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      links.buildingSlugs.addListener(() {
+        if (links.buildingSlugs.value.isNotEmpty) links.pauseBuild();
+      });
+      final done = links.sync();
+      await waitFor(() => doneOf(library.slug) >= 1);
+
+      links.cancelBuild();
+      expect(await done, isEmpty);
+      expect(links.incompleteSlugs.value, {library.slug});
+      expect(metaSignature(library.slug), contains('stop'));
+      expect(links.buildPaused.value, isFalse);
+      expect(links.buildProgress.value, isEmpty);
+    });
+
+    test('requestRebuild כפול ללחיצה כפולה מתבצע פעם אחת', () async {
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      await links.sync();
+      var builds = 0;
+      links.buildingSlugs.addListener(() {
+        if (links.buildingSlugs.value.isNotEmpty) builds++;
+      });
+
+      links.requestRebuild(library.slug);
+      links.requestRebuild(library.slug);
+      await links.sync();
+      await waitFor(() => !links.buildingSlugs.value.contains(library.slug));
+      expect(builds, 1);
+      expect(indexRows(library.slug), 5);
+
+      // אחרי שהסתיימה, בקשה חדשה מתקבלת.
+      links.requestRebuild(library.slug);
+      await links.sync();
+      await waitFor(() => builds == 2);
+    });
+
+    test(
+      'ההתקדמות מונוטונית ומגיעה ל-total גם עם שורות לא פתורות והמשך',
+      () async {
+        final library = await attach(
+          attachedDb(
+            'ext',
+            rows: [
+              _row(0, targetLineIndex: 1),
+              _row(1, targetTitle: 'אין כזה', targetLineIndex: 1),
+              _row(2, targetLineIndex: 1),
+              _row(3, targetTitle: 'אין כזה', targetLineIndex: 1),
+              _row(4, targetLineIndex: 1),
+            ],
+          ),
+        );
+        await links.sync();
+        // כל ריצה (הבנייה שנקטעה וההמשך) ברשימה משלה.
+        final runs = <List<int>>[];
+        var total = 0;
+        links.buildProgress.addListener(() {
+          final progress = links.buildProgress.value[library.slug];
+          if (progress == null) return;
+          if (progress.total == 0) runs.add([]);
+          runs.last.add(progress.done);
+          if (progress.total > 0) total = progress.total;
+        });
+
+        slowBuild(batchSize: 2);
+        await rebuildAndCancel(library.slug);
+        links.requestResume(library.slug);
+        await links.sync();
+        await waitFor(() => links.buildProgress.value.isEmpty);
+
+        expect(total, 5);
+        expect(runs, hasLength(2));
+        for (final run in runs) {
+          expect(run, orderedEquals([...run]..sort()));
+        }
+        expect(runs.last.last, 5);
+        expect(indexRows(library.slug), 3);
+      },
+    );
+
+    test('שינוי הקובץ בין העצירה להמשך — בנייה מאפס', () async {
+      final path = attachedDb('ext', rows: fiveRows());
+      final library = await attach(path);
+      await links.sync();
+      slowBuild(batchSize: 2);
+      await rebuildAndCancel(library.slug);
+      touch(path);
+      await attached.rescan();
+
+      links.requestResume(library.slug);
+      expect(await links.sync(), isEmpty);
+      await waitFor(() => indexRows(library.slug) == 5);
+      expect(links.incompleteSlugs.value, isEmpty);
     });
 
     /// שורה 0 עם שני קישורים ושורה 1 עם ארבעה: מנה של שלושה נחתכת באמצע
@@ -863,17 +982,6 @@ void main() {
       } finally {
         db.close();
       }
-    }
-
-    /// בונה את [slug] מחדש ועוצר אותו אחרי המנה הראשונה.
-    Future<void> rebuildAndCancel(String slug) async {
-      void cancelOnStart() {
-        if (links.buildingSlugs.value.isNotEmpty) links.cancelBuild();
-      }
-
-      links.buildingSlugs.addListener(cancelOnStart);
-      await links.rebuild(slug);
-      links.buildingSlugs.removeListener(cancelOnStart);
     }
 
     /// ההתקדמות הראשונה (done) שדווחה אחרי ספירת השורות במהלך [action].

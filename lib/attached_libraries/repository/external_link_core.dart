@@ -297,6 +297,7 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
   (int, int)? resumeFrom,
   int maxRows = kMaxExternalLinkRows,
   void Function(ResolvedExternalLink row)? onRow,
+  void Function()? onScanned,
 }) {
   final db = openReadOnlyTarget(source);
   final resolver = ExternalTargetResolver(
@@ -346,6 +347,7 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
         if (++count > maxRows) {
           throw const ExternalLinksTooLargeException();
         }
+        onScanned?.call();
         final resolved = _resolveRow(cursor.current, resolver);
         if (resolved == null) continue;
         onRow != null ? onRow(resolved) : result.add(resolved);
