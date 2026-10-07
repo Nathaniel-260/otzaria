@@ -93,10 +93,10 @@ String? captureSelectedTextForMenu(ValueListenable<String?> saved) =>
 void pruneCommentaryExpansionStates(
   Map<String, bool> states,
   List<Link> links,
-) => states.removeWhere(
-  (key, value) =>
-      !links.any((link) => key == utils.getTitleFromPath(link.path2)),
-);
+) {
+  final titles = {for (final l in links) utils.getTitleFromPath(l.path2)};
+  states.removeWhere((key, value) => !titles.contains(key));
+}
 
 /// מפתחות צ׳יפי סוגי המפרשים שקיימים בפועל בקישורי הקטע, בסדר
 /// [LinkTypes.commentaryFilterTypes]. סוג בלי קישורים אינו מקבל צ׳יפ.
