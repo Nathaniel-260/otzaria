@@ -25,6 +25,7 @@ import 'package:otzaria/settings/settings_exports.dart' hide UpdateFontSize;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
+import 'package:otzaria/utils/navigation/open_book.dart';
 import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/widgets/dialogs/password_dialog.dart';
 import 'package:otzaria/pdf_book/view/pdf_book_screen.dart'
@@ -596,7 +597,8 @@ class _BookPreviewPanelState extends State<BookPreviewPanel> {
                         key: ObjectKey(_currentTextTab),
                         data: state.content,
                         textSize: _fontSize,
-                        openBookCallback: (tab) {},
+                        openBookCallback: (tab) =>
+                            openPreparedTab(context, tab),
                         openLeftPaneTab: (index, {String? searchText}) {},
                         showCommentaryAsExpansionTiles: false,
                         tab: _currentTextTab!,
