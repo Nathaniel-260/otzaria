@@ -463,7 +463,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static const _dbFileSuffixes = ['', '-shm', '-wal', '-journal'];
 
   /// עדכון ספרייה קיימת עם גיבוי בטוח: ה-DB הישן מגובה לתיקייה זמנית, נמחק
-  /// לצמיתות רק בהצלחה ומשוחזר בכישלון. הורדה מחדש או העתקת seforim.db מתיקייה.
+  /// לצמיתות רק בהצלחה ומשוחזר בכישלון, וביניהם הספרייה מורדת מחדש.
   Future<void> _onUpdateLibraryRequested(
     UpdateLibraryRequested event,
     Emitter<EmptyLibraryState> emit,
@@ -478,20 +478,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       writeSessionStarted = true;
       await _accessGate.verifyReleased(_dbPathIn(event.existingLibraryPath));
       backupDir = await _backupDatabaseFiles(event.existingLibraryPath);
-      if (event.isDownload) {
-        await _downloadLibrary(target, emit);
-      } else {
-        emit(
-          EmptyLibraryExtracting(
-            selectedPath: target,
-            progress: 0.0,
-            message: 'מעתיק את קובץ הספרייה החדש...',
-          ),
-        );
-        await Directory(target).create(recursive: true);
-        await _copyDatabaseFiles(event.sourceFolder!, target);
-        await _handleDirectorySelection(target, emit);
-      }
+      await _downloadLibrary(target, emit);
       // הצלחה = state סופי DirectorySelected; אחרת (כשל שקט) משחזרים.
       if (state is EmptyLibraryDirectorySelected) {
         if (backupDir != null) await _discardBackupDir(backupDir);
@@ -771,33 +758,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   static Future<void> _discardBackupDir(String backupDir) async {
     final d = Directory(backupDir);
     if (await d.exists()) await d.delete(recursive: true);
-  }
-
-  /// מעתיק את seforim.db (ולוואיו) מתיקיית המקור אל היעד (דורס אם קיים).
-  Future<void> _copyDatabaseFiles(String sourceDir, String targetDir) async {
-    final sourceDb = File(
-      path.join(sourceDir, DatabaseConstants.databaseFileName),
-    );
-    if (!await sourceDb.exists()) {
-      throw Exception(
-        'לא נמצא ${DatabaseConstants.databaseFileName} בתיקייה שנבחרה',
-      );
-    }
-    // ה-DB הראשי נכתב אטומית תחילה (ההעברה מוחקת גם לוואים ישנים), והלוואים
-    // מועתקים אחריו.
-    await _writeDbAtomically(
-      path.join(targetDir, DatabaseConstants.databaseFileName),
-      (tempPath) => sourceDb.copy(tempPath),
-    );
-    for (final suffix in _dbFileSuffixes.where((s) => s.isNotEmpty)) {
-      final name = '${DatabaseConstants.databaseFileName}$suffix';
-      final src = File(path.join(sourceDir, name));
-      if (await src.exists()) {
-        final dest = File(path.join(targetDir, name));
-        if (await dest.exists()) await dest.delete();
-        await src.copy(dest.path);
-      }
-    }
   }
 
   /// [imported] — הרכיבים שהייבוא התקין; אז המצב הסופי נושא דוח רכיבים.

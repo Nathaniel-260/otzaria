@@ -28,30 +28,19 @@ class DownloadLibraryRequested extends EmptyLibraryEvent {
   List<Object?> get props => [targetPath];
 }
 
-/// עדכון ספרייה קיימת (מההגדרות) עם גיבוי בטוח של ה-DB הישן.
-/// ה-DB הישן ב-[existingLibraryPath] מגובה, ונמחק לצמיתות רק בהצלחה (ומשוחזר
-/// בכישלון). [isDownload] → הורדה מחדש; אחרת [sourceFolder] הוא תיקייה עם
-/// seforim.db.
+/// עדכון ספרייה קיימת (מההגדרות) בהורדה מחדש, עם גיבוי בטוח של ה-DB הישן
+/// ב-[existingLibraryPath]: נמחק לצמיתות רק בהצלחה, ומשוחזר בכישלון.
 class UpdateLibraryRequested extends EmptyLibraryEvent {
-  final bool isDownload;
-  final String? sourceFolder;
   final String targetPath;
   final String existingLibraryPath;
 
   UpdateLibraryRequested({
-    required this.isDownload,
-    this.sourceFolder,
     required this.targetPath,
     required this.existingLibraryPath,
   });
 
   @override
-  List<Object?> get props => [
-    isDownload,
-    sourceFolder,
-    targetPath,
-    existingLibraryPath,
-  ];
+  List<Object?> get props => [targetPath, existingLibraryPath];
 }
 
 /// ייבוא נכסי הספרייה הגולמיים שזוהו בתיקייה (seforim.db, קטלוג, מילון,

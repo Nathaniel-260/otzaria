@@ -14,6 +14,8 @@ import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/search/magic_dictionary_downloader.dart';
 import 'package:path/path.dart' as path;
 
+import 'library_release_test_support.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -1882,23 +1884,17 @@ void main() {
     );
 
     test(
-      'UpdateLibraryRequested (ייבוא) מעתיק DB חדש ומוחק את הגיבוי בהצלחה',
+      'UpdateLibraryRequested מוריד DB חדש ומוחק את הגיבוי בהצלחה',
       () async {
         final libDir = await Directory.systemTemp.createTemp(
           'otzaria-update-lib-',
         );
-        final srcDir = await Directory.systemTemp.createTemp(
-          'otzaria-update-src-',
-        );
         addTearDown(() async {
-          for (final d in [libDir, srcDir]) {
-            if (await d.exists()) await d.delete(recursive: true);
-          }
+          if (await libDir.exists()) await libDir.delete(recursive: true);
         });
 
         final dbName = DatabaseConstants.databaseFileName;
         await File(path.join(libDir.path, dbName)).writeAsString('old-db');
-        await File(path.join(srcDir.path, dbName)).writeAsString('new-db');
 
         await Settings.init(cacheProvider: _MemoryCacheProvider());
         await Settings.setValue<String>(
@@ -1906,7 +1902,7 @@ void main() {
           libDir.path,
         );
 
-        final bloc = EmptyLibraryBloc();
+        final bloc = _updateBloc(() => 'new-db');
         addTearDown(bloc.close);
 
         final selectedFuture = bloc.stream
@@ -1916,8 +1912,6 @@ void main() {
 
         bloc.add(
           UpdateLibraryRequested(
-            isDownload: false,
-            sourceFolder: srcDir.path,
             targetPath: libDir.path,
             existingLibraryPath: libDir.path,
           ),
@@ -2289,23 +2283,19 @@ void main() {
           final libDir = await Directory.systemTemp.createTemp(
             'otzaria-orphan-',
           );
-          final srcDir = await Directory.systemTemp.createTemp(
-            'otzaria-orphan-src-',
-          );
           addTearDown(() async {
-            for (final d in [libDir, srcDir]) {
-              if (await d.exists()) await d.delete(recursive: true);
-            }
+            if (await libDir.exists()) await libDir.delete(recursive: true);
           });
           // הריצה הקודמת נהרגה אחרי ההזזה: הספרייה ריקה, ה-DB בגיבוי.
           await createOrphan('old-db');
-          // srcDir ריק — ההעתקה תיכשל והגיבוי (שהוא ה-DB היתום) חייב לחזור.
+          // ההורדה תיכשל, והגיבוי (שהוא ה-DB היתום) חייב לחזור.
+          String? served;
           await Settings.init(cacheProvider: _MemoryCacheProvider());
           await Settings.setValue<String>(
             SettingsRepository.keyLibraryPath,
             libDir.path,
           );
-          final bloc = EmptyLibraryBloc();
+          final bloc = _updateBloc(() => served);
           addTearDown(bloc.close);
           final errorFuture = bloc.stream
               .where((s) => s is EmptyLibraryError)
@@ -2313,8 +2303,6 @@ void main() {
 
           bloc.add(
             UpdateLibraryRequested(
-              isDownload: false,
-              sourceFolder: srcDir.path,
               targetPath: libDir.path,
               existingLibraryPath: libDir.path,
             ),
@@ -2330,14 +2318,12 @@ void main() {
           // ריצה שנייה שנהרגה שוב (יתום לצד DB תקין) ואחריה עדכון מוצלח —
           // לא נשארת אף תיקיית גיבוי, לא ישנה ולא חדשה.
           await createOrphan('stale-db');
-          await File(path.join(srcDir.path, dbName)).writeAsString('new-db');
+          served = 'new-db';
           final selectedFuture = bloc.stream
               .where((s) => s is EmptyLibraryDirectorySelected)
               .first;
           bloc.add(
             UpdateLibraryRequested(
-              isDownload: false,
-              sourceFolder: srcDir.path,
               targetPath: libDir.path,
               existingLibraryPath: libDir.path,
             ),
@@ -2354,23 +2340,17 @@ void main() {
     });
 
     test(
-      'UpdateLibraryRequested (ייבוא) משחזר את הגיבוי כשהמקור חסר seforim.db',
+      'UpdateLibraryRequested משחזר את הגיבוי כשההורדה נכשלת',
       () async {
         final libDir = await Directory.systemTemp.createTemp(
           'otzaria-update-lib2-',
         );
-        final srcDir = await Directory.systemTemp.createTemp(
-          'otzaria-update-src2-',
-        );
         addTearDown(() async {
-          for (final d in [libDir, srcDir]) {
-            if (await d.exists()) await d.delete(recursive: true);
-          }
+          if (await libDir.exists()) await libDir.delete(recursive: true);
         });
 
         final dbName = DatabaseConstants.databaseFileName;
         await File(path.join(libDir.path, dbName)).writeAsString('old-db');
-        // srcDir ריק — אין seforim.db, לכן ההעתקה תיכשל.
 
         await Settings.init(cacheProvider: _MemoryCacheProvider());
         await Settings.setValue<String>(
@@ -2378,7 +2358,7 @@ void main() {
           libDir.path,
         );
 
-        final bloc = EmptyLibraryBloc();
+        final bloc = _updateBloc(() => null);
         addTearDown(bloc.close);
 
         final errorFuture = bloc.stream
@@ -2388,8 +2368,6 @@ void main() {
 
         bloc.add(
           UpdateLibraryRequested(
-            isDownload: false,
-            sourceFolder: srcDir.path,
             targetPath: libDir.path,
             existingLibraryPath: libDir.path,
           ),
@@ -2565,6 +2543,13 @@ Future<void> _eventually(bool Function() condition) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
 }
+
+/// bloc לעדכון ספרייה בהורדה; [db] null — ההורדה נכשלת.
+EmptyLibraryBloc _updateBloc(String? Function() db) => EmptyLibraryBloc(
+  httpClient: fakeLibraryReleaseClient(db),
+  extractCompressedDatabase: copyAsExtracted,
+  extractTarArchive: ignoreTarArchive,
+);
 
 final class _IsolatedTempOverrides extends IOOverrides {
   _IsolatedTempOverrides(this.root);

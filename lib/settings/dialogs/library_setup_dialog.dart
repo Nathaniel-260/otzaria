@@ -434,7 +434,6 @@ class _LibrarySetupDialogContentState
     if (_hasLibrary && !_isRelocating) {
       bloc.add(
         UpdateLibraryRequested(
-          isDownload: true,
           targetPath: widget.currentLibraryPath!,
           existingLibraryPath: widget.currentLibraryPath!,
         ),
