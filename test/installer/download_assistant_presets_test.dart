@@ -118,6 +118,9 @@ void main() {
       expect(
         calls,
         [
+          'library,|False',
+          'application,library,dependency,|False',
+          'library-index,|False',
           'application,library,dependency,|False',
           'library,|False',
           'application,|False',
@@ -125,20 +128,28 @@ void main() {
           'application,|False',
         ],
         reason:
-            'הרשימות חייבות להתאים ל-buildPresets — מלאה (ורק עם ספרייה), בסיסית, עדכון',
+            'הרשימות חייבות להתאים ל-buildPresets — מלאה + אינדקס ב-Android, '
+            'מלאה (ורק עם ספרייה), בסיסית, עדכון',
+      );
+      expect(
+        body.replaceAll(RegExp(r'\s+'), ' '),
+        contains(
+          "else if (TargetPlatform = 'android') and (FullPresetBundle() < 0)",
+        ),
+        reason: 'בלי חבילה, "מלאה + אינדקס" רק ב-Android',
       );
       // סדר ההוספה הוא סדר ההערכה של buildPresets: הוא קובע איזו כפולה מושמטת.
       final ids = RegExp(
         r"AddPreset\('([a-z-]+)'",
       ).allMatches(body).map((m) => m.group(1)).toList();
-      expect(ids, ['full-indexed', 'full', 'basic', 'update']);
+      expect(ids, ['full-indexed', 'full-indexed', 'full', 'basic', 'update']);
 
       // נתוני החיפוש החכם בשתי ההצעות המלאות, בכל הענפים.
       expect(
         body,
         contains('Offline := CollectByTypes(OfflineDataTypes, False);'),
       );
-      expect('+ Offline'.allMatches(body), hasLength(3));
+      expect('+ Offline'.allMatches(body), hasLength(4));
       final declared = RegExp(
         r"OfflineDataTypes = '([^']*)';",
       ).firstMatch(_script())!.group(1)!;

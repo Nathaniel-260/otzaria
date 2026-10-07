@@ -37,8 +37,8 @@ const Map<String, int> _singleFiles = {
   'otzaria-macos.zip': 86,
   'otzaria-macos-full.tar.zst': 1853,
   'app-release.apk': 96,
-  'otzaria-android-full.zip': 1925,
   // אינם רכיבים — חייבים להיעדר מהמניפסט.
+  'otzaria-android-full.zip': 1925,
   'Otzaria-Download-Assistant-windows.exe': 5,
   'Otzaria-Download-Assistant-macos.zip': 5,
   'Otzaria-Download-Assistant-linux-x64.tar.gz': 5,

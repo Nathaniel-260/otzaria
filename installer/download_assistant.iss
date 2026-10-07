@@ -1927,11 +1927,18 @@ begin
   SetArrayLength(PresetMembers, 0);
   Offline := CollectByTypes(OfflineDataTypes, False);
 
-  { סדר ההוספה קובע איזו כפולה מושמטת: השם המפורט יותר נשאר. }
+  { סדר ההוספה קובע איזו כפולה מושמטת: השם המפורט יותר נשאר. ב-Android, בלי
+    חבילה — התוכנה עם הספרייה והאינדקס: בטלפון בניית האינדקס איטית מאוד. }
   Bundle := IndexedPresetBundle();
   if Bundle >= 0 then
     AddPreset('full-indexed', CustomMessage('PresetFullIndexed'),
-      CustomMessage('PresetFullIndexedDesc'), WithInstalled(Bundle) + Offline);
+      CustomMessage('PresetFullIndexedDesc'), WithInstalled(Bundle) + Offline)
+  else if (TargetPlatform = 'android') and (FullPresetBundle() < 0) and
+     (CollectByTypes('library,', False) <> '') then
+    AddPreset('full-indexed', CustomMessage('PresetFullIndexed'),
+      CustomMessage('PresetFullIndexedDesc'),
+      CollectByTypes('application,library,dependency,', False) +
+      CollectByTypes('library-index,', False) + Offline);
 
   { מלאה: החבילה הגדולה ביותר עם מה שהיא מתקינה, אחרת התוכנה עם הספרייה —
     ובלי ספרייה אין "מלאה". }

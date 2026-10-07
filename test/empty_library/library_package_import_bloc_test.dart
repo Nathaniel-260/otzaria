@@ -16,6 +16,7 @@ import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
+import 'package:otzaria/empty_library/services/library_package/library_source.dart';
 import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
 import 'package:otzaria/library_update/services/library_access_gate.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
@@ -117,6 +118,7 @@ void main() {
   late _Gate gate;
   late _FailingCache cache;
   late List<(String?, String?)> reopenedLibrary;
+  late Completer<void> reopened;
 
   setUp(() async {
     temp = await Directory.systemTemp.createTemp('otzaria-pkg-bloc-');
@@ -126,6 +128,7 @@ void main() {
     books = p.join(root, 'books');
     indexHostCalls = [];
     reopenedLibrary = [];
+    reopened = Completer<void>();
     await Settings.init(cacheProvider: cache = _FailingCache());
     await Settings.setValue<String>(SettingsRepository.keyLibraryPath, '');
     await Settings.setValue<String>(SettingsRepository.keyIndexPath, '');
@@ -207,6 +210,7 @@ void main() {
             db.existsSync() ? db.readAsStringSync() : null,
             meta.existsSync() ? meta.readAsStringSync() : null,
           ));
+          if (!reopened.isCompleted) reopened.complete();
           if (failReopen) throw StateError('simulated reopen failure');
         },
       ),
@@ -217,7 +221,8 @@ void main() {
     DirectoryPackageFolder(source.path),
   )).packages!;
 
-  /// עדכון במקום מסתיים ב-resumeAll; הגדרה ראשונה — במצב הסופי.
+  /// עדכון במקום מסתיים ב-resumeAll; הגדרה ראשונה — במצב הסופי, ואם האינדקס
+  /// שוחרר גם בפתיחתו מחדש, שבאה אחרי שחזור וניקוי שעושים IO אמיתי.
   Future<void> settle(EmptyLibraryBloc bloc, {bool replacing = false}) async {
     if (replacing) {
       await gate.resumed.future.timeout(const Duration(seconds: 30));
@@ -228,6 +233,9 @@ void main() {
           (s) => s is EmptyLibraryDirectorySelected || s is EmptyLibraryError,
         )
         .timeout(const Duration(seconds: 30));
+    if (indexHostCalls.contains('release')) {
+      await reopened.future.timeout(const Duration(seconds: 30));
+    }
     await pumpEventQueue();
   }
 
@@ -274,6 +282,17 @@ void main() {
       expect(Settings.getValue<String>(SettingsRepository.keyIndexPath), index);
       expect(indexHostCalls, ['release', 'reopen']);
       expect(reopenedLibrary, [('new-db', '{"new":true}')]);
+      final report =
+          (bloc.state as EmptyLibraryDirectorySelected).importReport!;
+      expect(report.imported, {
+        LibraryComponent.libraryDb,
+        LibraryComponent.talmudBavli,
+        LibraryComponent.searchIndex,
+      });
+      expect(report.missing, {
+        LibraryComponent.catalog,
+        LibraryComponent.lexicon,
+      });
       expectNoLeftovers();
     },
   );
@@ -409,6 +428,64 @@ void main() {
       },
     );
   }
+
+  blocTest<EmptyLibraryBloc, EmptyLibraryState>(
+    'כל כרך חולץ לתיקייה משלו: בחירת תיקיית האב מייבאת את החבילה המלאה',
+    setUp: () async {
+      if (lib == null) return;
+      writeLibrary(lib);
+      writeIndex(lib);
+      final volume1 = await Directory(
+        p.join(
+          source.path,
+          'otzaria-android-full-part1',
+          'otzaria-android-full',
+        ),
+      ).create(recursive: true);
+      final volume2 = await Directory(
+        p.join(
+          source.path,
+          'otzaria-android-full-part2',
+          'otzaria-android-full',
+        ),
+      ).create(recursive: true);
+      await File(
+        p.join(volume1.path, 'otzaria-android.apk'),
+      ).writeAsBytes(_noise(5000, 9));
+      for (final file in source.listSync().whereType<File>()) {
+        final name = p.basename(file.path);
+        final toFirst =
+            name == '$_library.part-000' || name == '$_library.manifest.json';
+        file.renameSync(p.join((toFirst ? volume1 : volume2).path, name));
+      }
+      for (final volume in [volume1, volume2]) {
+        await File(p.join(volume.path, 'README.txt')).writeAsString('readme');
+      }
+      final scan = await scanLibrarySource(DirectoryPackageFolder(source.path));
+      packages = scan.packages.packages!;
+      expect(packages.folder, isA<MergedPackageFolder>());
+      expect(packages.library.parts.length, greaterThan(1));
+    },
+    build: build,
+    act: (bloc) async {
+      if (lib == null) return markTestSkipped('libzstd אינו זמין');
+      bloc.add(
+        ImportLibraryPackageRequested(packages: packages, targetPath: books),
+      );
+      await settle(bloc);
+    },
+    verify: (bloc) {
+      if (lib == null) return;
+      expect(bloc.state, isA<EmptyLibraryDirectorySelected>());
+      expect(File(p.join(books, _dbName)).readAsStringSync(), 'new-db');
+      expect(
+        File(p.join(books, 'תלמוד בבלי', 'ברכות.pdf')).lengthSync(),
+        400000,
+      );
+      expect(reopenedLibrary, [('new-db', '{"new":true}')]);
+      expectNoLeftovers();
+    },
+  );
 
   group('ספרייה קיימת', () {
     setUp(() async {

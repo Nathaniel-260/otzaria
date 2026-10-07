@@ -32,11 +32,7 @@ import 'package:otzaria/settings/services/backup/backup_import_merge.dart';
 import 'package:otzaria/settings/services/backup/backup_maintenance.dart';
 import 'package:otzaria/settings/services/backup/backup_rotation.dart';
 import 'package:otzaria/core/ui_snack.dart';
-import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
-import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
-import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
 import 'package:otzaria/library/bloc/library_bloc.dart';
-import 'package:otzaria/library/bloc/library_event.dart';
 import 'package:otzaria/library/bloc/library_state.dart';
 import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/navigation/bloc/navigation_event.dart';
@@ -348,7 +344,6 @@ class SystemSettingsTab extends StatefulWidget {
 
 class _SystemSettingsTabState extends State<SystemSettingsTab> {
   final GlobalKey _networkModeTileKey = GlobalKey();
-  final EmptyLibraryBloc _librarySelectionBloc = EmptyLibraryBloc();
 
   // ── מפתחות גיבוי ──────────────────────────────────────────────────────────
   static const _keyBackupSettings = 'key-backup-settings';
@@ -393,12 +388,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     AppPaths.getBackupPath().then((path) {
       if (mounted) setState(() => _resolvedBackupPath = path);
     });
-  }
-
-  @override
-  void dispose() {
-    _librarySelectionBloc.close();
-    super.dispose();
   }
 
   /// התרגום נעשה כאן ולא בטעינה: `context.settingsText` בגוף הסינכרוני של
@@ -555,61 +544,30 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           // כרטיס "מערכת" ממשיך להציג גרסת ספרייה ישנה (issue #895).
           listenWhen: LibraryState.reloadCompleted,
           listener: (context, libraryState) => _loadVersionInfo(),
-          child: BlocListener<EmptyLibraryBloc, EmptyLibraryState>(
-            bloc: _librarySelectionBloc,
-            listener: (context, librarySelectionState) async {
-              if (librarySelectionState is EmptyLibraryDirectorySelected) {
-                await context.read<NavigationBloc>().refreshLibrary();
-                if (!context.mounted) {
-                  return;
-                }
-                context.read<LibraryBloc>().add(RefreshLibrary());
-                UiSnack.showSuccess(SettingsMessages.libraryLoaded);
-              }
+          child: SettingsTabScrollView(
+            child: ToolPanelWrapper(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // 1. גרסאות + נתיב ספרייה
+                  _buildVersionAndPathSection(context, state),
 
-              if (librarySelectionState is EmptyLibraryError &&
-                  librarySelectionState.errorMessage != null) {
-                UiSnack.showError(librarySelectionState.errorMessage!);
-              }
+                  // 2. עדכוני מערכת (רשת + עדכון מפתחים)
+                  _buildSystemUpdatesSection(context, state),
 
-              // [בדיקת אנדרואיד] דיאלוג ה-SAF להעתקת seforim.db לאחסון פנימי.
-              // אינו ניתן-להתנעה כרגע (שום דבר לא משגר PickDirectoryRequested
-              // ל-bloc זה) — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
-              if (librarySelectionState is EmptyLibraryAskingDbCopy) {
-                if (librarySelectionState.errorMessage != null) {
-                  UiSnack.showError(librarySelectionState.errorMessage!);
-                }
-                if (!context.mounted) {
-                  return;
-                }
-                _showLibraryDbCopyDialog(context, librarySelectionState);
-              }
-            },
-            child: SettingsTabScrollView(
-              child: ToolPanelWrapper(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // 1. גרסאות + נתיב ספרייה
-                    _buildVersionAndPathSection(context, state),
+                  // 3. דיווחים (טעויות בספרים, תוכנה ותוספים)
+                  const ReportsCard(),
 
-                    // 2. עדכוני מערכת (רשת + עדכון מפתחים)
-                    _buildSystemUpdatesSection(context, state),
+                  const SearchFeedbackPanel(),
 
-                    // 3. דיווחים (טעויות בספרים, תוכנה ותוספים)
-                    const ReportsCard(),
+                  const SemanticDataPanel(),
 
-                    const SearchFeedbackPanel(),
+                  // 4. מתקדם (גיבוי + מצב סייפר)
+                  _buildAdvancedSection(context, state),
 
-                    const SemanticDataPanel(),
-
-                    // 4. מתקדם (גיבוי + מצב סייפר)
-                    _buildAdvancedSection(context, state),
-
-                    // 6. איפוס
-                    _buildResetSection(context),
-                  ],
-                ),
+                  // 6. איפוס
+                  _buildResetSection(context),
+                ],
               ),
             ),
           ),
@@ -826,33 +784,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
           ],
         ),
       ],
-    );
-  }
-
-  void _showLibraryDbCopyDialog(
-    BuildContext context,
-    EmptyLibraryAskingDbCopy state,
-  ) async {
-    final sizeText = state.dbSizeBytes > 0
-        ? '${(state.dbSizeBytes / 1024 / 1024).toStringAsFixed(1)} MB'
-        : context.settingsText('לא ידוע');
-
-    final shouldMove = await showDbCopyRequiredDialog(
-      context: context,
-      sizeText: sizeText,
-    );
-
-    if (shouldMove == null) {
-      return;
-    }
-
-    _librarySelectionBloc.add(
-      PickDbFileRequested(
-        libraryPath: state.libraryPath,
-        internalDbPath: state.internalDbPath,
-        externalDbPath: state.externalDbPath,
-        shouldMove: shouldMove,
-      ),
     );
   }
 

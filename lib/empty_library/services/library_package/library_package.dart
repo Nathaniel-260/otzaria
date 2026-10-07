@@ -77,6 +77,9 @@ enum LibraryPackageProblem {
 
   /// יש אינדקס אבל לא ספרייה מאותה גרסה.
   indexWithoutLibrary,
+
+  /// קובץ מופיע בשתי תיקיות כרכים בגדלים שונים.
+  conflictingParts,
 }
 
 /// תוצאת סריקת תיקייה: [packages] כשנמצאה ספרייה שלמה, אחרת [problem]

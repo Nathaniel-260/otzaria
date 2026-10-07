@@ -288,14 +288,19 @@ public func buildPresets(_ manifest: ReleaseManifest, _ target: AssistantTarget)
         }
     }
 
-    // בלי חבילה, "מלאה" היא התוכנה עם ספרייה — ובלי ספרייה אין "מלאה".
+    // בלי חבילה, "מלאה" היא התוכנה עם ספרייה — ובלי ספרייה אין "מלאה". ב-Android
+    // גם "מלאה + אינדקס": בטלפון בניית האינדקס איטית מאוד.
     let full: [String]
+    var fullIndexed = indexed.map { withInstalled($0) + offline } ?? []
     if let bundle = bundle {
         full = withInstalled(bundle) + offline
     } else {
         let collected = collect(manifest, target, types: ["application", "library", "dependency"])
         let hasLibrary = components.contains { collected.contains($0.id) && $0.type == "library" }
         full = hasLibrary ? collected + offline : []
+        if hasLibrary && target.platform == "android" {
+            fullIndexed = collected + collect(manifest, target, types: ["library-index"]) + offline
+        }
     }
 
     let candidates: [(id: String, caption: String, description: String, members: [String])] = [
@@ -303,7 +308,7 @@ public func buildPresets(_ manifest: ReleaseManifest, _ target: AssistantTarget)
             "full-indexed",
             "התקנה מלאה + אינדקס חיפוש",
             "למחשב שאין בו אינטרנט — אינדקס החיפוש מוכן, והחיפוש עובד מיד. כולל חיפוש חכם.",
-            indexed.map { withInstalled($0) + offline } ?? []
+            fullIndexed
         ),
         (
             "full",

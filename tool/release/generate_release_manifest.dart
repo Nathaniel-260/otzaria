@@ -32,7 +32,6 @@ class AssetSpec {
     required this.pattern,
     this.repository = kOtzariaRepository,
     this.split = false,
-    this.volumes = false,
   });
 
   /// תבנית (ביטוי רגולרי) לשם הקובץ בתיקיית ה-release. עבור נכס מפוצל
@@ -40,10 +39,6 @@ class AssetSpec {
   final String pattern;
   final String repository;
   final bool split;
-
-  /// התבנית מתארת כרכים עצמאיים (`…-part1.zip`, `…-part2.zip`): כל קובץ תואם
-  /// הוא נכס יחיד, לפי סדר מספר הכרך.
-  final bool volumes;
 }
 
 /// רכיב ידוע — השורה הדקלרטיבית היחידה שצריך להוסיף כדי שרכיב חדש
@@ -409,28 +404,8 @@ const List<ComponentSpec> kKnownComponents = [
     installOrder: 10,
     assets: [AssetSpec(pattern: r'^[^\\/]+\.apk$')],
   ),
-  ComponentSpec(
-    id: 'otzaria-android-full',
-    name: 'אוצריא ל-Android עם ספרייה מלאה',
-    description:
-        'ארכיון ZIP (או כמה כרכי ZIP שמחלצים לאותה תיקייה) ובו קובץ ה-APK '
-        'והספרייה המלאה, להעתקה אל המכשיר.',
-    nameEn: 'Otzaria for Android with the Full Library',
-    descriptionEn:
-        'A ZIP archive (or several ZIP volumes extracted into the same '
-        'folder) with the APK file and the full library, to copy to the '
-        'device.',
-    type: 'application-bundle',
-    required: false,
-    platform: 'android',
-    installOrder: 20,
-    assets: [
-      // מעל המגבלה — כרכי ZIP עצמאיים ולא חלקים גולמיים: בטלפון אין מי שיחבר.
-      AssetSpec(pattern: r'^otzaria-android-full\.zip$'),
-      AssetSpec(pattern: r'^otzaria-android-full-part\d+\.zip$', volumes: true),
-    ],
-  ),
-  // המתקינים הרגילים של Windows פורסים את החלקים שלצדם (installer/otzaria.iss).
+  // המתקינים הרגילים של Windows פורסים את החלקים שלצדם (installer/otzaria.iss),
+  // ובאנדרואיד "ייבוא מתיקיית קובצי הספרייה" באפליקציה (lib/empty_library/services/library_package).
   ComponentSpec(
     id: 'library-full',
     name: 'ספרייה מלאה',
@@ -445,14 +420,21 @@ const List<ComponentSpec> kKnownComponents = [
     required: false,
     platform: 'any',
     installOrder: 30,
-    installedBy: ['otzaria-windows-x64', 'otzaria-windows-arm64'],
+    installedBy: [
+      'otzaria-windows-x64',
+      'otzaria-windows-arm64',
+      'otzaria-android',
+    ],
     compatibilityFromLibraryIndexProvenance: true,
     outputNote:
-        'מתקין אוצריא שבתיקייה פורס את הספרייה מהחלקים שלצדו בזמן ההתקנה, '
-        'בלי אינטרנט.',
+        'אוצריא פורסת את הספרייה מהקבצים שבתיקייה בלי אינטרנט: ב-Windows '
+        'המתקין עושה זאת בזמן ההתקנה, וב-Android בוחרים "ייבוא מתיקיית קובצי '
+        'הספרייה" באוצריא אחרי התקנת ה-APK.',
     outputNoteEn:
-        'The Otzaria installer in this folder extracts the library from the '
-        'parts beside it without an internet connection.',
+        'Otzaria extracts the library from the files in this folder without '
+        'an internet connection: on Windows the installer does it during '
+        'installation; on Android, install the APK and choose "Import from the '
+        'Library Files Folder" in Otzaria.',
     assets: [
       AssetSpec(
         pattern: r'^otzaria-.+-library\.tar\.zst\.manifest\.json$',
@@ -478,7 +460,11 @@ const List<ComponentSpec> kKnownComponents = [
     platform: 'any',
     installOrder: 31,
     dependsOn: ['library-full'],
-    installedBy: ['otzaria-windows-x64', 'otzaria-windows-arm64'],
+    installedBy: [
+      'otzaria-windows-x64',
+      'otzaria-windows-arm64',
+      'otzaria-android',
+    ],
     compatibilityFromLibraryIndexProvenance: true,
     outputNote:
         'אינדקס החיפוש המוכן נפרס יחד עם הספרייה, ולכן התוכנה אינה בונה אותו '
@@ -539,19 +525,6 @@ Map<String, Object?> buildReleaseManifest({
       final pattern = RegExp(assetSpec.pattern);
       final matches = files.keys.where(pattern.hasMatch).toList()..sort();
       if (matches.isEmpty) continue;
-      if (assetSpec.volumes) {
-        matches.sort(_compareVolumeNames);
-        for (final name in matches) {
-          assets.add(
-            _singleAsset(
-              file: files[name]!,
-              repository: assetSpec.repository,
-              releaseTag: releaseTag,
-            ),
-          );
-        }
-        continue;
-      }
       if (matches.length > 1) {
         throw ReleaseManifestException(
           'component ${spec.id}: ${matches.length} files match '
@@ -647,14 +620,6 @@ Map<String, Object?> buildReleaseManifest({
     );
   }
   return manifest;
-}
-
-/// סדר כרכים לפי המספר האחרון בשם, כך ש-part10 בא אחרי part9.
-int _compareVolumeNames(String a, String b) {
-  int number(String name) =>
-      int.parse(RegExp(r'(\d+)(?!.*\d)').firstMatch(name)?.group(1) ?? '0');
-  final order = number(a).compareTo(number(b));
-  return order != 0 ? order : a.compareTo(b);
 }
 
 int _downloadSizeOf(Map<String, Object?> asset) {

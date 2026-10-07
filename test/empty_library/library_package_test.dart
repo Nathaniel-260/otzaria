@@ -330,6 +330,37 @@ void main() {
   });
 
   group('runPackageExtractionInIsolate', () {
+    test('תיקייה מאוחדת של כרכים עוברת ל-isolate ונפרסת', () async {
+      if (lib == null) return markTestSkipped('libzstd אינו זמין');
+      final names = writeSplitAsset(
+        source,
+        _library,
+        libraryArchive(lib),
+        partSize: 65536,
+      );
+      final second = Directory(p.join(source.path, 'part2'))..createSync();
+      File(
+        p.join(source.path, names.last),
+      ).renameSync(p.join(second.path, names.last));
+      final merged = MergedPackageFolder([
+        DirectoryPackageFolder(source.path),
+        DirectoryPackageFolder(second.path),
+      ], displayName: 'volumes');
+      final set = (await scanLibraryPackages(merged)).packages!;
+      final cancel = ZstdCancelFlag();
+      addTearDown(cancel.dispose);
+      await runPackageExtractionInIsolate(
+        PackageExtractionJob(packages: set, libraryDestination: dest.path),
+        onProgress: (_, _, _) {},
+        cancel: cancel,
+        openZstd: () => openZstdForTests()!,
+      );
+      expect(
+        File(p.join(dest.path, 'books', 'seforim.db')).readAsBytesSync(),
+        _noise(300000, 1),
+      );
+    });
+
     test('פורס ב-isolate ומדווח התקדמות עד הסוף; דגל ביטול עוצר', () async {
       if (lib == null) return markTestSkipped('libzstd אינו זמין');
       writeSplitAsset(source, _library, libraryArchive(lib), partSize: 65536);

@@ -432,8 +432,12 @@ List<AssistantPreset> buildPresets(
     }
   }
 
-  // בלי חבילה, "מלאה" היא התוכנה עם ספרייה — ובלי ספרייה אין "מלאה".
+  // בלי חבילה, "מלאה" היא התוכנה עם ספרייה — ובלי ספרייה אין "מלאה". ב-Android
+  // גם "מלאה + אינדקס": בטלפון בניית האינדקס איטית מאוד.
   final List<String> full;
+  var fullIndexed = indexed == null
+      ? const <String>[]
+      : [...withInstalled(indexed), ...offline];
   if (bundle != null) {
     full = [...withInstalled(bundle), ...offline];
   } else {
@@ -446,6 +450,13 @@ List<AssistantPreset> buildPresets(
       (c) => collected.contains(c['id']) && _field(c, 'type') == 'library',
     );
     full = hasLibrary ? [...collected, ...offline] : const [];
+    if (hasLibrary && target.platform == 'android') {
+      fullIndexed = [
+        ...collected,
+        ..._collect(manifest, target, types: const {'library-index'}),
+        ...offline,
+      ];
+    }
   }
 
   final candidates = [
@@ -454,9 +465,7 @@ List<AssistantPreset> buildPresets(
       caption: 'התקנה מלאה + אינדקס חיפוש',
       description:
           'למחשב שאין בו אינטרנט — אינדקס החיפוש מוכן, והחיפוש עובד מיד. כולל חיפוש חכם.',
-      members: indexed == null
-          ? const <String>[]
-          : [...withInstalled(indexed), ...offline],
+      members: fullIndexed,
     ),
     (
       id: 'full',

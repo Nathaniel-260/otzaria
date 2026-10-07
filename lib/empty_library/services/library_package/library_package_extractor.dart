@@ -131,7 +131,7 @@ Future<void> runPackageExtractionInIsolate(
   required ZstdCancelFlag cancel,
   DynamicLibrary Function() openZstd = openZstandardLib,
 }) async {
-  final token = job.packages.folder is SafPackageFolder
+  final token = job.packages.folder.usesPlatformChannel
       ? RootIsolateToken.instance
       : null;
   final port = ReceivePort();

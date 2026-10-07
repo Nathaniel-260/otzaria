@@ -43,7 +43,9 @@ Future<void> copyDirectoryEntries(
   String source,
   String destination, {
   Set<String>? includeOnly,
+  void Function()? checkCancelled,
 }) async {
+  checkCancelled?.call();
   final destDir = Directory(destination);
   if (!await destDir.exists()) {
     await destDir.create(recursive: true);
@@ -52,11 +54,16 @@ Future<void> copyDirectoryEntries(
   await for (final entity in Directory(source).list(followLinks: false)) {
     final name = p.basename(entity.path);
     if (includeOnly != null && !includeOnly.contains(name)) continue;
-    await _copyEntity(entity, p.join(destination, name));
+    await _copyEntity(entity, p.join(destination, name), checkCancelled);
   }
 }
 
-Future<void> _copyEntity(FileSystemEntity entity, String destPath) async {
+Future<void> _copyEntity(
+  FileSystemEntity entity,
+  String destPath,
+  void Function()? checkCancelled,
+) async {
+  checkCancelled?.call();
   // Link נבדק לפני File/Directory — קישור לקובץ הוא גם FileSystemEntity של File.
   if (entity is Link) {
     if (await _entityExists(destPath)) {
@@ -74,7 +81,11 @@ Future<void> _copyEntity(FileSystemEntity entity, String destPath) async {
     final sub = Directory(destPath);
     if (!await sub.exists()) await sub.create(recursive: true);
     await for (final child in entity.list(followLinks: false)) {
-      await _copyEntity(child, p.join(destPath, p.basename(child.path)));
+      await _copyEntity(
+        child,
+        p.join(destPath, p.basename(child.path)),
+        checkCancelled,
+      );
     }
   }
 }

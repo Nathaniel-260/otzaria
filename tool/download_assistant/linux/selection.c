@@ -383,6 +383,7 @@ GPtrArray *otz_build_presets(const OtzManifest *manifest,
                                            "dependency", NULL};
   static const char *const application_types[] = {"application", NULL};
   static const char *const library_types[] = {"library", NULL};
+  static const char *const index_types[] = {"library-index", NULL};
   /* Smart-search data, read by the installed app from the output folder: part
    * of "full" and "full-indexed" only. */
   static const char *const offline_data_types[] = {"semantic-model",
@@ -437,6 +438,14 @@ GPtrArray *otz_build_presets(const OtzManifest *manifest,
     if (libraries->len > 0) {
       collect(candidates[1].members, manifest, target, full_types, FALSE);
       collect(candidates[1].members, manifest, target, offline_data_types,
+              FALSE);
+    }
+    /* On Android also "full-indexed": building the index on a phone is very
+     * slow. */
+    if (libraries->len > 0 && strcmp(target->platform, "android") == 0) {
+      collect(candidates[0].members, manifest, target, full_types, FALSE);
+      collect(candidates[0].members, manifest, target, index_types, FALSE);
+      collect(candidates[0].members, manifest, target, offline_data_types,
               FALSE);
     }
   }
