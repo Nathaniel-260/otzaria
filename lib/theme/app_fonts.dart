@@ -340,7 +340,7 @@ class AppFonts {
         category: FontCategory.unknown,
         supportsTaamim: false,
       );
-      if (!_sfntSupportsHebrew(bytes)) continue;
+      if (!_sfntSupportsHebrew(bytes) || !_sfntMapsSpace(bytes)) continue;
       final acc = builders.putIfAbsent(
         family.toLowerCase(),
         () => _FamilyAccumulator(family),
@@ -410,6 +410,13 @@ class AppFonts {
   static bool _sfntSupportsTaamim(Uint8List data) => _sfntCoversAny(
     data,
     (start, end) => end >= start && end >= 0x0591 && start <= 0x05AF,
+  );
+
+  /// גופן בלי רווח מקריס את מנוע הטקסט על ריצה של תווים בלתי נראים בלבד,
+  /// כמו סימני הבידוד של סימון הערה (issue #2007).
+  static bool _sfntMapsSpace(Uint8List data) => _sfntCoversAny(
+    data,
+    (start, end) => start <= 0x20 && end >= 0x20,
   );
 
   /// האם ה-cmap של הגופן מכסה טווח שעליו [overlaps] מחזיר true.
@@ -813,7 +820,12 @@ class AppFonts {
           await _loadFamilyFaces(fontFamily, family);
           return;
         }
-        // תאימות לאחור: ערך שמור מגרסה קודמת הוא שם קובץ במפת system_fonts.
+        // תאימות לאחור: ערך שמור מגרסה קודמת הוא שם קובץ במפת system_fonts —
+        // נטען רק אם הסריקה קיבלה את הקובץ.
+        if (_systemFontAliasCache?.containsKey(fontFamily.toLowerCase()) !=
+            true) {
+          return;
+        }
         await SystemFonts().loadFont(fontFamily);
       } catch (_) {
         // אם הטעינה נכשלה, מסירים מהקאש כדי לאפשר ניסיון חוזר בעתיד.
