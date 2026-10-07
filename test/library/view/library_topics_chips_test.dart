@@ -200,4 +200,55 @@ void main() {
     tester.takeException();
     expect(_chipItems(tester), ['חסידות', 'קבלה']);
   });
+
+  testWidgets('מטמון הנושאים מתעדכן אחרי רענון וניקוי חיפוש', (tester) async {
+    final oldLibrary = Library(categories: []);
+    final oldResults = <Book>[
+      TextBook(title: 'ספר ישן', topics: 'תנך, ראשונים', category: oldLibrary),
+    ];
+    final states = await _pump(
+      tester,
+      LibraryState(
+        library: oldLibrary,
+        currentCategory: oldLibrary,
+        searchResults: oldResults,
+        searchQuery: 'ישן',
+      ),
+    );
+    expect(_chipItems(tester), ['תנך', 'ראשונים']);
+
+    final newLibrary = Library(categories: []);
+    final cleared = LibraryState(
+      library: newLibrary,
+      currentCategory: newLibrary,
+      searchQuery: '',
+    );
+    for (final state in [cleared, cleared.copyWith(searchResults: <Book>[])]) {
+      states.add(state);
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(FilterChipsSelector<String>), findsNothing);
+    }
+
+    final results = <Book>[
+      for (var i = 0; i < 1000; i++)
+        _CountingBook(title: 'ספר חדש $i', topics: 'חסידות, קבלה'),
+    ];
+    final searched = cleared.copyWith(
+      searchResults: results,
+      searchQuery: 'חדש',
+    );
+    states.add(searched);
+    await tester.pump();
+    await tester.pump();
+    expect(_chipItems(tester), ['חסידות', 'קבלה']);
+
+    _CountingBook.topicsReads = 0;
+    states.add(searched.copyWith(searchResults: results, searchQuery: 'חדש א'));
+    await tester.pump();
+    await tester.pump();
+    expect(_chipItems(tester), ['חסידות', 'קבלה']);
+    expect(_CountingBook.topicsReads, lessThan(results.length));
+    tester.takeException();
+  });
 }

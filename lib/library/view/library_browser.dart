@@ -944,8 +944,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   // ── Topics filter chips ───────────────────────────────────────────────────
 
-  // כל הקלדה בונה מחדש את התוכן מעל אותה רשימת תוצאות; הצ'יפים נגזרים ממנה בלבד.
-  List<Book>? _topicsSourceResults;
+  // סמן הזהות אינו מחזיק ספרים ודרכם ספרייה ישנה אחרי רענון וניקוי החיפוש.
+  WeakReference<List<Book>>? _topicsSourceResults;
   List<String> _relevantTopicsCache = const [];
 
   Widget? _buildTopicsSelection(
@@ -970,8 +970,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       'אחרונים',
       'מחברי זמננו',
     ];
-    if (!identical(state.searchResults, _topicsSourceResults)) {
-      _topicsSourceResults = state.searchResults;
+    if (!identical(state.searchResults, _topicsSourceResults?.target)) {
+      _topicsSourceResults = WeakReference(state.searchResults!);
       final allTopics = _getAllTopics(state.searchResults!);
       _relevantTopicsCache = categoryTopics.where(allTopics.contains).toList();
     }
