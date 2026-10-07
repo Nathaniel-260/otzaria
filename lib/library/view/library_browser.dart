@@ -2093,6 +2093,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                 style: titleStyle,
               ),
             ),
+            ExcludeFocusTraversal(
+              child: CategoryActionsMenuButton(category: category),
+            ),
             ExpandingChevron(
               isExpanded: isExpanded,
               color: cs.onSecondaryContainer,

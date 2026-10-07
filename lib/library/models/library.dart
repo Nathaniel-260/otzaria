@@ -2,6 +2,7 @@
 contain other categories and books */
 
 import 'package:otzaria/data/constants/database_constants.dart';
+import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/books.dart';
 
 /// Represents a category in the library.
@@ -69,6 +70,29 @@ class Category {
       if (category.hasBooks) return true;
     }
     return false;
+  }
+
+  /// מקור התיקייה כשאין בה (גם בתתי-התיקיות) אף ספר רשמי: מסד מצורף כשכל
+  /// ספריה ממסדים מצורפים, אחרת [BookSource.user]. null לתיקייה רשמית,
+  /// מעורבת או ריקה.
+  BookSource? get personalSource {
+    var hasUser = false;
+    BookSource? attached;
+    bool onlyPersonal(Category category) {
+      for (final book in category.books) {
+        final source = book.source;
+        if (source.isOfficial) return false;
+        if (source.isAttached) {
+          attached ??= source;
+        } else {
+          hasUser = true;
+        }
+      }
+      return category.subCategories.every(onlyPersonal);
+    }
+
+    if (!onlyPersonal(this)) return null;
+    return hasUser ? BookSource.user : attached;
   }
 
   List<Category> getAllCategories() {

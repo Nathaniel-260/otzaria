@@ -9,6 +9,9 @@ abstract class LibraryMessages {
 
   static String bookDeleteError(Object error) => 'שגיאה במחיקת הספר: $error';
 
+  static String folderDeletedFromLibrary(String title) =>
+      'התיקייה "$title" הוסרה מהספרייה';
+
   static const String libraryLoadError = 'שגיאה בטעינת הספרייה. נסה שוב.';
 
   static String talmudPdfEditionMissing(String title) =>
