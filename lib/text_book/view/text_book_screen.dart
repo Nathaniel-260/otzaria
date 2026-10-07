@@ -3400,10 +3400,14 @@ bool _handleGlobalKeyEvent(
         }
         break;
 
-      // ESC - ניקוי הדגשת החיפוש, ואם אין הדגשה — יציאה ממסך מלא
+      // ESC - ניקוי הדגשת החיפוש או ה-?mark, ואם אין הדגשה — יציאה ממסך מלא
       case LogicalKeyboardKey.escape:
         if (state.searchText.isNotEmpty) {
           context.read<TextBookBloc>().add(const UpdateSearchText(''));
+          return true;
+        }
+        if (state.permanentHighlightLine != null) {
+          context.read<TextBookBloc>().add(const ApplyMarkHighlight());
           return true;
         }
         if (!Platform.isAndroid && !Platform.isIOS) {
