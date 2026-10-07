@@ -4,16 +4,51 @@ import Foundation
 public struct AssistantError: Error, Equatable {
     public let message: String
     public let technical: String
+    /// הבקשה לא הגיעה לשרת כלל (אין רשת, שם שאינו נפתר) — הממשק מציג "אין חיבור לאינטרנט".
+    public let offline: Bool
 
-    public init(_ message: String, technical: String) {
+    public init(_ message: String, technical: String, offline: Bool = false) {
         self.message = message
         self.technical = technical
+        self.offline = offline
+    }
+
+    /// שגיאות URLSession שפירושן שאין חיבור — כמו קודי WinHTTP שהמסייע ל-Windows מזהה.
+    public static func isOfflineError(_ error: Error) -> Bool {
+        guard let code = (error as? URLError)?.code else { return false }
+        return [
+            .notConnectedToInternet, .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed,
+            .networkConnectionLost, .timedOut, .internationalRoamingOff, .dataNotAllowed,
+        ].contains(code)
     }
 
     public static let fileUnavailable =
         "לא ניתן להכין את ההתקנה משום שאחד הקבצים הדרושים אינו זמין."
     public static let cannotConnect = "לא ניתן להתחבר לאתר ההורדות של אוצריא."
     public static let cannotReadList = "לא ניתן לקרוא את רשימת הקבצים של אוצריא."
+    public static let cannotPrepare = "לא ניתן להכין את ההתקנה."
+    public static let copyFailed = "לא ניתן היה להעתיק את הקבצים לתיקייה שנבחרה."
+    public static let saveFailed = "לא ניתן היה לשמור את הקבצים. ייתכן שאין מספיק מקום פנוי."
+    public static let downloadDamaged = "אחד הקבצים שהורדו נמצא פגום ולא נשמר."
+    public static let writeJoinedFailed = "לא ניתן היה לכתוב את הקובץ המאוחד. ייתכן שאין מספיק מקום פנוי."
+    public static let joinedDamaged = "הקובץ המאוחד נמצא פגום ולכן לא נשמר."
+
+    /// כל משפט שהלוגיקה מציגה, ובאנגלית — בשביל ממשק באנגלית. משפט שאינו כאן מוצג כפי שהוא.
+    public static let english: [String: String] = [
+        fileUnavailable: "Can't prepare the installation because one of the required files isn't available.",
+        cannotConnect: "Can't connect to the Otzaria downloads site.",
+        cannotReadList: "Can't read the list of Otzaria files.",
+        cannotPrepare: "Can't prepare the installation.",
+        copyFailed: "Couldn't copy the files to the chosen folder.",
+        saveFailed: "Couldn't save the files. There may not be enough free space.",
+        downloadDamaged: "One of the downloaded files was damaged, so it wasn't saved.",
+        writeJoinedFailed: "Couldn't write the joined file. There may not be enough free space.",
+        joinedDamaged: "The joined file was damaged, so it wasn't saved.",
+    ]
+
+    public func message(english: Bool) -> String {
+        english ? (Self.english[message] ?? message) : message
+    }
 }
 
 public struct ManifestPart: Decodable, Equatable {
@@ -86,13 +121,29 @@ public struct ManifestComponent: Decodable, Equatable {
     public let outputFolder: String
     /// משפט לעמוד הסיום כשהרכיב הוכן ('' — אין).
     public let outputNote: String
+    /// השדות באנגלית ('' ב-release ישן — אז מוצג העברי, כמו componentText במימוש הייחוס).
+    public let nameEn: String
+    public let descriptionEn: String
+    public let outputNoteEn: String
     public let downloadSize: Int64
     public let assets: [ManifestAsset]
 
     enum CodingKeys: String, CodingKey {
         case id, name, description, type, required, platform, architecture
         case packageFormat, dependsOn, installedBy, partOf, outputFolder, outputNote
-        case downloadSize, assets
+        case downloadSize, assets, nameEn, descriptionEn, outputNoteEn
+    }
+
+    public func displayName(english: Bool) -> String {
+        english && !nameEn.isEmpty ? nameEn : name
+    }
+
+    public func displayDescription(english: Bool) -> String {
+        english && !descriptionEn.isEmpty ? descriptionEn : description
+    }
+
+    public func displayOutputNote(english: Bool) -> String {
+        english && !outputNoteEn.isEmpty ? outputNoteEn : outputNote
     }
 
     public init(
@@ -100,7 +151,8 @@ public struct ManifestComponent: Decodable, Equatable {
         required: Bool = false, platform: String = "", architecture: String = "",
         packageFormat: String = "", dependsOn: [String] = [], installedBy: [String] = [],
         partOf: String = "", outputFolder: String = "", outputNote: String = "",
-        downloadSize: Int64 = 0, assets: [ManifestAsset] = []
+        downloadSize: Int64 = 0, assets: [ManifestAsset] = [],
+        nameEn: String = "", descriptionEn: String = "", outputNoteEn: String = ""
     ) {
         self.id = id
         self.name = name
@@ -117,6 +169,9 @@ public struct ManifestComponent: Decodable, Equatable {
         self.outputNote = outputNote
         self.downloadSize = downloadSize
         self.assets = assets
+        self.nameEn = nameEn
+        self.descriptionEn = descriptionEn
+        self.outputNoteEn = outputNoteEn
     }
 
     // שדות הסינון אופציונליים; חסר נקרא כמחרוזת ריקה, בדיוק כמו במימוש הייחוס.
@@ -137,6 +192,9 @@ public struct ManifestComponent: Decodable, Equatable {
         outputNote = try c.decodeIfPresent(String.self, forKey: .outputNote) ?? ""
         downloadSize = try c.decodeIfPresent(Int64.self, forKey: .downloadSize) ?? 0
         assets = try c.decode([ManifestAsset].self, forKey: .assets)
+        nameEn = try c.decodeIfPresent(String.self, forKey: .nameEn) ?? ""
+        descriptionEn = try c.decodeIfPresent(String.self, forKey: .descriptionEn) ?? ""
+        outputNoteEn = try c.decodeIfPresent(String.self, forKey: .outputNoteEn) ?? ""
     }
 }
 
