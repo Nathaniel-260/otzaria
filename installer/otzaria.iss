@@ -1843,6 +1843,8 @@ begin
 end;
 #endif
 
+#include "installer_message_fallback.iss"
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   AppDataPath: string;

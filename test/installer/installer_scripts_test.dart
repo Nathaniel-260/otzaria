@@ -375,7 +375,7 @@ void main() {
         final script = _script(name);
         expect(
           _sections(script, 'Code').join(),
-          contains('#include "$include"'),
+          contains('function InstallDirTooLong(): Boolean;'),
         );
 
         final body = _routine(script, 'function NextButtonClick(');
@@ -410,6 +410,82 @@ void main() {
         );
       });
     }
+
+    test('הודעת הנתיב משתמשת בתרגום ובמתאם ההודעות המשותף', () {
+      final helper = _read(include);
+      final body = _routine(helper, 'function InstallDirTooLong(');
+      expect(body, contains('InstTellSuppressible('));
+      expect(body, isNot(contains('SuppressibleMsgBox(')));
+      expect(body, contains("CustomMessage('InstallDirTooLongTitle')"));
+      expect(
+        body,
+        contains("FmtMessage(CustomMessage('InstallDirTooLongText'),"),
+      );
+      expect(body, contains('IntToStr(Length(WizardDirValue))'));
+      expect(body, contains('IntToStr({#MaxInstallDirLength})'));
+      expect(
+        body,
+        contains('Result := Length(WizardDirValue) > {#MaxInstallDirLength}'),
+      );
+      expect(
+        helper,
+        contains(
+          'procedure InstTellSuppressible(const Title, Text: String); forward;',
+        ),
+      );
+      expect(
+        helper.indexOf('procedure InstTellSuppressible('),
+        lessThan(helper.indexOf('function InstallDirTooLong(')),
+      );
+
+      final messages = _messages(helper, 'CustomMessages');
+      expect(messages['hebrew']!['InstallDirTooLongTitle'], isNotEmpty);
+      expect(messages['english']!['InstallDirTooLongTitle'], isNotEmpty);
+      for (final lang in ['hebrew', 'english']) {
+        final text = messages[lang]!['InstallDirTooLongText']!;
+        expect(text, contains('%1'));
+        expect(text, contains('%2'));
+        expect(text, contains('%n%n'));
+      }
+      expect(
+        helper,
+        matches(
+          RegExp(
+            r'#ifdef OtzariaUiProduct\s+english\.InstallDirTooLongTitle=[^\n]+\n'
+            r'english\.InstallDirTooLongText=[^\n]+\n#endif',
+          ),
+        ),
+        reason: 'אנגלית נכללת רק כששכבת התצוגה מגדירה את השפה',
+      );
+    });
+
+    test('המתאם הישן שומר על הודעה ניתנת להשתקה ומפנה מקום למתאם המעוצב', () {
+      const fallback = 'installer_message_fallback.iss';
+      final text = _read(fallback);
+      expect(text.trim(), startsWith('#ifndef OtzariaUiProduct'));
+      expect(text.trim(), endsWith('#endif'));
+      final body = _routine(text, 'procedure InstTellSuppressible(');
+      expect(body, contains('SuppressibleMsgBox(Text, mbError, MB_OK, IDOK)'));
+      expect(body, isNot(contains('UiTell(')));
+      for (final name in _scripts) {
+        final script = _script(name);
+        final fallbackAt = script.indexOf(text);
+        expect(
+          fallbackAt,
+          greaterThan(script.indexOf('function NextButtonClick(')),
+        );
+        expect(_sections(script, 'Code').join(), contains(text));
+        final implementation = RegExp(
+          r'procedure InstTellSuppressible\([^;]+;\s*begin',
+        );
+        final adapterAt = implementation.firstMatch(script)!.start;
+        expect(
+          adapterAt,
+          lessThanOrEqualTo(fallbackAt + text.indexOf('procedure')),
+          reason: 'המתאם המעוצב חייב להופיע לפני ה-fallback הלא פעיל',
+        );
+      }
+    });
 
     test('שמות הנכסים שלנו קצרים מספיק לתיקיות התקנה עמוקות', () {
       // Flutter שומר כל נכס ב-data\flutter_assets בשם מקודד-URI, ולכן כל אות

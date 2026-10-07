@@ -1697,6 +1697,8 @@ begin
                 ExpandConstant('{param:MERGETASKS|}'))) > 0;
 end;
 
+#include "installer_message_fallback.iss"
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ZstdPath, SevenZipPath: String;
