@@ -395,6 +395,33 @@ void main() {
       expect(facet, '/תנ"ך/id:1');
     });
 
+    testWidgets('גרשיים בשאילתה מוצאים כותרת עם ״ (issue #2031)', (
+      tester,
+    ) async {
+      await pumpTree(
+        tester,
+        library: makeLibraryFrom([
+          makeCategory(
+            'תנ"ך',
+            books: [
+              makeBook(1, 'רשב״א על ברכות', '/תנ"ך'),
+              makeBook(2, 'רשב"א על בבא קמא', '/תנ"ך'),
+            ],
+          ),
+        ]),
+        facetCounts: const {
+          '/': 4,
+          '/תנ"ך': 4,
+          '/תנ"ך/id:1': 2,
+          '/תנ"ך/id:2': 2,
+        },
+        filterQuery: 'רשב"א',
+      );
+
+      expect(find.text('רשב״א על ברכות'), findsOneWidget);
+      expect(find.text('רשב"א על בבא קמא'), findsOneWidget);
+    });
+
     testWidgets('בטעינה ראשונית ללא תוצאות מוצג ספינר ולא ההודעה', (
       tester,
     ) async {

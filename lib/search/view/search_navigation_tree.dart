@@ -531,12 +531,15 @@ class SearchNavigationTree extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final query = filterQuery.toLowerCase();
+    // רשב"א מול רשב״א — גרשיים אינם חלק מההשוואה.
+    final query = normalizeBookTitle(filterQuery).toLowerCase();
     // ספר ללא תוצאות מוסתר כאן בדיוק כמו בעץ: בחירתו הייתה מרוקנת את
     // התוצאות ומשאירה סינון שלא מיוצג בעץ אחרי ניקוי שדה האיתור.
     final matches = <_FilteredBook>[];
     for (final book in _allBooks(library)) {
-      if (!book.title.toLowerCase().contains(query)) continue;
+      if (!normalizeBookTitle(book.title).toLowerCase().contains(query)) {
+        continue;
+      }
       final facet = FacetHelper.buildBookFacet(
         FacetHelper.resolveCategoryPath(book),
         book,
