@@ -2391,6 +2391,8 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       child: AnimatedOpacity(
         opacity: isVisible ? 1.0 : 0.0,
         duration: AppTokens.animFast,
+        // דהייה אל 0 מנתקת את הסמנטיקה באמצע אנימציה ושוברת את עץ הנגישות.
+        alwaysIncludeSemantics: true,
         child: _BookViewTurnButton(
           icon: icon,
           tooltip: tooltip,
