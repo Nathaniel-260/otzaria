@@ -268,6 +268,8 @@
   "נמצאה ספרייה מקבצים שהורדו (גרסה {version}), כולל אינדקס חיפוש מוכן": "Found a library in the downloaded files (version {version}), including a ready-made search index",
   "חסר הקובץ {file} — יש להכין את התיקייה מחדש במסייע ההורדה": "The file {file} is missing — prepare the folder again with the Download Assistant",
   "הקובץ {file} פגום — יש להכין את התיקייה מחדש במסייע ההורדה": "The file {file} is damaged — prepare the folder again with the Download Assistant",
+  "חסר הקובץ {file} — יש לחלץ את כל קובצי ה-ZIP לאותה תיקייה ולבחור אותה": "The file {file} is missing — extract all the ZIP files into the same folder and select it",
+  "הקובץ {file} פגום — יש להוריד ולחלץ מחדש את קובץ ה-ZIP שבו הוא נמצא": "The file {file} is damaged — download and extract the ZIP file that contains it again",
   "בתיקייה יש אינדקס חיפוש בלי הספרייה עצמה": "The folder has a search index but not the library itself",
   "הספרייה עודכנה במיקום החדש, אך חלק מהקבצים הישנים לא נמחקו. ניתן למחוק אותם ידנית מהמיקום הישן.": "The library was updated at the new location, but some old files were not deleted. You can remove them manually from the old location.",
   "עדכון {folder}": "Update {folder}",

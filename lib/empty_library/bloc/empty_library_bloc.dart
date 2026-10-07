@@ -209,7 +209,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         }
       },
       onError: (e) => _error(
-        errorMessage: packageImportErrorMessage(e),
+        // באנדרואיד החבילה מגיעה בדרך כלל מכרכי ה-ZIP שהורדו, לא מהמסייע.
+        errorMessage: packageImportErrorMessage(
+          e,
+          assistantFiles: !Platform.isAndroid,
+        ),
         selectedPath: event.packages.folder.displayName,
       ),
     );

@@ -383,11 +383,15 @@ class _LibrarySetupDialogContentState
     final file = scan.problemFile ?? '';
     return switch (scan.problem!) {
       LibraryPackageProblem.incompleteParts => context.settingsText(
-        'חסר הקובץ {file} — יש להכין את התיקייה מחדש במסייע ההורדה',
+        Platform.isAndroid
+            ? 'חסר הקובץ {file} — יש לחלץ את כל קובצי ה-ZIP לאותה תיקייה ולבחור אותה'
+            : 'חסר הקובץ {file} — יש להכין את התיקייה מחדש במסייע ההורדה',
         args: {'file': file},
       ),
       LibraryPackageProblem.invalidManifest => context.settingsText(
-        'הקובץ {file} פגום — יש להכין את התיקייה מחדש במסייע ההורדה',
+        Platform.isAndroid
+            ? 'הקובץ {file} פגום — יש להוריד ולחלץ מחדש את קובץ ה-ZIP שבו הוא נמצא'
+            : 'הקובץ {file} פגום — יש להכין את התיקייה מחדש במסייע ההורדה',
         args: {'file': file},
       ),
       LibraryPackageProblem.indexWithoutLibrary => context.settingsText(
