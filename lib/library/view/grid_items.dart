@@ -1,10 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/library/models/library.dart';
+import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/settings/services/custom_folders/bloc/custom_folders_bloc.dart';
+import 'package:otzaria/settings/services/custom_folders/custom_folder.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
+import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/external_catalog_mapper.dart';
 import 'package:otzaria/plugins/services/plugin_library_books_registry.dart';
 import 'package:otzaria/plugins/utils/plugin_icon_resolver.dart';
@@ -293,6 +300,20 @@ class CategoryGridItem extends StatelessWidget {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
     final infoText = categoryInfoText(category);
+    final personalSource = category.personalSource;
+    final folderIcon = Container(
+      width: 32,
+      height: 32,
+      decoration: BoxDecoration(
+        color: cs.secondaryContainer,
+        borderRadius: AppTokens.borderRadiusAll,
+      ),
+      child: Icon(
+        FluentIcons.folder_24_regular,
+        color: cs.onSecondaryContainer,
+        size: 16,
+      ),
+    );
     return AppCard(
       onTap: onCategoryClickCallback,
       focusNode: focusNode,
@@ -369,18 +390,18 @@ class CategoryGridItem extends StatelessWidget {
                 ),
               ),
             const SizedBox(width: 4),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: cs.secondaryContainer,
-                borderRadius: AppTokens.borderRadiusAll,
-              ),
-              child: Icon(
-                FluentIcons.folder_24_regular,
-                color: cs.onSecondaryContainer,
-                size: 16,
-              ),
+            personalSource == null
+                ? folderIcon
+                : _PersonalSourceBadge(
+                    source: personalSource,
+                    tooltip: personalSource.isAttached
+                        ? 'ממסד ספרים אישי'
+                        : 'תיקייה אישית',
+                    size: 32,
+                    child: folderIcon,
+                  ),
+            ExcludeFocusTraversal(
+              child: CategoryActionsMenuButton(category: category),
             ),
           ],
         ),
@@ -499,47 +520,77 @@ class _BookGridMediaColumn extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         !book.source.isOfficial
-            ? Tooltip(
-                message: book.source.isAttached
+            ? _PersonalSourceBadge(
+                source: book.source,
+                tooltip: book.source.isAttached
                     ? 'ממסד ספרים אישי'
                     : 'ספר אישי',
-                waitDuration: const Duration(milliseconds: 400),
-                child: SizedBox(
-                  width: iconBoxSize,
-                  height: iconBoxSize,
-                  child: Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      iconContainer,
-                      Positioned(
-                        right: -2,
-                        bottom: -2,
-                        child: Container(
-                          width: 14,
-                          height: 14,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AppSurfaces.card(context),
-                              width: 1.5,
-                            ),
-                          ),
-                          child: Icon(
-                            book.source.isAttached
-                                ? FluentIcons.database_24_regular
-                                : FluentIcons.person_24_regular,
-                            size: 8,
-                            color: cs.onPrimary,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                size: iconBoxSize,
+                child: iconContainer,
               )
             : iconContainer,
       ],
+    );
+  }
+}
+
+/// תג "אישי" (או "ממסד") בפינת אייקון — משותף לכרטיס ספר ולכרטיס תיקייה.
+class _PersonalSourceBadge extends StatelessWidget {
+  final BookSource source;
+  final String tooltip;
+  final double size;
+  final Widget child;
+
+  const _PersonalSourceBadge({
+    required this.source,
+    required this.tooltip,
+    required this.size,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    // צומת משלו: בכרטיס יש עוד Tooltip, ושני עוגנים בצומת אחד שוברים את הנגישות.
+    return Semantics(
+      container: true,
+      child: Tooltip(
+        message: tooltip,
+        waitDuration: const Duration(milliseconds: 400),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              child,
+              Positioned(
+                right: -2,
+                bottom: -2,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: BoxDecoration(
+                    color: cs.primary,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppSurfaces.card(context),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Icon(
+                    source.isAttached
+                        ? FluentIcons.database_24_regular
+                        : FluentIcons.person_24_regular,
+                    size: 8,
+                    color: cs.onPrimary,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -823,6 +874,116 @@ class _BookActionsMenuButtonState extends State<BookActionsMenuButton> {
         );
       },
     );
+  }
+}
+
+/// תפריט "אפשרויות נוספות" של תיקייה אישית — מחיקה מהספרייה, כמו לספר אישי.
+/// מוצג רק לתיקייה שהמשתמש הוסיף (ילד ישיר של "ספרים אישיים"), אחרת נעלם.
+class CategoryActionsMenuButton extends StatelessWidget {
+  final Category category;
+
+  const CategoryActionsMenuButton({super.key, required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final parent = category.parent;
+    if (parent == null ||
+        parent.title != _kPersonalRootTitle ||
+        parent.parent is! Library ||
+        category.personalSource?.isUser != true) {
+      return const SizedBox.shrink();
+    }
+    return BlocSelector<
+      CustomFoldersBloc,
+      CustomFoldersState,
+      ({CustomFolder? folder, bool isSyncing})
+    >(
+      selector: (state) => (
+        folder: _customFolderOf(category, state.folders),
+        isSyncing: state.isSyncing,
+      ),
+      builder: (context, selection) {
+        final folder = selection.folder;
+        if (folder == null) return const SizedBox.shrink();
+        final theme = Theme.of(context);
+        return SizedBox(
+          width: 28,
+          height: 28,
+          child: ValueListenableBuilder<int>(
+            valueListenable: DatabaseLibraryProvider.operationQueue.busyCount,
+            builder: (context, busyCount, _) => AppPopupMenuButton<String>(
+              enabled: !selection.isSyncing && busyCount == 0,
+              icon: Icon(
+                FluentIcons.more_vertical_24_regular,
+                size: 15,
+                color: theme.colorScheme.secondary,
+              ),
+              tooltip: 'אפשרויות נוספות',
+              position: PopupMenuPosition.under,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              onSelected: (value) {
+                if (value == 'delete') {
+                  _showDeleteFolderDialog(context, category.title, folder);
+                }
+              },
+              entries: const [
+                AppMenuEntry<String>(
+                  value: 'delete',
+                  label: 'מחק מהספרייה',
+                  icon: FluentIcons.delete_24_regular,
+                  isDestructive: true,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+const _kPersonalRootTitle = 'ספרים אישיים';
+
+/// התיקייה שהוגדרה בהגדרות עבור [category], לפי שמה. כמה תיקיות באותו שם
+/// מוצגות כקטגוריה אחת, ואז אין תיקייה אחת שאפשר למחוק.
+CustomFolder? _customFolderOf(Category category, List<CustomFolder> folders) {
+  final matches = folders.where((f) => f.name == category.title);
+  return matches.length == 1 ? matches.single : null;
+}
+
+Future<void> _showDeleteFolderDialog(
+  BuildContext context,
+  String title,
+  CustomFolder folder,
+) async {
+  final bloc = context.read<CustomFoldersBloc>();
+  if (bloc.state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy) {
+    UiSnack.show(LibraryMessages.folderRemovalBusy);
+    return;
+  }
+  final confirmed = await showWarningDialog(
+    context: context,
+    title: 'למחוק את התיקייה?',
+    content:
+        'התיקייה "$title" וספריה יוסרו מהספרייה.\n'
+        'הקבצים המקוריים בדיסק לא יימחקו.',
+    cancelText: 'ביטול',
+    confirmText: 'מחק',
+  );
+  if (confirmed != true || !context.mounted || bloc.isClosed) return;
+  if (bloc.state.isSyncing || DatabaseLibraryProvider.operationQueue.isBusy) {
+    UiSnack.show(LibraryMessages.folderRemovalBusy);
+    return;
+  }
+
+  final done = Completer<String?>();
+  bloc.add(RemoveCustomFolder(folder, deleteFromDb: true, completer: done));
+  final error = await done.future;
+  if (error != null) {
+    UiSnack.showError(error);
+  } else {
+    UiSnack.show(LibraryMessages.folderDeletedFromLibrary(title));
   }
 }
 
