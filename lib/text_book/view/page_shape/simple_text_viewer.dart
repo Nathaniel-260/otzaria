@@ -654,11 +654,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     return (link: anchorLinks[index], line: line, index: index);
   }
 
-  Future<void> _openAnchorTarget(Link link) async {
+  Future<void> _openAnchorTarget(Link link) {
     LinkPreviewOverlay.dismiss();
-    final tab = await buildLinkTargetTab(link);
-    if (!mounted) return;
-    widget.openBookCallback(tab);
+    return openLinkTarget(link, (tab) => widget.openBookCallback(tab));
   }
 
   /// ריחוף על סמן-מספר: ההתאמה בין הסמן להערה נעשית לפי תוכן ההערה, ולכן היא
@@ -1876,11 +1874,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
                   onTap: () => widget.onOpenSidebarTab!(kLinksTabIndex),
                 )
               : null,
-          onOpenLink: (link) async {
-            final tab = await buildLinkTargetTab(link);
-            if (!mounted) return;
-            widget.openBookCallback(tab);
-          },
+          onOpenLink: (link) =>
+              openLinkTarget(link, (tab) => widget.openBookCallback(tab)),
         );
 
     final hasLinkItems =
@@ -1975,11 +1970,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
         removeNikud: state.commentaryRemoveNikud,
         removePunctuation: state.commentaryRemovePunctuation,
         maxFontSize: widget.fontSize,
-        onNavigate: (link) async {
-          final tab = await buildLinkTargetTab(link);
-          if (!mounted) return;
-          widget.openBookCallback(tab);
-        },
+        onNavigate: (link) =>
+            openLinkTarget(link, (tab) => widget.openBookCallback(tab)),
       );
       if (siblingEntry != null) entries.add(siblingEntry);
     }
@@ -2120,11 +2112,8 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       targetSource: book.source,
     );
 
-    Future<void> navigate(Link link) async {
-      final tab = await buildLinkTargetTab(link);
-      if (!mounted) return;
-      widget.openBookCallback(tab);
-    }
+    Future<void> navigate(Link link) =>
+        openLinkTarget(link, (tab) => widget.openBookCallback(tab));
 
     final service = TargetLineLinksService.instance;
     // טעינה כבר בפתיחת התפריט, כדי שתת-התפריט לא ייפתח על "טוען…".

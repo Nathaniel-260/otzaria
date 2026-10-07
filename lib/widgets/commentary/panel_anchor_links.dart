@@ -242,11 +242,8 @@ class _PanelAnchoredTextState extends State<PanelAnchoredText>
   }
 
   // בלי onAnchorActivated: הלחיצה על כותרת החלונית אינה הקשה על הפריט שמתחת.
-  Future<void> _navigateTo(Link link) async {
-    final tab = await buildLinkTargetTab(link);
-    if (!mounted) return;
-    widget.openBookCallback(tab);
-  }
+  Future<void> _navigateTo(Link link) =>
+      openLinkTarget(link, (tab) => widget.openBookCallback(tab));
 
   @override
   Widget build(BuildContext context) {

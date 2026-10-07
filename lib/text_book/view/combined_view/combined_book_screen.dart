@@ -590,9 +590,7 @@ class _CombinedViewState extends State<CombinedView> {
         }
       }
     }
-    final tab = await buildLinkTargetTab(link);
-    if (_disposed || !mounted) return;
-    widget.openBookCallback(tab);
+    await openLinkTarget(link, _openTab);
   }
 
   /// מבקש מפאנל המפרשים שבצד לגלול לקטע שהעוגן מקשר אליו. שקט כשההורה לא
@@ -605,11 +603,13 @@ class _CombinedViewState extends State<CombinedView> {
     request(title, commentaryLinkKey(link), sourceLine);
   }
 
-  Future<void> _openLinkTarget(Link link) async {
+  void _openTab(OpenedTab tab) {
+    if (!_disposed) widget.openBookCallback(tab);
+  }
+
+  Future<void> _openLinkTarget(Link link) {
     LinkPreviewOverlay.dismiss();
-    final tab = await buildLinkTargetTab(link);
-    if (_disposed || !mounted) return;
-    widget.openBookCallback(tab);
+    return openLinkTarget(link, _openTab);
   }
 
   /// [activeAnchor] — כשהחלונית נפתחה מסמן-אות, הסמן מודגש כל עוד היא פתוחה.
@@ -1572,11 +1572,7 @@ class _CombinedViewState extends State<CombinedView> {
                 onTap: () => widget.onOpenLinksPane?.call(),
               )
             : null,
-        onOpenLink: (link) async {
-          final tab = await buildLinkTargetTab(link);
-          if (_disposed || !mounted) return;
-          widget.openBookCallback(tab);
-        },
+        onOpenLink: (link) => openLinkTarget(link, _openTab),
       );
     }
 
@@ -1638,11 +1634,7 @@ class _CombinedViewState extends State<CombinedView> {
           removeNikud: state.commentaryRemoveNikud,
           removePunctuation: state.commentaryRemovePunctuation,
           maxFontSize: widget.textSize,
-          onNavigate: (link) async {
-            final tab = await buildLinkTargetTab(link);
-            if (_disposed || !mounted) return;
-            widget.openBookCallback(tab);
-          },
+          onNavigate: (link) => openLinkTarget(link, _openTab),
         );
         return entry == null
             ? const <AppContextMenuEntry>[]

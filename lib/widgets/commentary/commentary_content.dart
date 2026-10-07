@@ -114,11 +114,8 @@ class _CommentaryContentState extends State<CommentaryContent>
     super.dispose();
   }
 
-  Future<void> _openAnchorTarget(Link link) async {
-    final tab = await buildLinkTargetTab(link);
-    if (!mounted) return;
-    widget.openBookCallback(tab);
-  }
+  Future<void> _openAnchorTarget(Link link) =>
+      openLinkTarget(link, (tab) => widget.openBookCallback(tab));
 
   void _loadContent() {
     // Validate link before loading content
