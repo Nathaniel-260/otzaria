@@ -115,6 +115,9 @@ void main() {
           alternativeWords: {
             0: ['שלם'],
           },
+          matchPolicy: SearchMatchPolicy(
+            proximityScope: SearchScope.sameParagraph,
+          ),
         ),
       );
 
@@ -122,63 +125,22 @@ void main() {
       expect(call.query, 'שלום');
       expect(call.facets, ['/תנך/בראשית']);
       expect(call.limit, 500);
-      expect(call.fuzzy, isTrue);
-      expect(call.distance, 2);
       expect(call.searchMode, SearchMode.fuzzy);
+      // ברירות המחדל שהמאגר השלים פעם: שלילה יורשת מרחק וטווח
+      expect(call.distance, 2);
+      expect(call.negativeDistance, 2);
+      expect(call.negativeScope, SearchScope.sameParagraph);
       expect(call.order, ResultsOrder.catalogue);
     });
   });
 }
 
 class _RecordingSearchRepository extends SearchRepository {
-  final calls =
-      <
-        ({
-          String query,
-          List<String> facets,
-          int limit,
-          bool fuzzy,
-          int distance,
-          SearchMode searchMode,
-          ResultsOrder order,
-        })
-      >[];
+  final calls = <SearchEngineRequest>[];
 
   @override
-  Future<List<SearchResult>> searchTexts(
-    String query,
-    List<String> facets,
-    int limit, {
-    int offset = 0,
-    ResultsOrder order = ResultsOrder.relevance,
-    bool fuzzy = false,
-    int distance = 0,
-    String negativeQuery = '',
-    int? negativeDistance,
-    SearchScope scope = SearchScope.wordDistance,
-    SearchScope? negativeScope,
-    SearchMode searchMode = SearchMode.exact,
-    Map<String, String>? customSpacing,
-    Map<String, String>? negativeCustomSpacing,
-    Map<int, List<String>>? alternativeWords,
-    Map<int, List<String>>? negativeAlternativeWords,
-    Map<String, Map<String, bool>>? searchOptions,
-    Map<String, Map<String, bool>>? negativeSearchOptions,
-    bool matchNikud = false,
-    bool matchTaamim = false,
-    ResultGrouping? grouping,
-    WordMatchMode wordMatchMode = WordMatchMode.all,
-    int? wordMatchCount,
-  }) async {
-    calls.add((
-      query: query,
-      facets: facets,
-      limit: limit,
-      fuzzy: fuzzy,
-      distance: distance,
-      searchMode: searchMode,
-      order: order,
-    ));
+  Future<List<SearchResult>> searchTexts(SearchEngineRequest request) async {
+    calls.add(request);
     return const [];
   }
 }

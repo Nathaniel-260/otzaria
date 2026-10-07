@@ -282,7 +282,13 @@ Future<void> main() async {
       );
       expect(quoted.map((r) => r.segment.toInt()), [0, 2]);
       expect(quoted.first.continuesToNextLine, isTrue);
-      final exact = await repository.searchTexts('ברא אלהים', ['/cross'], 100);
+      final exact = await repository.searchTexts(
+        const SearchEngineRequest(
+          query: 'ברא אלהים',
+          facets: ['/cross'],
+          limit: 100,
+        ),
+      );
       expect(
         exact.any((r) => r.segment.toInt() == 0 && r.continuesToNextLine),
         isTrue,

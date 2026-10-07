@@ -138,144 +138,41 @@ class _StubSearchRepository extends SearchRepository {
   List<SearchResult> fullTextResults = const [];
 
   @override
-  Future<List<SearchResult>> searchTexts(
-    String query,
-    List<String> facets,
-    int limit, {
-    int offset = 0,
-    ResultsOrder order = ResultsOrder.relevance,
-    bool fuzzy = false,
-    int distance = 0,
-    String negativeQuery = '',
-    int? negativeDistance,
-    SearchScope scope = SearchScope.wordDistance,
-    SearchScope? negativeScope,
-    SearchMode searchMode = SearchMode.exact,
-    Map<String, String>? customSpacing,
-    Map<String, String>? negativeCustomSpacing,
-    Map<int, List<String>>? alternativeWords,
-    Map<int, List<String>>? negativeAlternativeWords,
-    Map<String, Map<String, bool>>? searchOptions,
-    Map<String, Map<String, bool>>? negativeSearchOptions,
-    bool matchNikud = false,
-    bool matchTaamim = false,
-    ResultGrouping? grouping,
-    WordMatchMode wordMatchMode = WordMatchMode.all,
-    int? wordMatchCount,
-  }) async => fullTextResults;
+  Future<List<SearchResult>> searchTexts(SearchEngineRequest request) async =>
+      fullTextResults;
 
-  void _capture(
-    String query,
-    List<String> facets,
-    int limit, {
-    required int offset,
-    required ResultsOrder order,
-    required SearchMode searchMode,
-    required int distance,
-    required SearchScope scope,
-    required ResultGrouping? grouping,
-    required WordMatchMode wordMatchMode,
-    required Map<String, Map<String, bool>>? searchOptions,
-  }) {
+  void _capture(SearchEngineRequest request) {
     captured = {
-      'query': query,
-      'facets': facets,
-      'limit': limit,
-      'offset': offset,
-      'order': order,
-      'searchMode': searchMode,
-      'distance': distance,
-      'scope': scope,
-      'grouping': grouping,
-      'wordMatchMode': wordMatchMode,
-      'searchOptions': searchOptions,
+      'query': request.query,
+      'facets': request.facets,
+      'limit': request.limit,
+      'offset': request.offset,
+      'order': request.order,
+      'searchMode': request.searchMode,
+      'distance': request.distance,
+      'scope': request.scope,
+      'grouping': request.grouping,
+      'wordMatchMode': request.wordMatchMode,
+      'searchOptions': request.searchOptions,
     };
   }
 
   @override
   Future<SearchPageResult> searchTextsAndCount(
-    String query,
-    List<String> facets,
-    int limit, {
-    int offset = 0,
-    ResultsOrder order = ResultsOrder.relevance,
-    bool fuzzy = false,
-    int distance = 0,
-    String negativeQuery = '',
-    int? negativeDistance,
-    SearchScope scope = SearchScope.wordDistance,
-    SearchScope? negativeScope,
-    SearchMode searchMode = SearchMode.exact,
-    Map<String, String>? customSpacing,
-    Map<String, String>? negativeCustomSpacing,
-    Map<int, List<String>>? alternativeWords,
-    Map<int, List<String>>? negativeAlternativeWords,
-    Map<String, Map<String, bool>>? searchOptions,
-    Map<String, Map<String, bool>>? negativeSearchOptions,
-    bool matchNikud = false,
-    bool matchTaamim = false,
-    ResultGrouping? grouping,
-    WordMatchMode wordMatchMode = WordMatchMode.all,
-    int? wordMatchCount,
-  }) async {
+    SearchEngineRequest request,
+  ) async {
     pageCalls++;
-    _capture(
-      query,
-      facets,
-      limit,
-      offset: offset,
-      order: order,
-      searchMode: searchMode,
-      distance: distance,
-      scope: scope,
-      grouping: grouping,
-      wordMatchMode: wordMatchMode,
-      searchOptions: searchOptions,
-    );
+    _capture(request);
     return pageResult;
   }
 
   @override
   Stream<SearchStreamUpdate> searchTextsStreamWithCounts(
-    String query,
-    List<String> facets,
-    int limit, {
-    int offset = 0,
+    SearchEngineRequest request, {
     int chunkSize = 50,
-    ResultsOrder order = ResultsOrder.relevance,
-    bool fuzzy = false,
-    int distance = 0,
-    String negativeQuery = '',
-    int? negativeDistance,
-    SearchScope scope = SearchScope.wordDistance,
-    SearchScope? negativeScope,
-    SearchMode searchMode = SearchMode.exact,
-    Map<String, String>? customSpacing,
-    Map<String, String>? negativeCustomSpacing,
-    Map<int, List<String>>? alternativeWords,
-    Map<int, List<String>>? negativeAlternativeWords,
-    Map<String, Map<String, bool>>? searchOptions,
-    Map<String, Map<String, bool>>? negativeSearchOptions,
-    bool matchNikud = false,
-    bool matchTaamim = false,
-    ResultGrouping? grouping,
-    WordMatchMode wordMatchMode = WordMatchMode.all,
-    int? wordMatchCount,
   }) {
     streamWithCountsCalls++;
-    _capture(
-      query,
-      facets,
-      limit,
-      offset: offset,
-      order: order,
-      searchMode: searchMode,
-      distance: distance,
-      scope: scope,
-      grouping: grouping,
-      wordMatchMode: wordMatchMode,
-      searchOptions: searchOptions,
-    );
+    _capture(request);
     return streamOverride ?? Stream.fromIterable(updates);
   }
 }

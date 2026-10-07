@@ -151,19 +151,22 @@ Future<List<SearchResult>> searchBookWithEngine(
   final parameters = settings.activeParameters;
   final policy = settings.matchPolicy;
   return repository.searchTexts(
-    query,
-    [bookPath],
-    limit,
-    searchOptions: parameters.searchOptions,
-    alternativeWords: parameters.alternativeWords,
-    customSpacing: parameters.customSpacing,
-    fuzzy: settings.searchMode == SearchMode.fuzzy,
-    distance: settings.distance,
-    searchMode: settings.searchMode,
-    scope: policy.proximityScope,
-    wordMatchMode: policy.wordMatchMode,
-    wordMatchCount: policy.wordMatchCount,
-    order: ResultsOrder.catalogue,
+    SearchEngineRequest(
+      query: query,
+      facets: [bookPath],
+      limit: limit,
+      searchOptions: parameters.searchOptions,
+      alternativeWords: parameters.alternativeWords,
+      customSpacing: parameters.customSpacing,
+      distance: settings.distance,
+      negativeDistance: settings.distance,
+      searchMode: settings.searchMode,
+      scope: policy.proximityScope,
+      negativeScope: policy.proximityScope,
+      wordMatchMode: policy.wordMatchMode,
+      wordMatchCount: policy.wordMatchCount,
+      order: ResultsOrder.catalogue,
+    ),
   );
 }
 
