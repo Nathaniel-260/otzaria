@@ -260,14 +260,14 @@ class _CommentaryContentState extends State<CommentaryContent>
                       SmartTextWidget(
                         text: displayData,
                         settings: renderSettings,
-                        onAnchorTap: anchorLinks.isEmpty
+                        onAnchorTap: !hasPanelLinks
                             ? null
                             : (url) {
                                 cancelAnchorHover();
                                 final link = anchorLinkFromUrl(url);
                                 if (link != null) _openAnchorTarget(link);
                               },
-                        onAnchorHover: anchorLinks.isEmpty
+                        onAnchorHover: !hasPanelLinks
                             ? null
                             : (url, position) => handleAnchorHover(
                                 url,
@@ -275,7 +275,7 @@ class _CommentaryContentState extends State<CommentaryContent>
                                 onOpen: _openAnchorTarget,
                                 displayProfile: widget.displayProfile,
                               ),
-                        onAnchorHoverExit: anchorLinks.isEmpty
+                        onAnchorHoverExit: !hasPanelLinks
                             ? null
                             : handleAnchorHoverExit,
                         onNoteTap: notesForLine.isEmpty
