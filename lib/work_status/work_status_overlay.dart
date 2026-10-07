@@ -1,4 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
+import 'package:otzaria/attached_libraries/external_link_work_status.dart';
+import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/theme/app_tokens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -6,114 +8,198 @@ import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/work_status/work_status_item.dart';
 
-class WorkStatusOverlay extends StatelessWidget {
-  const WorkStatusOverlay({super.key});
+/// חלוני חיווי העבודה בפינת המסך: אינדוקס הספרים ושאר העבודות בחלון אחד,
+/// ואינדקס הקישורים בחלון נפרד שצמוד מימין לו (או במקומו כשהוא לבדו).
+class WorkStatusOverlay extends StatefulWidget {
+  const WorkStatusOverlay({super.key, this.links});
+
+  /// ברירת המחדל: [ExternalLinkRepository.instance].
+  final ExternalLinkRepository? links;
+
+  @override
+  State<WorkStatusOverlay> createState() => _WorkStatusOverlayState();
+}
+
+class _WorkStatusOverlayState extends State<WorkStatusOverlay> {
+  late final ExternalLinkRepository _links =
+      widget.links ?? ExternalLinkRepository.instance;
+  bool _linksDismissed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _links.buildProgress.addListener(_resetDismissWhenIdle);
+  }
+
+  @override
+  void dispose() {
+    _links.buildProgress.removeListener(_resetDismissWhenIdle);
+    super.dispose();
+  }
+
+  // סגירה תקפה לבנייה הנוכחית בלבד; בנייה חדשה מציגה את החלון שוב.
+  void _resetDismissWhenIdle() {
+    if (_links.buildProgress.value.isEmpty) _linksDismissed = false;
+  }
 
   @override
   Widget build(BuildContext context) {
     return BlocBuilder<WorkStatusCubit, WorkStatusState>(
       builder: (context, state) {
-        if (!state.hasActiveItems || state.isDismissed) {
-          return const SizedBox.shrink();
-        }
+        return ListenableBuilder(
+          listenable: Listenable.merge([
+            _links.buildProgress,
+            _links.buildPaused,
+            _links.buildEconomy,
+          ]),
+          builder: (context, _) {
+            final showBooks = state.hasActiveItems && !state.isDismissed;
+            final progress = _links.buildProgress.value;
+            final showLinks = progress.isNotEmpty && !_linksDismissed;
+            if (!showBooks && !showLinks) return const SizedBox.shrink();
 
-        final items = state.orderedItems;
-        final colorScheme = Theme.of(context).colorScheme;
-        final isWindows = Theme.of(context).platform == TargetPlatform.windows;
-        final alignment = isWindows
-            ? Alignment.bottomLeft
-            : Alignment.bottomRight;
-        final padding = isWindows
-            ? const EdgeInsets.only(bottom: 24, left: 16)
-            : const EdgeInsets.only(bottom: 24, right: 16);
-        final closeOnRight = alignment == Alignment.topRight;
-        // עבודה יחידה נשארת בתצוגה המלאה; כמה עבודות מוצגות בשורות אחידות.
-        final isSingle = items.length == 1;
+            final isWindows =
+                Theme.of(context).platform == TargetPlatform.windows;
+            final alignment = isWindows
+                ? Alignment.bottomLeft
+                : Alignment.bottomRight;
+            final padding = isWindows
+                ? const EdgeInsets.only(bottom: 24, left: 16)
+                : const EdgeInsets.only(bottom: 24, right: 16);
 
-        return Align(
-          alignment: alignment,
-          child: Padding(
-            padding: padding,
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: AppTokens.borderRadiusAll,
-              clipBehavior: Clip.antiAlias,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: colorScheme.surface.withValues(alpha: 0.96),
-                  borderRadius: AppTokens.borderRadiusAll,
-                  border: Border.all(color: colorScheme.outlineVariant),
-                  boxShadow: [
-                    BoxShadow(
-                      color: colorScheme.shadow.withValues(alpha: 0.12),
-                      blurRadius: 18,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Stack(
+            return Align(
+              alignment: alignment,
+              child: Padding(
+                padding: padding,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  textDirection: TextDirection.ltr,
                   children: [
-                    Padding(
-                      // בשורות האחידות המרווח בצד כפתור הסגירה מוגדל כדי שלא יכסה את החץ.
-                      padding: isSingle
-                          ? const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 16,
-                            )
-                          : EdgeInsets.fromLTRB(
-                              closeOnRight ? 16 : 32,
-                              12,
-                              closeOnRight ? 32 : 16,
-                              12,
-                            ),
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 380),
-                        child: isSingle
-                            ? _PrimaryItemRow(item: items.single)
-                            : Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  for (final (index, item)
-                                      in items.indexed) ...[
-                                    if (index > 0)
-                                      Divider(
-                                        height: 13,
-                                        color:
-                                            colorScheme.surfaceContainerHighest,
-                                      ),
-                                    _WorkItemRow(
-                                      key: ValueKey(item.id),
-                                      item: item,
-                                    ),
-                                  ],
-                                ],
+                    if (showBooks) Flexible(child: _booksCard(context, state)),
+                    if (showBooks && showLinks) const SizedBox(width: 12),
+                    if (showLinks)
+                      Flexible(
+                        child: _WorkStatusCard(
+                          key: const ValueKey('external-link-work-status'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 16,
+                          ),
+                          onClose: () => setState(() => _linksDismissed = true),
+                          child: _PrimaryItemRow(
+                            item: externalLinkWorkStatusItem(
+                              progress,
+                              isPaused: _links.buildPaused.value,
+                              isEconomy: _links.buildEconomy.value,
+                              onTogglePause: () => _links.buildPaused.value
+                                  ? _links.resumeBuild()
+                                  : _links.pauseBuild(),
+                              onToggleEconomy: () => _links.setBuildEconomy(
+                                !_links.buildEconomy.value,
                               ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: closeOnRight ? 8 : null,
-                      left: closeOnRight ? null : 8,
-                      child: IconButton(
-                        icon: const Icon(
-                          FluentIcons.dismiss_24_regular,
-                          size: 16,
+                            ),
+                          ),
                         ),
-                        color: colorScheme.onSurfaceVariant,
-                        tooltip: 'סגור',
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: () =>
-                            context.read<WorkStatusCubit>().dismiss(),
                       ),
-                    ),
                   ],
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
+    );
+  }
+
+  Widget _booksCard(BuildContext context, WorkStatusState state) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final items = state.orderedItems;
+    // עבודה יחידה נשארת בתצוגה המלאה; כמה עבודות מוצגות בשורות אחידות.
+    final isSingle = items.length == 1;
+    return _WorkStatusCard(
+      key: const ValueKey('books-work-status'),
+      // בשורות האחידות המרווח בצד כפתור הסגירה מוגדל כדי שלא יכסה את החץ.
+      padding: isSingle
+          ? const EdgeInsets.symmetric(horizontal: 20, vertical: 16)
+          : const EdgeInsets.fromLTRB(32, 12, 16, 12),
+      onClose: () => context.read<WorkStatusCubit>().dismiss(),
+      child: isSingle
+          ? _PrimaryItemRow(item: items.single)
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (final (index, item) in items.indexed) ...[
+                  if (index > 0)
+                    Divider(
+                      height: 13,
+                      color: colorScheme.surfaceContainerHighest,
+                    ),
+                  _WorkItemRow(key: ValueKey(item.id), item: item),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+/// מסגרת החלון הקופץ: רקע, צל וכפתור סגירה.
+class _WorkStatusCard extends StatelessWidget {
+  const _WorkStatusCard({
+    super.key,
+    required this.child,
+    required this.padding,
+    required this.onClose,
+  });
+
+  final Widget child;
+  final EdgeInsets padding;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: AppTokens.borderRadiusAll,
+      clipBehavior: Clip.antiAlias,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colorScheme.surface.withValues(alpha: 0.96),
+          borderRadius: AppTokens.borderRadiusAll,
+          border: Border.all(color: colorScheme.outlineVariant),
+          boxShadow: [
+            BoxShadow(
+              color: colorScheme.shadow.withValues(alpha: 0.12),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Stack(
+          children: [
+            Padding(
+              padding: padding,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 380),
+                child: child,
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 8,
+              child: IconButton(
+                icon: const Icon(FluentIcons.dismiss_24_regular, size: 16),
+                color: colorScheme.onSurfaceVariant,
+                tooltip: 'סגור',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: onClose,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

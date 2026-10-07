@@ -201,6 +201,26 @@ void main() {
       expect(find.text(incomplete), findsNothing);
       expect(find.text(retry), findsNothing);
     });
+
+    testWidgets('מסד שאינו תקין אינו מציג צ׳יפ וכפתור של אינדקס לא שלם', (
+      tester,
+    ) async {
+      final repository = _FakeRepository([
+        _library('dbA', status: AttachedLibraryStatus.invalid),
+      ]);
+      AttachedLibrariesRepository.instance = repository;
+      await pumpPanel(tester, repository);
+      final links = ExternalLinkRepository.instance;
+      addTearDown(() => links.incompleteSlugs.value = const {});
+
+      links.incompleteSlugs.value = {'dbA'};
+      await tester.pump();
+      expect(
+        find.text('אינדקס הקישורים לא הושלם — המפרשים של המסד אינם מוצגים'),
+        findsNothing,
+      );
+      expect(find.text('בנה אינדקס מחדש'), findsNothing);
+    });
   });
 
   testWidgets('בלי קישור (מובייל) — אין הוספת תיקייה', (tester) async {

@@ -6,7 +6,9 @@ import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart'
     hide SwitchSettingsTile;
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:otzaria/attached_libraries/bloc/attached_libraries_bloc.dart';
 import 'package:otzaria/attached_libraries/view/attached_libraries_panel.dart';
+import 'package:otzaria/attached_libraries/view/external_link_index_tile.dart';
 import 'package:otzaria/settings/engine/settings_engine_exports.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/search/settings_search_models.dart';
@@ -74,6 +76,14 @@ class LibrarySettingsTab extends StatefulWidget {
         'איפוס',
         'עדכן',
       ],
+    ),
+    SettingsSearchEntry(
+      id: 'library.search.link_index_status',
+      title: 'אינדקס קישורים',
+      subtitle: 'סטטוס ועדכון אינדקס הקישורים של מסדי הספרים המצורפים',
+      tab: SettingsTab.library,
+      cardId: 'library.repository',
+      keywords: ['קישורים', 'אינדקס', 'בנייה', 'מעודכן', 'מסד', 'מפרשים'],
     ),
     SettingsSearchEntry(
       id: 'library.location.hebrewbooks',
@@ -653,6 +663,9 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     SettingsState state,
     LibraryState libraryState,
   ) {
+    final showLinkIndex = context.select<AttachedLibrariesBloc, bool>(
+      (bloc) => hasExternalLinkLibrary(bloc.state.libraries),
+    );
     return [
       SettingsActionTile.switchTile(
         icon: FluentIcons.arrow_clockwise_24_regular,
@@ -792,6 +805,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
           );
         },
       ),
+      if (showLinkIndex) const ExternalLinkIndexTile(),
     ];
   }
 }

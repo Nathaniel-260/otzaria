@@ -11,6 +11,7 @@ import 'package:otzaria/attached_libraries/models/attached_library_update_status
 import 'package:otzaria/attached_libraries/repository/attached_libraries_repository.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/attached_libraries/view/attached_library_update_view.dart';
+import 'package:otzaria/attached_libraries/view/external_link_index_tile.dart';
 import 'package:otzaria/core/messages/settings_messages.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
@@ -286,7 +287,11 @@ class _AttachedLibrariesPanelState extends State<AttachedLibrariesPanel> {
                 linksIncomplete: _links.incompleteSlugs.value.contains(
                   libraries[i].slug,
                 ),
-                onRebuildLinks: () => _links.rebuild(libraries[i].slug),
+                onRebuildLinks: () async {
+                  if (await confirmLinkIndexRebuild(context)) {
+                    _links.requestRebuild(libraries[i].slug);
+                  }
+                },
                 enabled: !state.isBusy,
                 update: state.updateOf(libraries[i]),
                 onCheckUpdate: () => context.read<AttachedLibrariesBloc>().add(
@@ -447,7 +452,7 @@ class _AttachedLibraryTile extends StatelessWidget {
                     'בונה אינדקס קישורים — המפרשים של המסד יופיעו בסיום',
                   ),
                 ),
-              if (linksIncomplete && !linksBuilding)
+              if (library.isOk && linksIncomplete && !linksBuilding)
                 AttachedInfoChip(
                   label: context.settingsText(
                     'אינדקס הקישורים לא הושלם — המפרשים של המסד אינם מוצגים',
@@ -457,7 +462,7 @@ class _AttachedLibraryTile extends StatelessWidget {
                 ),
             ],
           ),
-          if (linksIncomplete && !linksBuilding)
+          if (library.isOk && linksIncomplete && !linksBuilding)
             TextButton(
               onPressed: enabled ? onRebuildLinks : null,
               child: Text(context.settingsText('בנה אינדקס מחדש')),
