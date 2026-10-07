@@ -11,13 +11,22 @@ let package = Package(
     targets: [
         // כל הלוגיקה, בלי ממשק — כך היא נבדקת ב-XCTest בלי חלון.
         .target(name: "AssistantCore"),
+        // החלון והעמודים. ספרייה, כדי שגם AssistantSnapshots יצייר אותם.
+        .target(
+            name: "AssistantUI",
+            dependencies: ["AssistantCore"]
+        ),
         .executableTarget(
             name: "DownloadAssistant",
-            dependencies: ["AssistantCore"]
+            dependencies: ["AssistantUI"]
         ),
         .testTarget(
             name: "AssistantCoreTests",
             dependencies: ["AssistantCore"]
+        ),
+        .testTarget(
+            name: "AssistantUITests",
+            dependencies: ["AssistantUI", "AssistantCore"]
         ),
     ],
     // בדיקות ה-concurrency המחמירות של Swift 6 היו מפילות את הבנייה על ה-runner.
