@@ -238,10 +238,8 @@ class DirectErrorReportService {
         .toList();
   }
 
-  Future<PendingReport?> _rowOf(String kind, String reportId) async {
-    final rows = await _reports.listByKind(kind);
-    return rows.where((row) => row.payload['id'] == reportId).firstOrNull;
-  }
+  Future<PendingReport?> _rowOf(String kind, String reportId) =>
+      _reports.findByPayloadId(kind, reportId);
 
   /// מסמן דיווח מהתור כנשלח ידנית: מעביר אותו להיסטוריית הנשלחים
   /// ומסיר אותו מהתור, מבלי לפנות לשרת.

@@ -81,19 +81,31 @@ class PendingReportStore {
       'WHERE kind = ? ORDER BY id',
       [kind],
     );
-    return rows.map((row) {
-      final decoded = jsonDecode(row['payload_json'] as String);
-      return PendingReport(
-        id: row['id'] as int,
-        kind: row['kind'] as String,
-        payload: decoded is Map
-            ? Map<String, dynamic>.from(decoded)
-            : <String, dynamic>{},
-        createdAt: DateTime.fromMillisecondsSinceEpoch(
-          row['created_at'] as int,
-        ),
-      );
-    }).toList();
+    return rows.map(_decodeRow).toList();
+  }
+
+  /// מחפש את הרשומה הראשונה מסוג [kind] שמזהה התוכן שלה הוא [reportId].
+  Future<PendingReport?> findByPayloadId(String kind, String reportId) async {
+    final db = await _database.database;
+    final rows = db.select(
+      'SELECT id, kind, payload_json, created_at FROM pending_reports '
+      r"WHERE kind = ? AND json_type(payload_json, '$.id') = 'text' "
+      r"AND json_extract(payload_json, '$.id') = ? ORDER BY id LIMIT 1",
+      [kind, reportId],
+    );
+    return rows.isEmpty ? null : _decodeRow(rows.single);
+  }
+
+  static PendingReport _decodeRow(Map<String, Object?> row) {
+    final decoded = jsonDecode(row['payload_json'] as String);
+    return PendingReport(
+      id: row['id'] as int,
+      kind: row['kind'] as String,
+      payload: decoded is Map
+          ? Map<String, dynamic>.from(decoded)
+          : <String, dynamic>{},
+      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+    );
   }
 
   /// מעדכן את התוכן של שורה קיימת, בלי לשנות את מקומה בתור.
