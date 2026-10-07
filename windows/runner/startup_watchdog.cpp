@@ -23,6 +23,7 @@ constexpr DWORD kStallThresholdMs = 3000;
 constexpr DWORD kCaptureIntervalMs = 5000;
 constexpr int kMaxCaptures = 6;
 constexpr DWORD kHeartbeatIntervalMs = 250;
+constexpr DWORD kModuleRefreshMs = 2000;
 constexpr ULONGLONG kMaxLifetimeMs = 300000;
 constexpr int kMaxFrames = 48;
 
@@ -44,8 +45,15 @@ using ModuleSnapshot = std::vector<ModuleRange>;
 std::shared_ptr<const ModuleSnapshot> g_modules =
     std::make_shared<const ModuleSnapshot>();
 
+// ריענון המודולים כאן, ב-thread הראשי כשהוא מגיב, כולל ספריות FFI שנטענו מאוחר.
 void CALLBACK HeartbeatProc(HWND, UINT, UINT_PTR, DWORD) {
-  g_last_beat.store(::GetTickCount64(), std::memory_order_relaxed);
+  const ULONGLONG now = ::GetTickCount64();
+  g_last_beat.store(now, std::memory_order_relaxed);
+  if (now - g_start_tick > kMaxLifetimeMs) return RequestStop();
+  static ULONGLONG last_refresh = 0;
+  if (now - last_refresh < kModuleRefreshMs) return;
+  last_refresh = now;
+  RefreshModules();
 }
 
 std::string NarrowPathTail(const std::wstring& path) {
