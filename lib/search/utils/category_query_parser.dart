@@ -97,9 +97,8 @@ ParsedCategoryQuery parseCategoryQuery(String rawQuery, Library? library) {
 
 /// נתיבי ה-facet של כל הקטגוריות והספרים שכותרתם תואמת ל-[name].
 ///
-/// ההתאמה בשכבות: כותרת ספר מדויקת → השם כמילים שלמות בכותרת/בכינוי →
-/// הכלה חלקית → התאמה סלחנית לשגיאות כתיב. מוחזרת השכבה הטובה ביותר שאינה
-/// ריקה, כך ש-`@בראשית` אינו גורר את "רש"י על בראשית".
+/// כותרת ספר מדויקת כוללת גם קטגוריות בשם זהה. אחרת מחפשים מילים שלמות,
+/// הכלה חלקית ולבסוף שגיאות כתיב; מוחזרת השכבה הטובה ביותר שאינה ריקה.
 List<String> _facetsForName(String name, Library? library) {
   final normalizedName = normalizeFindText(name);
   if (library == null || normalizedName.isEmpty) {
@@ -126,10 +125,6 @@ List<String> _facetsForName(String name, Library? library) {
     return null;
   }
 
-  for (final category in library.getAllCategories()) {
-    final tier = tierOf([normalizeFindText(category.title)]);
-    if (tier != null) tiers[tier].add(category.path);
-  }
   for (final book in library.getAllBooks()) {
     final id = book.id;
     final acronyms = id == null
@@ -146,6 +141,13 @@ List<String> _facetsForName(String name, Library? library) {
         ),
       );
     }
+  }
+  for (final category in library.getAllCategories()) {
+    final title = normalizeFindText(category.title);
+    final tier = tiers[0].isNotEmpty && title == normalizedName
+        ? 0
+        : tierOf([title]);
+    if (tier != null) tiers[tier].add(category.path);
   }
 
   for (final tier in tiers) {

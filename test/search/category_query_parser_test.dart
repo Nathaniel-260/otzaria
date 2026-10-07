@@ -143,6 +143,38 @@ void main() {
       expect(parsed.facets!.single, contains('משנה ברורה'));
     });
 
+    test('ספר זהה שומר גם קטגוריה זהה בלי להרחיב להתאמות חלקיות', () {
+      final exactBook = TextBook(title: 'משנה ברורה', id: 1);
+      final category = _category('משנה ברורה', [
+        TextBook(title: 'ביאור הלכה', id: 2),
+      ]);
+      final library = Library(
+        categories: [
+          category,
+          _category('הלכה', [
+            exactBook,
+            TextBook(title: 'קיצור משנה ברורה', id: 3),
+          ]),
+          _category('פירושי משנה ברורה', [
+            TextBook(title: 'הערות', id: 4),
+          ]),
+        ],
+      );
+
+      final parsed = parseCategoryQuery('שלום@משנה ברורה', library);
+
+      expect(
+        parsed.facets,
+        unorderedEquals([
+          category.path,
+          FacetHelper.buildBookFacet(
+            FacetHelper.resolveCategoryPath(exactBook),
+            exactBook,
+          ),
+        ]),
+      );
+    });
+
     test('שגיאת כתיב — התאמה סלחנית לפי מרחק עריכה', () {
       final library = Library(
         categories: [
