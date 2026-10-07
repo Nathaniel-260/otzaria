@@ -1,7 +1,7 @@
 import 'package:otzaria/utils/file/zstd_stream_extractor.dart';
 
 /// מחלץ ארכיון tar.zst לתיקיית היעד בזרימה אחת (zstd → tar), בלי קובץ tar
-/// זמני — שהיה מכפיל את המקום הנדרש בדיסק.
+/// זמני, כדי שהחילוץ לא ידרוש מקום כפול בדיסק.
 Future<void> extractTarZstToDir(
   String archivePath,
   String outputDir, {
