@@ -6,8 +6,6 @@ abstract class EmptyLibraryEvent extends Equatable {
   List<Object?> get props => [];
 }
 
-class PickDirectoryRequested extends EmptyLibraryEvent {}
-
 /// שימוש בספרייה קיימת במקומה: [folderPath] נשמר כנתיב הספרייה כמות שהוא,
 /// ללא העתקה או חילוץ. חוסך שכפול של קובץ ה-DB כשהוא כבר יושב במקום מתאים.
 class UseLibraryInPlaceRequested extends EmptyLibraryEvent {
@@ -125,35 +123,4 @@ class StorageLocationSelected extends EmptyLibraryEvent {
 
   @override
   List<Object?> get props => [libraryRoot];
-}
-
-/// בחירת קובץ seforim.db ישירות דרך file picker (SAF-aware).
-/// משמש כאשר הגישה לנתיב הפיזי נכשלת ב-Android Scoped Storage.
-class PickDbFileRequested extends EmptyLibraryEvent {
-  /// תיקיית הספרייה שנבחרה (תישמר ב-keyLibraryPath)
-  final String libraryPath;
-
-  /// הנתיב הפנימי שאליו יועתק הקובץ
-  final String internalDbPath;
-
-  /// הנתיב החיצוני המקורי של seforim.db (למחיקה אם shouldMove == true)
-  final String externalDbPath;
-
-  /// אם true — ינסה למחוק את הקובץ החיצוני המקורי לאחר ההעתקה.
-  final bool shouldMove;
-
-  PickDbFileRequested({
-    required this.libraryPath,
-    required this.internalDbPath,
-    required this.externalDbPath,
-    this.shouldMove = false,
-  });
-
-  @override
-  List<Object?> get props => [
-    libraryPath,
-    internalDbPath,
-    externalDbPath,
-    shouldMove,
-  ];
 }

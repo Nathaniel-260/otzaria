@@ -6,7 +6,6 @@ import 'package:bloc/bloc.dart';
 import 'package:otzaria/core/app_paths.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:otzaria/utils/text/byte_size_text.dart';
-import 'package:otzaria/utils/file/file_picker_dialog_options.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
@@ -74,7 +73,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
          const EmptyLibraryInitial(downloadDisabledReason: 'בודק מקום פנוי...'),
        ) {
     HttpClientRegistry.register(_httpClient.close);
-    on<PickDirectoryRequested>(_onPickDirectoryRequested);
     on<UseLibraryInPlaceRequested>(_onUseLibraryInPlaceRequested);
     on<DownloadLibraryRequested>(_onDownloadLibraryRequested);
     on<ImportLibraryFolderRequested>(_onImportLibraryFolderRequested);
@@ -84,7 +82,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       (_, _) => _activeImportCancel?.cancel(),
     );
     on<UpdateLibraryRequested>(_onUpdateLibraryRequested);
-    on<PickDbFileRequested>(_onPickDbFileRequested);
     on<CheckDiskSpaceRequested>(_onCheckDiskSpaceRequested);
     on<StorageLocationSelected>(_onStorageLocationSelected);
     // בדיקת מקום פנוי מתבצעת מיד — כפתור ההורדה מושבת עד להשלמתה
@@ -134,24 +131,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
   // סיבת השבתת כפתור ההורדה — נשמרת כ-instance field כדי להישמר בין state transitions
   String? _downloadDisabledReason = 'בודק מקום פנוי...';
   final String? _defaultLibraryPathOverride;
-
-  // [בדיקת אנדרואיד] לא נגיש מ-UI כרגע (PickDirectoryRequested לא משוגר). מפעיל
-  // את זרימת בחירת התיקייה + SAF — לאמת על מכשיר לפני חיבור מחדש או מחיקה.
-  Future<void> _onPickDirectoryRequested(
-    PickDirectoryRequested event,
-    Emitter<EmptyLibraryState> emit,
-  ) async {
-    final result = await FilePicker.getDirectoryPath(
-      dialogTitle: 'בחר את תיקיית הספרייה (התיקייה שמכילה את seforim.db)',
-      windowsOptions: kModalWindowsOptions,
-      linuxOptions: kModalLinuxOptions,
-    );
-
-    if (result == null) return;
-
-    emit(EmptyLibraryLoading(selectedPath: result));
-    await _handleDirectorySelection(result, emit);
-  }
 
   /// מצביע על ספרייה קיימת בלי להעתיק דבר — מאמת שיש seforim.db בתיקייה
   /// ושומר אותה כנתיב הספרייה.
@@ -1073,86 +1052,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         return;
       }
 
-      // [בדיקת אנדרואיד] זרימת SAF: העתקת seforim.db מאחסון לא-נגיש ל-native
-      // אל אחסון פנימי. לא נגישה מ-UI כרגע — לאמת על מכשיר לפני שינוי.
-      if (Platform.isAndroid && !_isPathNativeAccessible(dbFilePath)) {
-        final internalDbPath = await _getInternalDbPath();
-        final dbStat = await dbFile.stat();
-        final dbSize = dbStat.size;
-        final appDir = await getApplicationDocumentsDirectory();
-        final freeSpace = await _getFreeInternalSpace(appDir.path);
-
-        // בדיקת מקום פנוי לפני ניסיון ההעתקה
-        // (גם "העבר" לא יעזור — הוא מעתיק לפנימי לפני מחיקת החיצוני)
-        if (freeSpace > 0 && dbSize > freeSpace) {
-          final needed = formatMegabytesLtr(dbSize);
-          final free = formatMegabytesLtr(freeSpace);
-          emit(
-            _error(
-              errorMessage:
-                  'אין מספיק מקום פנוי באחסון הפנימי.\n'
-                  'נדרש: $needed, פנוי: $free.\n'
-                  'יש לפנות מקום ידנית ולנסות שוב.',
-              selectedPath: directoryPath,
-            ),
-          );
-          return;
-        }
-
-        // נסה להעתיק ישירות — עובד אם לאפליקציה יש READ_EXTERNAL_STORAGE
-        emit(EmptyLibraryLoading(selectedPath: directoryPath));
-        try {
-          final destFile = File(internalDbPath);
-          await destFile.parent.create(recursive: true);
-          await File(dbFilePath).openRead().pipe(destFile.openWrite());
-
-          // העתקה הצליחה — שמור הגדרות והמשך
-          await Settings.setValue(
-            SettingsRepository.keyLibraryPath,
-            directoryPath,
-          );
-          await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
-          await Settings.setValue(
-            SettingsRepository.keyDbEffectivePath,
-            internalDbPath,
-          );
-          emit(EmptyLibraryDirectorySelected(selectedPath: directoryPath));
-          return;
-        } on PathAccessException {
-          // dart:io לא יכול לגשת לקובץ — צריך FilePicker (SAF)
-          // ממשיכים למטה להצגת הדיאלוג
-        } catch (copyError) {
-          // שגיאת I/O שאינה הרשאה (למשל ENOSPC, שגיאת קריאה)
-          // מנקים קובץ יעד חלקי אם נוצר
-          try {
-            await File(internalDbPath).delete();
-          } catch (_) {}
-          final isNoSpace =
-              copyError.toString().contains('No space') ||
-              copyError.toString().contains('ENOSPC');
-          emit(
-            _error(
-              errorMessage: isNoSpace
-                  ? 'אין מספיק מקום פנוי. יש לפנות מקום ולנסות שוב.'
-                  : 'שגיאה בהעתקת קובץ הספרייה: $copyError',
-              selectedPath: directoryPath,
-            ),
-          );
-          return;
-        }
-        // נגענו כאן רק אם PathAccessException — הדרך היחידה קדימה היא picker שני
-        emit(
-          EmptyLibraryAskingDbCopy(
-            externalDbPath: dbFilePath,
-            libraryPath: directoryPath,
-            internalDbPath: internalDbPath,
-            dbSizeBytes: dbSize,
-            freeSpaceBytes: freeSpace,
-          ),
-        );
-        return;
-      }
-
       await Settings.setValue(SettingsRepository.keyLibraryPath, directoryPath);
       await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
       // נקה override קודם אם קיים
@@ -1168,36 +1067,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
       );
     }
   }
-
-  /// בודק אם נתיב נגיש לספריית sqlite3 native ב-Android.
-  ///
-  /// ב-Android Scoped Storage, רק אחסון פנימי (/data/) ואחסון חיצוני
-  /// ייעודי לאפליקציה (Android/data/PACKAGE_NAME/) נגיש לגישה native.
-  /// נתיבים כגון /storage/emulated/0/Download/ אינם נגישים.
-  static bool _isPathNativeAccessible(String filePath) {
-    if (!Platform.isAndroid) return true;
-    // אחסון פנימי
-    if (filePath.startsWith('/data/')) return true;
-    // אחסון חיצוני ייעודי לאפליקציה
-    if (filePath.contains('/Android/data/')) return true;
-    // אחסון חיצוני ייעודי אחר
-    if (filePath.contains('/Android/obb/')) return true;
-    return false;
-  }
-
-  /// מחזיר את הנתיב הפנימי שאליו יועתק seforim.db ב-Android.
-  static Future<String> _getInternalDbPath() async {
-    final appDir = await getApplicationDocumentsDirectory();
-    return path.join(
-      appDir.path,
-      'otzaria',
-      DatabaseConstants.databaseFileName,
-    );
-  }
-
-  /// מקום פנוי באחסון הפנימי, או -1 כשלא ניתן לקבוע.
-  static Future<int> _getFreeInternalSpace(String dirPath) async =>
-      (await getDiskSpaceInfo(dirPath)).freeBytes;
 
   /// בודק שיש מקום להורדה ולחילוץ, לפי הגדלים האמיתיים של [assets] כשהם
   /// ידועים ולפי [measuredLibraryDownload] לפני כן.
@@ -1367,102 +1236,6 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     zipFiles: zipFiles,
     downloadDisabledReason: _downloadDisabledReason,
   );
-
-  /// בוחר את קובץ seforim.db ישירות דרך FilePicker (SAF-aware).
-  /// משמש כאשר הנתיב הפיזי אינו נגיש ל-dart:io ב-Android Scoped Storage.
-  // [בדיקת אנדרואיד] המשך זרימת ה-SAF (אחרי EmptyLibraryAskingDbCopy). מגיע רק
-  // מ-system_settings_tab, וזרימה זו אינה ניתנת-להתנעה כרגע — לאמת על מכשיר.
-  Future<void> _onPickDbFileRequested(
-    PickDbFileRequested event,
-    Emitter<EmptyLibraryState> emit,
-  ) async {
-    try {
-      final pickedFile = await FilePicker.pickFile(
-        type: FileType.any,
-        dialogTitle: 'בחר את קובץ ${DatabaseConstants.databaseFileName}',
-        windowsOptions: kModalWindowsOptions,
-        linuxOptions: kModalLinuxOptions,
-      );
-
-      if (pickedFile == null) {
-        // המשתמש ביטל — חזרה לדיאלוג ההעתקה
-        final internalDbPath = await _getInternalDbPath();
-        emit(
-          EmptyLibraryAskingDbCopy(
-            externalDbPath: '',
-            libraryPath: event.libraryPath,
-            internalDbPath: internalDbPath,
-            dbSizeBytes: 0,
-            freeSpaceBytes: -1,
-          ),
-        );
-        return;
-      }
-
-      // וודא שנבחר הקובץ הנכון — אם לא, חזור לדיאלוג עם הסבר
-      if (pickedFile.name != DatabaseConstants.databaseFileName) {
-        final internalDbPath = await _getInternalDbPath();
-        emit(
-          EmptyLibraryAskingDbCopy(
-            externalDbPath: event.externalDbPath,
-            libraryPath: event.libraryPath,
-            internalDbPath: internalDbPath,
-            dbSizeBytes: 0,
-            freeSpaceBytes: -1,
-            errorMessage:
-                'יש לבחור את הקובץ ${DatabaseConstants.databaseFileName}. '
-                'נבחר: "${pickedFile.name}" — נסה שוב.',
-          ),
-        );
-        return;
-      }
-
-      emit(EmptyLibraryLoading(selectedPath: event.libraryPath));
-
-      final sourcePath = pickedFile.path;
-      final destFile = File(event.internalDbPath);
-      await destFile.parent.create(recursive: true);
-
-      if (sourcePath == null) {
-        throw Exception('FilePicker לא החזיר נתיב נגיש לקובץ שנבחר');
-      }
-
-      // העתק תוך שימוש ב-streams (FilePicker מספק נתיב נגיש מ-cache SAF)
-      await File(sourcePath).openRead().pipe(destFile.openWrite());
-
-      // אם בחר להעביר — מחק את קובץ המקור החיצוני האמיתי
-      if (event.shouldMove && event.externalDbPath.isNotEmpty) {
-        try {
-          await File(event.externalDbPath).delete();
-        } catch (_) {
-          // dart:io עשוי להיכשל על Scoped Storage — לא קריטי, ה-DB כבר הועתק
-        }
-      }
-
-      await Settings.setValue(
-        SettingsRepository.keyLibraryPath,
-        event.libraryPath,
-      );
-      await Settings.setValue(SettingsRepository.keyLibraryFolderName, '');
-      await Settings.setValue(
-        SettingsRepository.keyDbEffectivePath,
-        event.internalDbPath,
-      );
-
-      emit(EmptyLibraryDirectorySelected(selectedPath: event.libraryPath));
-    } catch (e) {
-      // זיהוי שגיאת חוסר מקום (ENOSPC / No space left)
-      final isNoSpace =
-          (e is FileSystemException && e.osError?.errorCode == 28) ||
-          e.toString().contains('No space') ||
-          e.toString().contains('ENOSPC');
-      final msg = isNoSpace
-          ? 'אין מספיק מקום פנוי. בחר "העבר" (מחיקת מקור) כדי לפנות מקום, '
-                'או פנה מקום ידנית ונסה שוב.'
-          : 'שגיאה בהעתקת קובץ הספרייה: $e';
-      emit(_error(errorMessage: msg, selectedPath: event.libraryPath));
-    }
-  }
 
   Future<void> _checkAndSaveExtractedDatabase(
     String extractedDirectory,

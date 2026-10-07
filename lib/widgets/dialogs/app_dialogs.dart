@@ -304,34 +304,3 @@ Future<bool?> showWarningDialog({
     ),
   ),
 );
-
-Future<bool?> showDbCopyRequiredDialog({
-  required BuildContext context,
-  required String sizeText,
-  bool barrierDismissible = false,
-}) => showTwoActionsDialog(
-  context: context,
-  title: 'נדרשת העתקה של קובץ הספרייה',
-  content: '',
-  barrierDismissible: barrierDismissible,
-  cancelText: 'העתק (שמור מקור)',
-  confirmText: 'העתק + נסה מחק מקור',
-  customContent: Column(
-    mainAxisSize: MainAxisSize.min,
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        'לא ניתן לגשת ישירות לקובץ seforim.db (גודל: $sizeText) מכיוון שהוא נמצא באחסון חיצוני ב-Android.',
-      ),
-      const SizedBox(height: 12),
-      const Text(
-        'לחץ על כפתור למטה, נווט לאותה תיקייה ובחר את הקובץ seforim.db — האפליקציה תעתיק אותו לאחסון הפנימי.',
-      ),
-      const SizedBox(height: 6),
-      const Text(
-        '(אפשרות "נסה מחק מקור" — ניסיון למחוק לאחר העתקה. עשויה שלא להצליח בכל גרסאות Android.)',
-        style: TextStyle(fontSize: 12),
-      ),
-    ],
-  ),
-);
