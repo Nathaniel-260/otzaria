@@ -2028,15 +2028,24 @@ jobs:
           cat > "$BUNDLE_ROOT/README.txt" << 'EOF'
           אוצריא ל-Android — חבילה מלאה
 
-          חלצו את כל קובצי ה-ZIP לאותה תיקייה, התקינו את ה-APK, פתחו את אוצריא ובחרו
-          'ייבוא מתיקייה' → בחרו את התיקייה otzaria-android-full.
+          1. חלצו את כל קובצי ה-ZIP לאותה תיקייה. אם מנהל הקבצים חילץ כל ZIP
+             לתיקייה נפרדת, העבירו את כל הקבצים לתיקייה אחת בשם otzaria-android-full.
+          2. התקינו את otzaria-android.apk.
+          3. פתחו את אוצריא, לחצו 'בחר מיקום או הורד ספרייה' (או בהגדרות: 'מיקום
+             הספרייה והאינדקס'), בחרו 'ייבוא מתיקיית קובצי הספרייה' → 'בחר תיקייה',
+             ובחרו את התיקייה otzaria-android-full.
           אין לחלץ או לשנות את שמות קובצי ה-part וה-manifest.json: אוצריא מאמתת אותם
           ופורסת מהם את הספרייה ואת אינדקס החיפוש.
 
           Otzaria for Android — FULL bundle
 
-          Extract all the ZIP files into the same folder, install the APK, open Otzaria
-          and choose "Import from folder" → pick the otzaria-android-full folder.
+          1. Extract all the ZIP files into the same folder. If your file manager put
+             each ZIP in a folder of its own, move all the files into one folder named
+             otzaria-android-full.
+          2. Install otzaria-android.apk.
+          3. Open Otzaria, tap the setup button on the empty-library screen (or, in
+             Settings, "Library and Index Folder"), choose "Import from the Library
+             Files Folder" → "Select Folder", and pick the otzaria-android-full folder.
           Do not extract or rename the part and manifest.json files: Otzaria verifies
           them and installs the library and the search index from them.
           EOF
