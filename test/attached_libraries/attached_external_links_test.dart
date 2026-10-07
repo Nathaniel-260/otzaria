@@ -689,6 +689,301 @@ void main() {
       expect(seen.where((slugs) => slugs.isNotEmpty), isEmpty);
     });
 
+    /// בנייה איטית וצפופה בדיווחים, כדי שאפשר לתפוס אותה באמצע.
+    void slowBuild({int batchSize = 1}) {
+      final batch = ExternalLinkRepository.insertBatchSize;
+      final pause = ExternalLinkRepository.batchPause;
+      final interval = ExternalLinkRepository.progressInterval;
+      addTearDown(() {
+        ExternalLinkRepository.insertBatchSize = batch;
+        ExternalLinkRepository.batchPause = pause;
+        ExternalLinkRepository.progressInterval = interval;
+      });
+      ExternalLinkRepository.insertBatchSize = batchSize;
+      ExternalLinkRepository.batchPause = const Duration(milliseconds: 100);
+      ExternalLinkRepository.progressInterval = Duration.zero;
+    }
+
+    test('buildProgress עולה עד total, ומתנקה בסיום', () async {
+      final batch = ExternalLinkRepository.insertBatchSize;
+      final interval = ExternalLinkRepository.progressInterval;
+      addTearDown(() {
+        ExternalLinkRepository.insertBatchSize = batch;
+        ExternalLinkRepository.progressInterval = interval;
+      });
+      ExternalLinkRepository.insertBatchSize = 2;
+      ExternalLinkRepository.progressInterval = Duration.zero;
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      final seen = <ExternalLinkBuildProgress>[];
+      links.buildProgress.addListener(() {
+        final progress = links.buildProgress.value[library.slug];
+        if (progress != null) seen.add(progress);
+      });
+
+      expect(await links.sync(), {library.slug});
+      expect(
+        seen.map((p) => p.done),
+        orderedEquals([...seen.map((p) => p.done)]..sort()),
+      );
+      // הדיווח הראשון הוא רשימת ה-slugs, עוד לפני ספירת השורות.
+      expect(seen.first.total, 0);
+      expect(seen.skip(1).every((p) => p.total == 5), isTrue);
+      expect(seen[1].done, 0);
+      expect(seen.last.done, 5);
+      expect(seen.last.fraction, 1);
+      expect(links.buildProgress.value, isEmpty);
+      expect(links.buildingSlugs.value, isEmpty);
+    });
+
+    test('כשל בסנכרון מנקה את buildProgress', () async {
+      await attach(attachedDb('ext', rows: fiveRows()));
+      // נתיב שהוא תיקייה — פתיחת cache.db נכשלת.
+      final broken = ExternalLinkRepository(
+        registry: registry,
+        cacheDbPath: () async => tempDir.path,
+      );
+      await expectLater(broken.sync(), throwsA(anything));
+      expect(broken.buildProgress.value, isEmpty);
+      expect(broken.buildingSlugs.value, isEmpty);
+    });
+
+    test('הסרת מסד לא שלם מנקה את incompleteSlugs', () async {
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      await links.sync();
+      final db = sqlite3.sqlite3.open(cachePath());
+      db.execute(
+        "UPDATE attached_external_link_meta SET targetsSignature = "
+        "'!building:' || targetsSignature WHERE sourceSlug = ?",
+        [library.slug],
+      );
+      db.close();
+      await links.sync();
+      expect(links.incompleteSlugs.value, {library.slug});
+
+      await attached.remove(library);
+      await links.sync();
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test(
+      'מסד בלי externalLinks או לא נגיש אינו מופיע ב-buildProgress',
+      () async {
+        final reachablePath = attachedDb('ext', rows: fiveRows());
+        await attach(reachablePath);
+        await links.sync();
+        final plain = await attach(attachedDb('plain'));
+        expect(
+          plain.capabilities.contains(AttachedLibraryCapability.externalLinks),
+          isFalse,
+        );
+
+        await registry.closeAll();
+        File(reachablePath).renameSync('$reachablePath.away');
+        await attached.rescan();
+        final keys = <String>{};
+        links.buildProgress.addListener(
+          () => keys.addAll(links.buildProgress.value.keys),
+        );
+        links.buildingSlugs.addListener(
+          () => keys.addAll(links.buildingSlugs.value),
+        );
+        await links.sync();
+        expect(keys, isEmpty);
+      },
+    );
+
+    test('rebuild רץ בשרשרת — סנכרונים מקבילים אינם נכשלים', () async {
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      await links.sync();
+      final db = sqlite3.sqlite3.open(cachePath());
+      db.execute(
+        "UPDATE attached_external_link_meta SET targetsSignature = "
+        "'!building:' || targetsSignature WHERE sourceSlug = ?",
+        [library.slug],
+      );
+      db.close();
+
+      await Future.wait([
+        links.sync(),
+        links.rebuild(library.slug),
+        links.sync(),
+        links.sync(),
+      ]);
+      expect(links.incompleteSlugs.value, isEmpty);
+      expect(indexRows(library.slug), 5);
+    });
+
+    test('השהיה עוצרת את ההתקדמות, והמשך ממשיך', () async {
+      slowBuild();
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      links.buildingSlugs.addListener(() {
+        if (links.buildingSlugs.value.isNotEmpty) links.pauseBuild();
+      });
+      var finished = false;
+      final done = links.sync().whenComplete(() => finished = true);
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      expect(links.buildPaused.value, isTrue);
+      final frozen = links.buildProgress.value[library.slug]!.done;
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+      expect(links.buildProgress.value[library.slug]!.done, frozen);
+      expect(frozen, lessThan(5));
+      expect(finished, isFalse);
+
+      links.resumeBuild();
+      expect(await done, {library.slug});
+      expect(indexRows(library.slug), 5);
+      expect(links.buildPaused.value, isFalse);
+      expect(links.buildProgress.value, isEmpty);
+    });
+
+    /// שורה 0 עם שני קישורים ושורה 1 עם ארבעה: מנה של שלושה נחתכת באמצע
+    /// קישורי שורה 1, וכשנעצרת אחריה נשארים באינדקס שני קישורים של שורה 0.
+    List<ExternalLinkFixtureRow> fourPerLine() => [
+      for (var target = 0; target < 2; target++)
+        _row(0, targetLineIndex: target),
+      for (final type in ['SOURCE', 'REFERENCE'])
+        for (var target = 0; target < 2; target++)
+          _row(1, targetLineIndex: target, connectionType: type),
+    ];
+
+    List<String> indexSnapshot(String slug) {
+      final db = sqlite3.sqlite3.open(cachePath());
+      try {
+        return [
+          for (final row in db.select(
+            'SELECT sourceBookId, sourceLineIndex, targetLineIndex, connectionType '
+            'FROM attached_external_link_index WHERE sourceSlug = ? '
+            'ORDER BY sourceBookId, sourceLineIndex, targetLineIndex, connectionType',
+            [slug],
+          ))
+            '${row['sourceBookId']}:${row['sourceLineIndex']}:'
+                '${row['targetLineIndex']}:${row['connectionType']}',
+        ];
+      } finally {
+        db.close();
+      }
+    }
+
+    /// בונה את [slug] מחדש ועוצר אותו אחרי המנה הראשונה.
+    Future<void> rebuildAndCancel(String slug) async {
+      void cancelOnStart() {
+        if (links.buildingSlugs.value.isNotEmpty) links.cancelBuild();
+      }
+
+      links.buildingSlugs.addListener(cancelOnStart);
+      await links.rebuild(slug);
+      links.buildingSlugs.removeListener(cancelOnStart);
+    }
+
+    /// ההתקדמות הראשונה (done) שדווחה אחרי ספירת השורות במהלך [action].
+    Future<int> firstDoneDuring(String slug, Future<void> Function() action) {
+      int? first;
+      void record() {
+        final progress = links.buildProgress.value[slug];
+        if (first == null && progress != null && progress.total > 0) {
+          first = progress.done;
+        }
+      }
+
+      links.buildProgress.addListener(record);
+      return action().then((_) {
+        links.buildProgress.removeListener(record);
+        return first!;
+      });
+    }
+
+    test('עצירה שומרת התקדמות, מסמנת לא שלם ומנקה את buildProgress', () async {
+      final library = await attach(attachedDb('ext', rows: fourPerLine()));
+      await links.sync();
+      slowBuild(batchSize: 3);
+      await rebuildAndCancel(library.slug);
+
+      expect(links.incompleteSlugs.value, {library.slug});
+      expect(metaSignature(library.slug), startsWith('!building:'));
+      expect(links.buildProgress.value, isEmpty);
+      expect(links.buildingSlugs.value, isEmpty);
+      expect(indexRows(library.slug), inInclusiveRange(3, 6));
+    });
+
+    test(
+      'requestResume ממשיך מהנקודה השמורה — אינדקס זהה, בלי כפילויות',
+      () async {
+        final library = await attach(attachedDb('ext', rows: fourPerLine()));
+        await links.sync();
+        final continuous = indexSnapshot(library.slug);
+        expect(continuous, hasLength(6));
+
+        slowBuild(batchSize: 3);
+        await rebuildAndCancel(library.slug);
+
+        final firstDone = await firstDoneDuring(library.slug, () async {
+          links.requestResume(library.slug);
+          await links.sync();
+        });
+        expect(firstDone, greaterThan(0));
+        expect(indexSnapshot(library.slug), continuous);
+        expect(links.incompleteSlugs.value, isEmpty);
+        expect(metaSignature(library.slug), isNot(startsWith('!')));
+      },
+    );
+
+    test('טביעת אצבע שונה — המשך בונה מאפס', () async {
+      final path = attachedDb('ext', rows: fourPerLine());
+      final library = await attach(path);
+      await links.sync();
+      final continuous = indexSnapshot(library.slug);
+
+      slowBuild(batchSize: 3);
+      await rebuildAndCancel(library.slug);
+      touch(path);
+      await attached.rescan();
+
+      final firstDone = await firstDoneDuring(library.slug, () async {
+        links.requestResume(library.slug);
+        await links.sync();
+      });
+      expect(firstDone, 0);
+      expect(indexSnapshot(library.slug), continuous);
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test('requestRebuild אחרי עצירה בונה מאפס', () async {
+      final library = await attach(attachedDb('ext', rows: fourPerLine()));
+      await links.sync();
+      final continuous = indexSnapshot(library.slug);
+
+      slowBuild(batchSize: 3);
+      await rebuildAndCancel(library.slug);
+
+      final firstDone = await firstDoneDuring(library.slug, () async {
+        links.requestRebuild(library.slug);
+        await links.sync();
+      });
+      expect(firstDone, 0);
+      expect(indexSnapshot(library.slug), continuous);
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test('מצב חסכוני אינו משנה את התוצאה הסופית', () async {
+      final batch = ExternalLinkRepository.insertBatchSize;
+      addTearDown(() => ExternalLinkRepository.insertBatchSize = batch);
+      ExternalLinkRepository.insertBatchSize = 4;
+      final library = await attach(attachedDb('ext', rows: fiveRows()));
+      var sawEconomy = false;
+      links.buildingSlugs.addListener(() {
+        if (links.buildingSlugs.value.isEmpty) return;
+        links.setBuildEconomy(true);
+        sawEconomy = links.buildEconomy.value;
+      });
+
+      expect(await links.sync(), {library.slug});
+      expect(sawEconomy, isTrue);
+      expect(indexRows(library.slug), 5);
+      expect(metaSignature(library.slug), isNot(startsWith('!')));
+      expect(links.buildEconomy.value, isFalse);
+    });
+
     test('כותרת יעד ארוכה מדי אינה נפתרת', () async {
       final library = await attach(
         attachedDb(

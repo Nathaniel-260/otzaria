@@ -294,6 +294,7 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
   required List<ExternalTargetDb> targets,
   ({String title, int? categoryId})? book,
   (int, int)? lineRange,
+  (int, int)? resumeFrom,
   int maxRows = kMaxExternalLinkRows,
   void Function(ResolvedExternalLink row)? onRow,
 }) {
@@ -328,6 +329,7 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
       WHERE 1 = 1
         ${bookId != null ? 'AND e.sourceBookId = ?' : ''}
         ${lineRange != null ? 'AND e.sourceLineIndex BETWEEN ? AND ?' : ''}
+        ${resumeFrom != null ? 'AND (e.sourceBookId, e.sourceLineIndex) >= (?, ?)' : ''}
       ORDER BY e.sourceBookId, e.sourceLineIndex
       LIMIT ?
       ''');
@@ -336,6 +338,7 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
       final cursor = statement.selectCursor([
         ?bookId,
         if (lineRange != null) ...[lineRange.$1, lineRange.$2],
+        if (resumeFrom != null) ...[resumeFrom.$1, resumeFrom.$2],
         maxRows + 1,
       ]);
       var count = 0;
