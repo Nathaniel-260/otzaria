@@ -249,18 +249,12 @@ class AppFonts {
 
   static Future<void> _runWarmUp() async {
     try {
-      final result = await compute(_computeSystemFontScan, 0);
+      final result = await compute(_scanSystemFonts, null);
       _storeScan(result);
     } catch (_) {
       // אם החימום ב-isolate נכשל מסיבה כלשהי - לא מאתחלים את הקאש,
       // והנתיב הסינכרוני ב-_getSystemFontsHebrewOnly ירוץ בפעם הראשונה.
     }
-  }
-
-  /// פונקציה שרצה ב-isolate נפרד דרך `compute`.
-  /// חייבת להיות סטטית/top-level וללא תלות במצב של isolate הראשי.
-  static SystemFontScanResult _computeSystemFontScan(int _) {
-    return _scanSystemFonts();
   }
 
   static void _storeScan(SystemFontScanResult scan) {
@@ -281,9 +275,10 @@ class AppFonts {
     return _systemFontsHebrewCache!;
   }
 
-  static SystemFontScanResult _scanSystemFonts() {
+  /// רץ גם ב-isolate נפרד דרך `compute`. עם [family]: רק הקבצים שמזכירים אותה.
+  static SystemFontScanResult _scanSystemFonts([String? family]) {
     try {
-      return _buildScan(_installedFacesLazily());
+      return _buildScan(_installedFacesLazily(family));
     } catch (_) {
       // אם אין גישה לגופני מערכת מסיבה כלשהי, נחזיר תוצאה ריקה.
       return const SystemFontScanResult.empty();
@@ -292,8 +287,10 @@ class AppFonts {
 
   /// עצל בכוונה: הבייטים של כל גופן משתחררים לפני קריאת הבא, במקום להחזיק
   /// את כל הגופנים המותקנים בזיכרון בבת אחת (מאות MB במחשב עם Office).
-  static Iterable<MapEntry<String, Uint8List>> _installedFacesLazily() sync* {
-    for (final path in SystemFontLocator.installedFontPaths()) {
+  static Iterable<MapEntry<String, Uint8List>> _installedFacesLazily(
+    String? family,
+  ) sync* {
+    for (final path in SystemFontLocator.installedFontPaths(family)) {
       final bytes = SfntMetadataReader.readSync(path);
       if (bytes == null) continue;
       yield MapEntry(path, bytes);
@@ -779,8 +776,12 @@ class AppFonts {
 
     return _loadingSystemFonts.putIfAbsent(fontFamily, () async {
       try {
-        if (_systemFamiliesCache == null) await warmUpSystemFontsCache();
-        final family = _systemFamiliesCache?[fontFamily];
+        // סריקה ממוקדת בשם המשפחה — בלי להמתין לסריקת כל הגופנים (issue #2076).
+        var family = _systemFamiliesCache == null
+            ? (await compute(_scanSystemFonts, fontFamily)).families[fontFamily]
+            : null;
+        if (family == null) await warmUpSystemFontsCache();
+        family ??= _systemFamiliesCache?[fontFamily];
         if (family != null) {
           await _loadFamilyFaces(fontFamily, family);
           return;
