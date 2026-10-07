@@ -339,6 +339,46 @@ void main() {
 
   // issue #1268 — בתצוגה מפוצלת החלון רחב אך החלונית צרה; החלטות רוחב
   // (מיקוד יזום של שדה) חייבות להימדד לפי החלונית.
+  testWidgets('השדה ממוקד גם כשהפוקוס בטקסט הספר (issue #1994)', (
+    tester,
+  ) async {
+    final bookFocus = FocusNode();
+    addTearDown(bookFocus.dispose);
+    final controller = TextEditingController();
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      wrap(
+        Column(
+          children: [
+            Focus(focusNode: bookFocus, child: const SizedBox(height: 10)),
+            Expanded(
+              child: NavPanelCollapsibleSearch(
+                delegate: NavPanelSearchDelegate(
+                  controller: controller,
+                  hintText: 'סינון מפרשים...',
+                ),
+                child: ListView(
+                  children: const [
+                    NavTreeHeader(
+                      title: 'מפרשים',
+                      trailing: NavPanelSearchToggle(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    bookFocus.requestFocus();
+    await tester.pumpAndSettle();
+
+    await _openField(tester);
+
+    expect(_fieldHasFocus(tester), isTrue);
+  });
+
   group('רוחב לפי החלונית ולא לפי החלון (issue #1268)', () {
     testWidgets('חלונית צרה בתוך חלון רחב — אינה רחבה', (tester) async {
       tester.view.physicalSize = const Size(1200, 800);
