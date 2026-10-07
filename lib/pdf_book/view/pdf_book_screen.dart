@@ -4225,39 +4225,40 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       child: Scaffold(
         body: Column(
           children: [
-            AppTopBar(
-              minCenterWidth: ReaderNavCenter.minTitleWidth,
-              leadingItems: [
-                AppTopBarItem(
-                  widget: NavPanelToggleButton(
-                    key: widget.enableTourTargets
-                        ? pdfBookNavigationTourTargetKey
-                        : null,
-                    isOpen: widget.tab.showLeftPane.value,
-                    onToggle: () =>
-                        _setLeftPaneVisibility(!widget.tab.showLeftPane.value),
-                  ),
-                ),
-                if (widget.tab.showLeftPane.value &&
-                    NavPanelSearch.isWide(context))
+            ValueListenableBuilder<bool>(
+              valueListenable: widget.tab.showLeftPane,
+              builder: (context, showLeftPane, _) => AppTopBar(
+                minCenterWidth: ReaderNavCenter.minTitleWidth,
+                leadingItems: [
                   AppTopBarItem(
-                    widget: ValueListenableBuilder<bool>(
-                      valueListenable: widget.tab.pinLeftPane,
-                      builder: (context, isPinned, _) => NavPanelPinButton(
-                        isPinned: isPinned,
-                        onToggle: () =>
-                            widget.tab.pinLeftPane.value = !isPinned,
-                      ),
+                    widget: NavPanelToggleButton(
+                      key: widget.enableTourTargets
+                          ? pdfBookNavigationTourTargetKey
+                          : null,
+                      isOpen: showLeftPane,
+                      onToggle: () => _setLeftPaneVisibility(!showLeftPane),
                     ),
                   ),
-              ],
-              center: _buildPdfCenter(context),
-              trailingItems: [
-                AppTopBarItem(
-                  flexible: true,
-                  widget: _buildPdfActions(context),
-                ),
-              ],
+                  if (showLeftPane && NavPanelSearch.isWide(context))
+                    AppTopBarItem(
+                      widget: ValueListenableBuilder<bool>(
+                        valueListenable: widget.tab.pinLeftPane,
+                        builder: (context, isPinned, _) => NavPanelPinButton(
+                          isPinned: isPinned,
+                          onToggle: () =>
+                              widget.tab.pinLeftPane.value = !isPinned,
+                        ),
+                      ),
+                    ),
+                ],
+                center: _buildPdfCenter(context),
+                trailingItems: [
+                  AppTopBarItem(
+                    flexible: true,
+                    widget: _buildPdfActions(context),
+                  ),
+                ],
+              ),
             ),
             // עמודי התאמה ממנוע חיפוש חיצוני (תוסף): סרגל ניווט בין המופעים.
             PdfExternalMatchesBar(
