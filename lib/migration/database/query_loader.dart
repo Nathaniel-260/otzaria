@@ -30,22 +30,17 @@ class QueryLoader {
       'AuthorQueries.sq',
       'BookHasLinksQueries.sq',
       'BookQueries.sq',
-      'CategoryClosureQueries.sq',
       'CategoryQueries.sq',
       'ConnectionTypeQueries.sq',
       'Database.sq',
       'DocxTextCacheQueries.sq',
-      'GenerationQueries.sq',
       'LineQueries.sq',
       'LineRefQueries.sq',
-      'LineTocQueries.sq',
       'LinkQueries.sq',
       'PdfAnchorCacheQueries.sq',
       'PdfOutlineCacheQueries.sq',
       'PubDateQueries.sq',
       'PubPlaceQueries.sq',
-      'SearchQueries.sq',
-      'SourceQueries.sq',
       'TocQueries.sq',
       'TocTextQueries.sq',
       'TopicQueries.sq',
@@ -127,13 +122,4 @@ class QueryLoader {
     return queries;
   }
 
-  /// Get a specific query by name from a .sq file
-  static String getQuery(String fileName, String queryName) {
-    final queries = loadQueries(fileName);
-    final query = queries[queryName];
-    if (query == null) {
-      throw ArgumentError('Query "$queryName" not found in $fileName');
-    }
-    return query;
-  }
 }

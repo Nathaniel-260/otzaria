@@ -43,13 +43,6 @@ class BookHasLinksDao {
 
   Future<sqlite3.Database> get database => _db.database;
 
-  Future<BookHasLinksEntry?> getBookHasLinksByBookId(int bookId) async {
-    final db = await database;
-    final result = db.select(_queries['selectByBookId']!, [bookId]).toMapList();
-    if (result.isEmpty) return null;
-    return BookHasLinksEntry.fromMap(result.first);
-  }
-
   Future<List<Book>> getBooksWithSourceLinks() async {
     final db = await database;
     return db
@@ -94,20 +87,6 @@ class BookHasLinksDao {
     return firstIntValue(db.select(_queries['countBooksWithAnyLinks']!)) ?? 0;
   }
 
-  Future<int> upsertBookHasLinks(
-    int bookId,
-    bool hasSourceLinks,
-    bool hasTargetLinks,
-  ) async {
-    final db = await database;
-    db.execute(_queries['upsert']!, [
-      bookId,
-      hasSourceLinks ? 1 : 0,
-      hasTargetLinks ? 1 : 0,
-    ]);
-    return db.lastInsertRowId;
-  }
-
   Future<int> updateSourceLinks(int bookId, bool hasSourceLinks) async {
     final db = await database;
     db.execute(_queries['updateSourceLinks']!, [
@@ -140,23 +119,4 @@ class BookHasLinksDao {
     return db.updatedRows;
   }
 
-  Future<int> insertBookHasLinks(
-    int bookId,
-    bool hasSourceLinks,
-    bool hasTargetLinks,
-  ) async {
-    final db = await database;
-    db.execute(_queries['insert']!, [
-      bookId,
-      hasSourceLinks ? 1 : 0,
-      hasTargetLinks ? 1 : 0,
-    ]);
-    return db.lastInsertRowId;
-  }
-
-  Future<int> deleteBookHasLinks(int bookId) async {
-    final db = await database;
-    db.execute(_queries['delete']!, [bookId]);
-    return db.updatedRows;
-  }
 }

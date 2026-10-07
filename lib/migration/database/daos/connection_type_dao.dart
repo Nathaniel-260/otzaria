@@ -47,41 +47,4 @@ class ConnectionTypeDao {
         .toList();
   }
 
-  Future<ConnectionTypeEntry?> getConnectionTypeById(int id) async {
-    final db = await database;
-    final result = db.select(_queries['selectById']!, [id]).toMapList();
-    if (result.isEmpty) return null;
-    return ConnectionTypeEntry.fromMap(result.first);
-  }
-
-  Future<ConnectionTypeEntry?> getConnectionTypeByName(String name) async {
-    final db = await database;
-    final result = db.select(_queries['selectByName']!, [name]).toMapList();
-    if (result.isEmpty) return null;
-    return ConnectionTypeEntry.fromMap(result.first);
-  }
-
-  Future<int> insertConnectionType(String name) async {
-    final db = await database;
-    db.execute(_queries['insert']!, [name]);
-    return db.lastInsertRowId;
-  }
-
-  Future<int> insertConnectionTypeAndGetId(String name) async {
-    final db = await database;
-    db.execute(_queries['insert']!, [name]);
-    return db.lastInsertRowId;
-  }
-
-  Future<int> updateConnectionType(int id, String name) async {
-    final db = await database;
-    db.execute(_queries['update']!, [name, id]);
-    return db.updatedRows;
-  }
-
-  Future<int> deleteConnectionType(int id) async {
-    final db = await database;
-    db.execute(_queries['delete']!, [id]);
-    return db.updatedRows;
-  }
 }

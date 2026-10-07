@@ -84,6 +84,3 @@ DELETE FROM line WHERE bookId = ?;
 
 countByBookId:
 SELECT COUNT(*) FROM line WHERE bookId = ?;
-
-lastInsertRowId:
-SELECT last_insert_rowid();

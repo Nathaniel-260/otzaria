@@ -7,7 +7,6 @@ import 'book_has_links_dao.dart';
 import 'category_dao.dart';
 import 'connection_type_dao.dart';
 import 'docx_text_cache_dao.dart';
-import 'generation_dao.dart';
 import 'line_dao.dart';
 import 'line_dh_dao.dart';
 import 'line_ref_dao.dart';
@@ -16,7 +15,6 @@ import 'pdf_anchor_cache_dao.dart';
 import 'pdf_outline_cache_dao.dart';
 import 'pub_date_dao.dart';
 import 'pub_place_dao.dart';
-import 'search_dao.dart';
 import 'toc_dao.dart';
 import 'toc_text_dao.dart';
 import 'topic_dao.dart';
@@ -73,7 +71,6 @@ class MyDatabase {
   CategoryDao? _categoryDao;
   ConnectionTypeDao? _connectionTypeDao;
   DocxTextCacheDao? _docxTextCacheDao;
-  GenerationDao? _generationDao;
   LineDao? _lineDao;
   LineDhDao? _lineDhDao;
   LineRefDao? _lineRefDao;
@@ -82,7 +79,6 @@ class MyDatabase {
   PdfOutlineCacheDao? _pdfOutlineCacheDao;
   PubDateDao? _pubDateDao;
   PubPlaceDao? _pubPlaceDao;
-  SearchDao? _searchDao;
   TocDao? _tocDao;
   TocTextDao? _tocTextDao;
   TopicDao? _topicDao;
@@ -120,11 +116,6 @@ class MyDatabase {
   DocxTextCacheDao get docxTextCacheDao {
     _ensureDaosInitialized();
     return _docxTextCacheDao!;
-  }
-
-  GenerationDao get generationDao {
-    _ensureDaosInitialized();
-    return _generationDao!;
   }
 
   LineDao get lineDao {
@@ -165,11 +156,6 @@ class MyDatabase {
   PubPlaceDao get pubPlaceDao {
     _ensureDaosInitialized();
     return _pubPlaceDao!;
-  }
-
-  SearchDao get searchDao {
-    _ensureDaosInitialized();
-    return _searchDao!;
   }
 
   TocDao get tocDao {
@@ -459,7 +445,6 @@ class MyDatabase {
     _categoryDao = CategoryDao(this);
     _connectionTypeDao = ConnectionTypeDao(this);
     _docxTextCacheDao = DocxTextCacheDao(this);
-    _generationDao = GenerationDao(this);
     _lineDao = LineDao(this);
     _lineDhDao = LineDhDao(this);
     _lineRefDao = LineRefDao(this);
@@ -468,7 +453,6 @@ class MyDatabase {
     _pdfOutlineCacheDao = PdfOutlineCacheDao(this);
     _pubDateDao = PubDateDao(this);
     _pubPlaceDao = PubPlaceDao(this);
-    _searchDao = SearchDao(this);
     _tocDao = TocDao(this);
     _tocTextDao = TocTextDao(this);
     _topicDao = TopicDao(this);
