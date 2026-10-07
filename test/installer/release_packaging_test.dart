@@ -466,7 +466,8 @@ packages:
                 'full_installer/library_db/seforim.db.zst'
             .allMatches(workflow)
             .length,
-        3,
+        2,
+        reason: 'Windows ו-Linux; Android אורז את חלקי חבילת הספרייה',
       );
       expect(
         workflow,
@@ -738,41 +739,74 @@ packages:
 
     Map<String, String> volumeEnv(int threshold) => {
       'SPLIT_THRESHOLD': '$threshold',
-      'SPLIT_PART_SIZE': '64',
       'ZIP_OVERHEAD_MARGIN': '0',
     };
 
-    test('Android מתחת לסף: ZIP אחד כמו היום', () async {
-      androidBundle({'otzaria-android.apk': 50, 'README.txt': 10});
+    Future<ProcessResult> pack(Directory out, int threshold) =>
+        run('tool/release/pack_android_full.sh', [
+          p.join(temp.path, 'bundle'),
+          'otzaria-android-full',
+          out.path,
+        ], env: volumeEnv(threshold));
+
+    /// שם → שיטת הדחיסה, מתוך `unzip -Zv`.
+    Future<Map<String, String>> entriesOf(File zip) async {
+      final r = await Process.run('unzip', ['-Zv', zip.path]);
+      expect(r.exitCode, 0, reason: '${r.stderr}');
+      final entries = <String, String>{};
+      String? name;
+      for (final line in (r.stdout as String).split('\n')) {
+        final header = RegExp(r'^Central directory entry #\d+:').hasMatch(line);
+        if (header) name = null;
+        final trimmed = line.trim();
+        if (name == null &&
+            trimmed.startsWith('otzaria-android-full/') &&
+            !trimmed.endsWith('/')) {
+          name = trimmed;
+        }
+        final method = RegExp(r'compression method:\s+(\S+)').firstMatch(line);
+        if (method != null && name != null) entries[name] = method.group(1)!;
+      }
+      return entries;
+    }
+
+    // חלקים ומניפסטים בשמות שהייבוא באוצריא מזהה, בגודל מוקטן.
+    const library = 'otzaria-1.2.3-library.tar.zst';
+    const index = 'otzaria-1.2.3-library-index.tar.zst';
+    final packageFiles = {
+      'otzaria-android.apk': 30,
+      'README.txt': 10,
+      '$library.manifest.json': 5,
+      '$library.part-000': 120,
+      '$library.part-001': 40,
+      '$index.manifest.json': 5,
+      '$index.part-000': 90,
+    };
+
+    test('Android מתחת לסף: ZIP אחד ללא דחיסה, הכול בשורש', () async {
+      androidBundle(packageFiles);
       final out = Directory(p.join(temp.path, 'out'))..createSync();
-      final result = await run('tool/release/pack_android_full.sh', [
-        p.join(temp.path, 'bundle'),
-        'otzaria-android-full',
-        out.path,
-      ], env: volumeEnv(1000));
+      final result = await pack(out, 1000);
       expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
       expect(namesIn(out), ['otzaria-android-full.zip']);
+      final entries = await entriesOf(
+        File(p.join(out.path, 'otzaria-android-full.zip')),
+      );
+      expect(entries.keys.toSet(), {
+        for (final name in packageFiles.keys) 'otzaria-android-full/$name',
+      });
+      expect(entries.values.toSet(), {'none'}, reason: 'stored');
     });
 
-    test('Android מעל הסף: כרכי ZIP עצמאיים שמשחזרים את החבילה', () async {
-      final root = androidBundle({
-        'otzaria-android.apk': 30,
-        'README.txt': 10,
-        'library_db/seforim.db.zst': 120,
-        'library_db/talmud_bavli_latest.tar.zst': 90,
-        'library_db/lexical.db': 40,
-      });
+    test('Android מעל הסף: כרכים ללא דחיסה, כל חלק שלם בכרך אחד', () async {
+      final root = androidBundle(packageFiles);
       final original = {
         for (final f in root.listSync(recursive: true).whereType<File>())
           p.relative(f.path, from: root.path).replaceAll(r'\', '/'): f
               .readAsBytesSync(),
       };
       final out = Directory(p.join(temp.path, 'out'))..createSync();
-      final result = await run('tool/release/pack_android_full.sh', [
-        p.join(temp.path, 'bundle'),
-        'otzaria-android-full',
-        out.path,
-      ], env: volumeEnv(150));
+      final result = await pack(out, 150);
       expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
       final volumes = namesIn(out);
       expect(volumes, [
@@ -780,52 +814,40 @@ packages:
         'otzaria-android-full-part2.zip',
       ]);
 
-      // כל כרך נפתח לבדו, ה-APK והוראות השימוש בכרך הראשון.
-      final first = await Process.run('unzip', [
-        '-Z1',
-        p.join(out.path, volumes.first),
-      ]);
-      expect(
-        first.stdout,
-        contains('otzaria-android-full/otzaria-android.apk'),
-      );
-      for (final volume in volumes) {
-        final listing = await Process.run('unzip', [
-          '-Z1',
-          p.join(out.path, volume),
-        ]);
-        expect(listing.stdout, contains('otzaria-android-full/README.txt'));
+      final seen = <String, int>{};
+      for (final (i, volume) in volumes.indexed) {
+        final entries = await entriesOf(File(p.join(out.path, volume)));
+        expect(entries.values.toSet(), {'none'}, reason: '$volume stored');
+        expect(entries.keys, contains('otzaria-android-full/README.txt'));
+        if (i == 0) {
+          expect(
+            entries.keys,
+            contains('otzaria-android-full/otzaria-android.apk'),
+          );
+        }
+        for (final name in entries.keys) {
+          if (name.endsWith('README.txt')) continue;
+          seen.update(name, (n) => n + 1, ifAbsent: () => 1);
+        }
       }
+      expect(seen.keys.toSet(), {
+        for (final name in packageFiles.keys)
+          if (name != 'README.txt') 'otzaria-android-full/$name',
+      });
+      expect(seen.values.toSet(), {1}, reason: 'כל קובץ בכרך אחד בדיוק');
       final extracted = await extractAll(
         volumes.map((v) => File(p.join(out.path, v))).toList(),
       );
-      expect(extracted, original);
+      expect(extracted, original, reason: 'החלקים שלמים, בלי פיצול נוסף');
     });
 
-    test('Android: קובץ שגדול מכרך נשמר כחלקים גולמיים עם מניפסט', () async {
-      androidBundle({
-        'otzaria-android.apk': 20,
-        'library_db/seforim.db.zst': 200,
-      });
+    test('Android: קובץ שאינו נכנס בכרך מפיל את האריזה', () async {
+      androidBundle({'otzaria-android.apk': 20, '$library.part-000': 200});
       final out = Directory(p.join(temp.path, 'out'))..createSync();
-      final result = await run('tool/release/pack_android_full.sh', [
-        p.join(temp.path, 'bundle'),
-        'otzaria-android-full',
-        out.path,
-      ], env: volumeEnv(150));
-      expect(result.exitCode, 0, reason: '${result.stdout}\n${result.stderr}');
-      final extracted = await extractAll(
-        namesIn(out).map((v) => File(p.join(out.path, v))).toList(),
-      );
-      expect(
-        extracted.keys,
-        containsAll([
-          'library_db/seforim.db.zst.manifest.json',
-          'library_db/seforim.db.zst.part-000',
-          'library_db/seforim.db.zst.part-003',
-        ]),
-      );
-      expect(extracted.keys, isNot(contains('library_db/seforim.db.zst')));
+      final result = await pack(out, 150);
+      expect(result.exitCode, isNot(0));
+      expect(result.stderr, contains('does not fit in one volume'));
+      expect(namesIn(out), isEmpty);
     });
 
     group('download_library_db.sh', () {

@@ -1942,23 +1942,6 @@ jobs:
             ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager --install "build-tools;36.0.0"
           fi
 
-      - name: Download library assets for Android FULL bundle
-        if: true
-        shell: bash
-        env:
-          LIBRARY_DB_RELEASE_TAG: ${{ needs.bump_version.outputs.library_tag }}
-          SEFORIM_LIBRARY_TAG: ${{ needs.bump_version.outputs.library_tag }}
-        run: |
-          set -euo pipefail
-          mkdir -p full_installer/library_db
-          # DB מעל מגבלת הנכס של GitHub מתפרסם בחלקים; הסקריפט מחבר ומאמת אותם.
-          bash tool/release/download_library_db.sh full_installer/library_db/seforim.db.zst
-          curl -L --fail https://github.com/Otzaria/otzar-HB_catalog/releases/latest/download/otzar-HB_catalog.db.zst -o full_installer/library_db/otzar-HB_catalog.db.zst
-          curl -L --fail https://github.com/Otzaria/otzaria-library/releases/latest/download/talmud_bavli_latest.tar.zst -o full_installer/library_db/talmud_bavli_latest.tar.zst
-          # lexical-v2.db הוא המילון המתוקן; lexical.db קפוא לגרסאות ישנות של התוכנה.
-          curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical-v2.db -o full_installer/library_db/lexical.db \
-            || curl -L --fail https://github.com/Otzaria/SeforimMagicIndexer/releases/latest/download/lexical.db -o full_installer/library_db/lexical.db
-
       # תוספים מצורפים — במובייל אין "ליד ה-executable", לכן הארכיונים נארזים
       # כ-assets בתוך ה-APK והאפליקציה רושמת אותם משם (docs/bundled_plugins.md).
       - name: Download bundled plugins into Android assets
@@ -1997,36 +1980,6 @@ jobs:
           name: otzaria-android.apk
           path: build/app/outputs/flutter-apk/app-release.apk
 
-      - name: Create Android FULL bundle
-        if: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          BUNDLE_ROOT="full_installer/otzaria-android-full"
-          rm -rf "$BUNDLE_ROOT"
-          mkdir -p "$BUNDLE_ROOT/library_db"
-          cp build/app/outputs/flutter-apk/app-release.apk "$BUNDLE_ROOT/otzaria-android.apk"
-          cp full_installer/library_db/* "$BUNDLE_ROOT/library_db/"
-          cat > "$BUNDLE_ROOT/README.txt" << 'EOF'
-          Otzaria Android FULL bundle
-
-          This bundle includes the APK and the offline library payload.
-          The APK itself cannot preinstall external library files automatically.
-          Use this bundle when distributing the APK together with the library payload.
-          A bundle above GitHub's file limit comes as several ZIP files: extract all
-          of them into the same folder. Files named *.part-NNN with a *.manifest.json
-          stay as they are; importing the library_db folder in Otzaria joins them.
-          EOF
-          # מעל מגבלת GitHub — כרכי ZIP עצמאיים, כי בטלפון אי אפשר לחבר חלקים גולמיים.
-          bash tool/release/pack_android_full.sh full_installer otzaria-android-full .
-
-      - name: Upload Android FULL bundle
-        if: true
-        uses: actions/upload-artifact@v7.0.1
-        with:
-          name: otzaria-android-full
-          path: otzaria-android-full*.zip
-      
       - name: Final cleanup
         if: always()
         run: |
@@ -2034,6 +1987,70 @@ jobs:
           rm -rf build || true
           echo "Disk space after final cleanup:"
           df -h
+
+  # ה-APK עם חלקי חבילת הספרייה והאינדקס שנבנו ב-Linux x86_64 — בדיוק הקבצים
+  # ש"ייבוא מתיקייה" באוצריא קורא (lib/empty_library/services/library_package).
+  build_android_full:
+    if: "!cancelled() && needs.build_android.result == 'success' && needs.build_linux.result == 'success'"
+    needs: [bump_version, build_android, build_linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repository
+        uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ needs.bump_version.outputs.sha }}
+
+      - name: Download APK
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: otzaria-android.apk
+          path: android-apk
+
+      - name: Download library and search index parts
+        uses: actions/download-artifact@v8.0.1
+        with:
+          name: otzaria-library-parts
+          path: full_installer/otzaria-android-full
+
+      - name: Create Android FULL bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE_ROOT="full_installer/otzaria-android-full"
+          VERSION=$(awk '/^version:/ {split($2, v, "+"); print v[1]; exit}' pubspec.yaml)
+          for kind in library library-index; do
+            [ -f "$BUNDLE_ROOT/otzaria-${VERSION}-${kind}.tar.zst.manifest.json" ] \
+              || { echo "::error::Missing otzaria-${VERSION}-${kind}.tar.zst.manifest.json"; exit 1; }
+          done
+          # כלי ההרכבה מיועדים למחשב; בטלפון הייבוא מחבר את החלקים בעצמו.
+          rm -f -- "$BUNDLE_ROOT/assemble_split_asset.sh" "$BUNDLE_ROOT/assemble_split_asset.ps1"
+          mv android-apk/app-release.apk "$BUNDLE_ROOT/otzaria-android.apk"
+          cat > "$BUNDLE_ROOT/README.txt" << 'EOF'
+          אוצריא ל-Android — חבילה מלאה
+
+          חלצו את כל קובצי ה-ZIP לאותה תיקייה, התקינו את ה-APK, פתחו את אוצריא ובחרו
+          'ייבוא מתיקייה' → בחרו את התיקייה otzaria-android-full.
+          אין לחלץ או לשנות את שמות קובצי ה-part וה-manifest.json: אוצריא מאמתת אותם
+          ופורסת מהם את הספרייה ואת אינדקס החיפוש.
+
+          Otzaria for Android — FULL bundle
+
+          Extract all the ZIP files into the same folder, install the APK, open Otzaria
+          and choose "Import from folder" → pick the otzaria-android-full folder.
+          Do not extract or rename the part and manifest.json files: Otzaria verifies
+          them and installs the library and the search index from them.
+          EOF
+          bash tool/release/pack_android_full.sh full_installer otzaria-android-full .
+          rm -rf full_installer
+          df -h .
+
+      - name: Upload Android FULL bundle
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: otzaria-android-full
+          path: otzaria-android-full*.zip
+          compression-level: 0
+          if-no-files-found: error
 
   build_macos:
     if: github.event_name != 'release' && github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.build_macos)
@@ -2568,6 +2585,7 @@ jobs:
       needs.build_windows.result == 'success' &&
       needs.build_linux.result == 'success' &&
       needs.build_android.result == 'success' &&
+      needs.build_android_full.result == 'success' &&
       needs.build_macos.result == 'success' &&
       needs.build_windows_installer.result == 'success' &&
       (needs.build_windows_arm64.result == 'success' || needs.build_windows_arm64.result == 'skipped')
@@ -2575,7 +2593,7 @@ jobs:
       tag: ${{ steps.version.outputs.tag }}
       title: ${{ steps.version.outputs.title }}
       url: https://github.com/${{ github.repository }}/releases/tag/${{ steps.version.outputs.tag }}
-    needs: [bump_version, build_windows, build_windows_arm64, build_linux, build_android, build_macos, build_windows_installer]
+    needs: [bump_version, build_windows, build_windows_arm64, build_linux, build_android, build_android_full, build_macos, build_windows_installer]
     runs-on: ubuntu-latest
 
     steps:
@@ -2708,9 +2726,9 @@ jobs:
             cp artifacts/otzaria-android.apk/*.apk release-files/ || true
           fi
 
-          # Android FULL bundle
+          # Android FULL bundle — מועבר ולא מועתק: הכרכים כ-4GB, והדיסק של ה-runner מוגבל.
           if [ -d "artifacts/otzaria-android-full" ]; then
-            cp artifacts/otzaria-android-full/*.zip release-files/ || true
+            mv artifacts/otzaria-android-full/*.zip release-files/ || true
           fi
           
           # macOS DMG
