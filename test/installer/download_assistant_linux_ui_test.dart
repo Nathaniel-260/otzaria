@@ -32,37 +32,66 @@ void main() {
     final title = window.indexOf('gtk_window_set_title(');
     final bar = window.indexOf('gtk_window_set_titlebar(');
     expect(title, isNonNegative);
-    expect(bar, greaterThan(title), reason: 'אחרת GTK מעתיק את השם לכותרת מרוכזת ומודגשת');
-    expect(window, contains('gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), title);'));
+    expect(
+      bar,
+      greaterThan(title),
+      reason: 'אחרת GTK מעתיק את השם לכותרת מרוכזת ומודגשת',
+    );
+    expect(
+      window,
+      contains('gtk_header_bar_pack_start(GTK_HEADER_BAR(bar), title);'),
+    );
     expect(window, contains('gtk_header_bar_set_show_close_button('));
-    expect(widgets, contains('.t-wintitle { font-size: 13px; color: #201B13; }'));
+    expect(
+      widgets,
+      contains('.t-wintitle { font-size: 13px; color: #201B13; }'),
+    );
     expect(
       routine(ui, 'int otz_ui_run(const OtzUiOptions *options)'),
       contains('GTK_TEXT_DIR_RTL'),
     );
   });
 
-  test('מקלדת: Return לפעולה הראשית, Esc לחזרה ולדו-שיח, חיצים בכרטיסי רדיו', () {
-    final keys = routine(ui, 'static gboolean on_key(');
-    expect(keys, contains('GDK_KEY_Escape'));
-    expect(keys, contains('ui->dialog_open ? ui->dialog_cancel : ui->escape'));
-    expect(keys, contains('GDK_KEY_Return'));
-    expect(keys, contains('GDK_KEY_KP_Enter'));
-    // כפתור במוקד מופעל בעצמו; כרטיס (toggle) במוקד — הפעולה הראשית.
-    expect(keys, contains('GTK_IS_BUTTON(focus) && !GTK_IS_TOGGLE_BUTTON(focus)'));
-    expect(keys, contains('ui->dialog_open ? ui->dialog_default : ui->primary'));
-    final card = routine(widgets, 'GtkWidget *otz_card(');
-    expect(card, contains('gtk_radio_button_new('));
-    expect(card, contains('gtk_check_button_new()'));
-    expect(card, contains('otz_accessible(card, spec->title, description);'));
-    // "אין בחירה" ברשימת היעדים: רדיו נסתר, כדי ש-GTK לא יסמן את הראשון.
-    expect(routine(ui, 'static GtkWidget *other_page('), contains('unselected_group('));
-  });
+  test(
+    'מקלדת: Return לפעולה הראשית, Esc לחזרה ולדו-שיח, חיצים בכרטיסי רדיו',
+    () {
+      final keys = routine(ui, 'static gboolean on_key(');
+      expect(keys, contains('GDK_KEY_Escape'));
+      expect(
+        keys,
+        contains('ui->dialog_open ? ui->dialog_cancel : ui->escape'),
+      );
+      expect(keys, contains('GDK_KEY_Return'));
+      expect(keys, contains('GDK_KEY_KP_Enter'));
+      // כפתור במוקד מופעל בעצמו; כרטיס (toggle) במוקד — הפעולה הראשית.
+      expect(
+        keys,
+        contains('GTK_IS_BUTTON(focus) && !GTK_IS_TOGGLE_BUTTON(focus)'),
+      );
+      expect(
+        keys,
+        contains('ui->dialog_open ? ui->dialog_default : ui->primary'),
+      );
+      final card = routine(widgets, 'GtkWidget *otz_card(');
+      expect(card, contains('gtk_radio_button_new('));
+      expect(card, contains('gtk_check_button_new()'));
+      expect(card, contains('otz_accessible(card, spec->title, description);'));
+      // "אין בחירה" ברשימת היעדים: רדיו נסתר, כדי ש-GTK לא יסמן את הראשון.
+      expect(
+        routine(ui, 'static GtkWidget *other_page('),
+        contains('unselected_group('),
+      );
+    },
+  );
 
   test('טבעת מוקד גלויה בכל פקד, בתוך השוליים שלו', () {
     for (final name in ['draw_button', 'draw_field', 'draw_card']) {
       final draw = routine(widgets, 'static gboolean $name(');
-      expect(draw, contains('gtk_widget_has_visible_focus(widget)'), reason: name);
+      expect(
+        draw,
+        contains('gtk_widget_has_visible_focus(widget)'),
+        reason: name,
+      );
       expect(draw, contains('focus_ring('), reason: name);
     }
     expect(read('widgets.h'), contains('#define OTZ_RING 4'));
@@ -102,7 +131,7 @@ void main() {
   test('צילומי המסך: workflow ידני, שתי שפות, ונכשל על אזהרת GTK', () {
     final workflow = File(
       '.github/workflows/linux-assistant-screenshots.yml',
-    ).readAsStringSync();
+    ).readAsStringSync().replaceAll('\r\n', '\n');
     expect(workflow, contains('on:\n  workflow_dispatch:\n\n'));
     expect(workflow, contains('--dev-screenshot'));
     expect(workflow, contains('GDK_SCALE: "2"'));
