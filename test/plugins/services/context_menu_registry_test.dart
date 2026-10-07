@@ -58,6 +58,28 @@ void main() {
       expect(item.contexts, ['reader-highlight']);
     });
 
+    test('מקבל reader-book ומוריש אותו לפריטי משנה ללא שינוי ברירת המחדל', () {
+      final item = registry.registerPayload('corrections', {
+        'id': 'book-menu',
+        'title': 'פעולות בספר',
+        'type': 'submenu',
+        'contexts': ['reader-book'],
+        'children': [
+          {'id': 'correct-book', 'title': 'העבר את הספר לתיקון'},
+        ],
+      });
+      expect(item.contexts, ['reader-book']);
+      expect(item.children.single.contexts, ['reader-book']);
+      final legacy = registry.registerPayload('legacy', {
+        'id': 'selection',
+        'title': 'פעולה על סימון',
+      });
+      expect(legacy.contexts, [
+        'reader-selection',
+        'reader-page-shape-selection',
+      ]);
+    });
+
     group('action — פעולת host דקלרטיבית', () {
       Map<String, dynamic> actionItem({
         Map<String, dynamic> extra = const {},

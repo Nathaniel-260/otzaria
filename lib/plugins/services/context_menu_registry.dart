@@ -261,6 +261,7 @@ class ContextMenuRegistry extends ChangeNotifier {
               const ['reader-selection', 'reader-page-shape-selection']
         : List<String>.from(contextsValue as List);
     const supportedContexts = {
+      'reader-book',
       'reader-selection',
       'reader-page-shape-selection',
       'reader-highlight',

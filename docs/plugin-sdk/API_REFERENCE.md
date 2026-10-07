@@ -251,6 +251,7 @@ if (response.success) {
 | `fs.revokeFolder` | 0.9.98 |
 | `feedback.sendEmail` | 0.9.89 |
 | `feedback.report` | 0.9.97 |
+| `feedback.submitBookCorrection` | 0.9.99 |
 | `feedback.hasReporterEmail` | 0.9.97 |
 | `history.list` | 0.9.89 |
 | `history.listSearches` | 0.9.89 |
@@ -3270,6 +3271,35 @@ const { data } = await Otzaria.call('feedback.report', {
 
 **שגיאות אפשריות:** `error.invalid_params` — `details` חסר או ריק. `error.internal` — דחייה קבועה של השרת (HTTP 400/422), או מצב לא-מקוון כשהמשתמש כיבה את תור הדיווחים בהגדרות. דחייה קבועה אינה נכנסת לתור.
 
+### `feedback.submitBookCorrection`
+
+מגיש דיווח שגיאה בספר דרך `DirectErrorReportService` של אוצריא, באותו חוזה v2, תור והיסטוריית דיווחים של התוכנה. אינו משנה את טקסט הספר. דורש הרשאת `feedback.send_email`, המוצהרת במניפסט ומאושרת בידי המשתמש, וכתובת מייל שמורה בהגדרות אוצריא; אינו מקבל כתובת מהתוסף.
+
+גרסת המינימום של ה־API היא `0.9.99`. הוא זמין בבנייה הכוללת את ההרחבה; הוא אינו קיים במהדורת 0.9.98 הרשמית המקורית. בגרסה רשמית ללא התוספת מתקבלת שיטת API לא מוכרת.
+
+```js
+const result = await Otzaria.call('feedback.submitBookCorrection', {
+  reportId: 'stable-correction-id',
+  bookId: 'שם הספר', bookUid: 'id:42',
+  sectionIndex: 7,
+  snapshots: [{ index: 7, text: 'לפני המקור אחרי' }],
+  original: 'המקור', proposed: 'התיקון',
+  sourceStart: 5, sourceEnd: 10,
+  allowQueue: false
+});
+```
+
+- `reportId` הוא מזהה יציב באורך 1–160 תווים מתוך `[A-Za-z0-9_.:-]`. `details` אופציונלי ומוגבל ל־20,000 יחידות UTF-16.
+- זהות הספר דורשת `bookId` כמחרוזת; `bookUid` אופציונלי. כאשר נמסר UID, ההתאמה אליו מחמירה וללא חזרה לחיפוש לפי כותרת. ללא UID, הכותרת חייבת לזהות ספר יחיד.
+- `sectionIndex/endSectionIndex` הם אינדקסי מקור אפסיים; ברירת המחדל של הסיום היא פסקת ההתחלה. עד 32 פסקאות. `snapshots` מכסה את כולן ברצף, והטקסט חייב להתאים למקור הרשמי העדכני לאחר ניקוי HTML של אוצריא.
+- `original/proposed` נשמרים ללא נרמול, עד 20,000 יחידות UTF-16 כל אחד. הצעה ריקה היא מחיקה. `sourceStart/sourceEnd` הם טווח מקומי בתוך פסקה יחידה; יש להעביר את שניהם או להשמיט את שניהם. הוספה ריקה דורשת טווח מפורש כדי לבנות תיקון מובנה.
+- אוצריא בונה מיקום, מקור, גרסת ספרייה, digest ופרטי לקוח מהמידע שלה. תיקון חד־משמעי בפסקה אחת מקבל `text_correction` עם מקור HTML גולמי; טווח שאינו ממופה בבטחה או שינוי בין פסקאות מקבלים `free_text` v2 עם נוסח לפני/אחרי, בלי להמציא טווח DB. טווחי `sourceStart/sourceEnd` שנמסרו נשמרים גם בדיווח `free_text`.
+- נתמכים רק ספרי טקסט רשמיים ממסד הספרייה, ללא ספר אישי, מסד מצורף, קובץ חיצוני או מהדורה חלופית. גוף הדיווח מוגבל ל־256 KiB UTF-8.
+- `allowQueue` ברירת מחדל true. כאשר false, מצב מנותק או כשל רשת מחזירים `error.report_failed` ללא שמירה בתור. התוסף משאיר את הטיוטה וניסיון חוזר משתמש באותו `reportId`.
+- `forceFreeText: true` מגיש v2 חופשי גם כאשר טווח יחיד ניתן למיפוי. יש להשתמש בו בחלקים של תיקון גדול, כדי שלא ליצור הצעות שורה שלמה חלופיות עבור חלקי הוספה אחת. פירוט סדר החלקים נמצא ב־`details`.
+- תוצאה: `{status: 'sent'|'queued', reportId, nativeReportId, message, duplicate, correctionSupported}`. `queued` מעביר בעלות לשירות אוצריא; `correctionSupported` הוא null עד שיש אישור שרת. כשל או שינוי במקור מחזירים שגיאה ואינם מאשרים את התיקון.
+- `error.report_id_conflict` מציין התנגשות בתור המקומי או HTTP 409: יש ליצור `reportId` חדש לפני ניסיון נוסף. כשל זמני משתמש באותו מזהה ובאותו תוכן.
+
 ### `feedback.hasReporterEmail`
 **הרשאה:** אינה נדרשת — מוחזר ביט קיום בלבד, בלי הכתובת עצמה.
 
@@ -5437,9 +5467,12 @@ await Otzaria.call('reader.addContextMenuItem', {
   הטקסט המסומן ולפעול עליו בדף שלו.
 - `type` יכול להיות `item`,‏ `submenu`,‏ `color-row` או `separator`
 - תת־תפריט מקבל `children`; שורת צבעים מקבלת `colors` עם `id`,‏ `color`,‏ `label`,‏ `selected` ו־`icon` אופציונלי. כאשר `icon` קיים הוא מוצג במקום גוש הצבע ומתאים לפעולות קומפקטיות כמו מחק
-- `contexts` הוא מערך ויכול להכיל את `reader-selection`, את `reader-page-shape-selection`, או את שניהם באותו פריט. מ-`0.9.97` נתמך גם `reader-highlight` (ראו למטה). ערכי `contexts` חייבים להיות חוקיים וייחודיים. פריט שלא מגדיר `contexts` מופיע בשני הקשרי הבחירה (כהתנהגות הרישום המקורית).
+- `contexts` הוא מערך ויכול להכיל את `reader-selection`, את `reader-page-shape-selection`, או את שניהם באותו פריט. מ-`0.9.97` נתמך גם `reader-highlight` (ראו למטה), ומ־`0.9.99` נתמך `reader-book` ללא סימון. ערכי `contexts` חייבים להיות חוקיים וייחודיים. פריט שלא מגדיר `contexts` מופיע בשני הקשרי הבחירה (כהתנהגות הרישום המקורית).
 - ילד שלא מגדיר `contexts` יורש את המערך של אביו. ילד שמגדיר `contexts` במפורש מוצג רק בהקשרים שלו, ללא איחוד אוטומטי עם הקשר האב; ההקשרים המפורשים חייבים להיות תת־קבוצה של הקשרי האב.
 - אפשר להגדיר `onClickEvent` או `onColorClickEvent` כאירוע מותאם אישית
+
+**פעולה ללא סימון — `reader-book` (מ־`0.9.99`):**
+אפשר לרשום `contexts: ['reader-book']` להצגת פעולה בלחיצה ימנית ללא סימון, בשני קוראי הטקסט: הקורא הרגיל וקורא צורת הדף. ה־payload כולל את זהות הספר ואת `sectionIndex` ו־`currentIndex` של הפסקה שנלחצה. בשדה `selection`, הערך `text` הוא מחרוזת ריקה, `start` ו־`end` הם `null`, ואין `sourceRange`. ברירות המחדל של פריט ללא `contexts` נשארות שני הקשרי הבחירה; ילדים ללא `contexts` יורשים את הקשרי האב גם עבור `reader-book`.
 
 **בחירה חוצת־פסקאות — `selection.sections` (מ-`0.9.97`):**
 כשהבחירה משתרעת על כמה פסקאות, ה־`selection` שנמסר לאירועי הלחיצה של

@@ -100,6 +100,22 @@ Map<String, dynamic> buildReaderSelectionPayload({
   );
 }
 
+Map<String, dynamic> buildReaderBookPayload({
+  required TextBookLoaded state,
+  required int paragraphIndex,
+}) => {
+  ...PluginBookIdentity.toJsonWithUid(state.book),
+  'bookTitle': state.book.title,
+  'currentBook': state.book.title,
+  'currentBookId': state.book.title,
+  'sectionIndex': paragraphIndex,
+  'currentIndex': paragraphIndex,
+  'currentRef': state.currentTitle,
+  'text': '',
+  'start': null,
+  'end': null,
+};
+
 /// Plugin entries for the `reader-highlight` context: a right click on
 /// highlighted text with no active selection. Empty unless the click at
 /// [tapPosition] falls on a highlight in paragraph [paragraphIndex].
@@ -145,12 +161,6 @@ List<AppContextMenuEntry> buildClickedHighlightPluginEntries({
   return [const AppContextMenuEntry.divider(), ...entries];
 }
 
-/// The plugin section of a reader's main text context menu, for a right
-/// click on paragraph [paragraphIndex] of [lines].
-///
-/// With a selection it holds the items of [selectionContext]; without one,
-/// the items of a highlight under the click. [settings] is only computed when
-/// there are plugin items to show.
 List<AppContextMenuEntry> buildReaderPluginMenuEntries({
   required RenderObject? root,
   required TextBookLoaded state,
@@ -171,7 +181,16 @@ List<AppContextMenuEntry> buildReaderPluginMenuEntries({
   }
   final renderSettings = settings();
   if (!hasSelection) {
-    return buildClickedHighlightPluginEntries(
+    final bookEntries = buildPluginContextMenuEntries(
+      records: items,
+      selection: buildReaderBookPayload(
+        state: state,
+        paragraphIndex: paragraphIndex,
+      ),
+      context: 'reader-book',
+      selectionActionDispatcher: pluginSelectionActionDispatcherOf(menuContext),
+    );
+    final highlightEntries = buildClickedHighlightPluginEntries(
       root: root,
       state: state,
       rawText: lines[paragraphIndex],
@@ -181,6 +200,11 @@ List<AppContextMenuEntry> buildReaderPluginMenuEntries({
       pluginItems: items,
       menuContext: menuContext,
     );
+    return [
+      if (bookEntries.isNotEmpty) const AppContextMenuEntry.divider(),
+      ...bookEntries,
+      ...highlightEntries,
+    ];
   }
   final selection = buildReaderSelectionPayload(
     state: state,
