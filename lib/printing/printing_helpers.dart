@@ -199,3 +199,23 @@ String printCommentaryContentCacheKey(
 }) =>
     '$removeNikud|$removeTaamim|$replaceHolyNames'
     '::${link.contentIdentityKey}::${link.heRef}::$keepHtml';
+
+/// מספר השורות של טקסט הספר, שמור לפי זהות המחרוזת: מסך ההדפסה שואל עליו
+/// בכל בנייה, ופיצול ספר שלם בכל פעם עולה עשרות מילי-שניות.
+class LineCountCache {
+  LineCountCache([this._countLines = _splitLineCount]);
+
+  final int Function(String) _countLines;
+  String? _source;
+  int _count = 0;
+
+  static int _splitLineCount(String text) => text.split('\n').length;
+
+  int of(String text) {
+    if (!identical(text, _source)) {
+      _source = text;
+      _count = _countLines(text);
+    }
+    return _count;
+  }
+}

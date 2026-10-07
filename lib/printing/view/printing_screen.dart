@@ -367,7 +367,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
     _renderPreview();
   }
 
-  Future<int> _totalLineCount() async => (await _dataFuture).split('\n').length;
+  final _lineCounts = LineCountCache();
+
+  Future<int> _totalLineCount() async => _lineCounts.of(await _dataFuture);
 
   Future<void> _applyCurrentRange() async {
     final totalLines = await _totalLineCount();
@@ -1904,7 +1906,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                   }
 
                   if (snapshot.connectionState == ConnectionState.done) {
-                    final totalLines = snapshot.data!.split('\n').length;
+                    final totalLines = _lineCounts.of(snapshot.data!);
                     return Row(
                       children: [
                         // תצוגה מקדימה (תמונות מרוסטרות)

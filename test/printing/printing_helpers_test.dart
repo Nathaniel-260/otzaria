@@ -450,4 +450,33 @@ void main() {
       expect(m.end, isNull);
     });
   });
+
+  group('LineCountCache', () {
+    test('זהה ל-split(newline).length', () {
+      final cache = LineCountCache();
+      for (final text in ['', 'א', 'א\nב', '\n', 'א\n\nב\n', '\r\nא']) {
+        expect(cache.of(text), text.split('\n').length, reason: text);
+      }
+    });
+
+    test('מחשב מחדש כשהטקסט מתחלף', () {
+      final cache = LineCountCache();
+      expect(cache.of('א\nב'), 2);
+      expect(cache.of('א\nב\nג'), 3);
+      expect(cache.of('א'), 1);
+    });
+
+    test('קריאה חוזרת על אותו טקסט אינה מפצלת אותו שוב', () {
+      var computations = 0;
+      final cache = LineCountCache((text) {
+        computations++;
+        return text.split('\n').length;
+      });
+      final text = List.filled(1000, 'בראשית ברא אלהים').join('\n');
+      for (var i = 0; i < 100; i++) {
+        expect(cache.of(text), 1000);
+      }
+      expect(computations, 1);
+    });
+  });
 }
