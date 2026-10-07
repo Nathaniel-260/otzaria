@@ -1489,8 +1489,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
               final repo = context.read<FocusRepository>();
               return _buildEmptyState(context, state, settingsState, repo);
             }
-            final displayBooks = _filterBooksByTopics(
-              books,
+            final displayBooks = _filterByTopics(books, state.selectedTopics);
+            final displayCategories = _filterByTopics(
+              categories,
               state.selectedTopics,
             );
             final displayLimit = min(displayBooks.length, 100);
@@ -1502,9 +1503,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   ?topicsHeader,
                   if (displayBooks.isNotEmpty)
                     _buildSearchResultsGrid(displayBooks, displayLimit),
-                  if (categories.isNotEmpty)
+                  if (displayCategories.isNotEmpty)
                     _buildSearchCategoriesGrid(
-                      categories,
+                      displayCategories,
                       firstFocus: displayBooks.isEmpty,
                     ),
                 ],
@@ -1529,9 +1530,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
             return _buildEmptyState(context, state, settingsState, repo);
           }
           return _buildSearchListView(
-            _filterBooksByTopics(visibleResults, state.selectedTopics),
+            _filterByTopics(visibleResults, state.selectedTopics),
             _buildTopicsSelection(context, state),
-            categories: categories,
+            categories: _filterByTopics(categories, state.selectedTopics),
           );
         }
         return _buildListView(state.currentCategory!);
@@ -2738,12 +2739,17 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   /// מסנן את התוצאות המוצגות לפי הקטגוריות הנבחרות — ספר נכלל אם הוא שייך לאחת
   /// מהן (OR). כל צ'יפ נגזר מהתוצאות הקיימות, ולכן הסינון לעולם לא ריק. הרשימה
-  /// המלאה נשמרת ב-state כדי שצ'יפי שאר הקטגוריות יישארו.
-  List<Book> _filterBooksByTopics(List<Book> books, List<String>? topics) {
-    if (topics == null || topics.isEmpty) return books;
-    return books.where((book) {
-      final bookTopics = book.topics.split(',').map((t) => t.trim()).toSet();
-      return topics.any(bookTopics.contains);
+  /// המלאה נשמרת ב-state כדי שצ'יפי שאר הקטגוריות יישארו. תיקייה שייכת
+  /// לקטגוריות שבנתיב שלה ולשמה — כמו topics של ספר.
+  List<T> _filterByTopics<T>(List<T> items, List<String>? topics) {
+    if (topics == null || topics.isEmpty) return items;
+    return items.where((item) {
+      final itemTopics = switch (item) {
+        Book book => book.topics,
+        Category c => '${categoryParentPath(c)}, ${c.title}',
+        _ => '',
+      }.split(',').map((t) => t.trim()).toSet();
+      return topics.any(itemTopics.contains);
     }).toList();
   }
 
