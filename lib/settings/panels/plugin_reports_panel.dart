@@ -1,25 +1,17 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
-import 'package:otzaria/settings/services/safer_mode_guard.dart';
-import 'package:otzaria/settings/services/offline_send_target.dart';
 import 'package:otzaria/settings/panels/report_panel_widgets.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/plugins/models/plugin_report_record.dart';
 import 'package:otzaria/plugins/services/plugin_report_service.dart';
-import 'package:otzaria/services/direct_error_report_service.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
 import 'package:otzaria/widgets/text/rtl_text_field.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
-import 'package:otzaria/utils/file/save_file_with_extension.dart';
 
 /// Reports sent to plugin developers through the Otzaria site: the saved
 /// queue and the sent history.
@@ -244,29 +236,15 @@ class _PluginReportsPanelState extends State<PluginReportsPanel> {
     return '${date.day}.${date.month}.${date.year}';
   }
 
-  Future<void> _flushPluginReports() async {
-    setState(() {
-      _isFlushingPluginReports = true;
-    });
-
+  Future<void> _flushPluginReports() {
     final reportService = PluginReportService();
-    final pendingBefore = await reportService.getPendingReportsCount();
-    final sentCount = await reportService.flushPendingReports();
-    final pendingAfter = await reportService.getPendingReportsCount();
-
-    if (!mounted) return;
-    widget.onPendingReportsChanged?.call();
-    setState(() {
-      _isFlushingPluginReports = false;
-    });
-
-    if (sentCount > 0) {
-      UiSnack.showSuccess(ReportMessages.pendingFlushed(sentCount));
-    } else if (pendingBefore == 0) {
-      UiSnack.show(ReportMessages.noPendingToSend);
-    } else {
-      UiSnack.show(ReportMessages.pendingFlushFailed(pendingAfter));
-    }
+    return flushReportQueue(
+      context,
+      pendingCount: reportService.getPendingReportsCount,
+      flush: reportService.flushPendingReports,
+      setBusy: (busy) => setState(() => _isFlushingPluginReports = busy),
+      onPendingReportsChanged: widget.onPendingReportsChanged,
+    );
   }
 
   Future<void> _sendPendingPluginReport(PluginReportRecord record) async {
@@ -361,130 +339,31 @@ class _PluginReportsPanelState extends State<PluginReportsPanel> {
     UiSnack.show(ReportMessages.deletedFromHistory);
   }
 
-  Future<void> _clearPluginPendingReports() async {
-    final confirmed = await showWarningDialog(
-      context: context,
-      title: context.settingsText('למחוק דיווחים שמורים?'),
-      content: context.settingsText('כל הדיווחים השמורים בתור יימחקו מהמחשב.'),
-      subtitle: context.settingsText('לא ניתן לשחזר דיווחים שנמחקו.'),
-      cancelText: context.settingsText('ביטול'),
-      confirmText: context.settingsText('מחק'),
-    );
-    if (confirmed != true) {
-      return;
-    }
+  Future<void> _clearPluginPendingReports() => clearPendingReports(
+    context,
+    clear: () => PluginReportService().clearPendingReports(),
+    setBusy: (busy) => setState(() => _isClearingPluginPendingReports = busy),
+    onPendingReportsChanged: widget.onPendingReportsChanged,
+  );
 
-    setState(() {
-      _isClearingPluginPendingReports = true;
-    });
+  Future<void> _clearPluginSentReports() => clearSentReports(
+    context,
+    subtitle: context.settingsText(
+      'הפעולה לא מוחקת דיווחים שכבר נשלחו למפתחים.',
+    ),
+    clear: () => PluginReportService().clearSentReports(),
+    setBusy: (busy) => setState(() => _isClearingPluginSentReports = busy),
+  );
 
-    await PluginReportService().clearPendingReports();
-
-    if (!mounted) return;
-    widget.onPendingReportsChanged?.call();
-    setState(() {
-      _isClearingPluginPendingReports = false;
-    });
-    UiSnack.show(ReportMessages.pendingCleared);
-  }
-
-  Future<void> _clearPluginSentReports() async {
-    final confirmed = await showWarningDialog(
-      context: context,
-      title: context.settingsText('לנקות את היסטוריית הדיווחים?'),
-      content: context.settingsText(
-        'כל הדיווחים שנשלחו יימחקו מההיסטוריה המקומית.',
-      ),
-      subtitle: context.settingsText(
-        'הפעולה לא מוחקת דיווחים שכבר נשלחו למפתחים.',
-      ),
-      cancelText: context.settingsText('ביטול'),
-      confirmText: context.settingsText('נקה'),
-    );
-    if (confirmed != true) {
-      return;
-    }
-
-    setState(() {
-      _isClearingPluginSentReports = true;
-    });
-
-    await PluginReportService().clearSentReports();
-
-    if (!mounted) return;
-    setState(() {
-      _isClearingPluginSentReports = false;
-    });
-    UiSnack.show(ReportMessages.historyCleared);
-  }
-
-  Future<void> _exportPluginReportsScript() async {
-    final verified = await verifySaferModePassword(context);
-    if (!verified) {
-      return;
-    }
-
+  Future<void> _exportPluginReportsScript() {
     final reportService = PluginReportService();
-    final records = await reportService.getPendingReports();
-    if (records.isEmpty) {
-      if (!mounted) return;
-      UiSnack.show(ReportMessages.noPendingToExport);
-      return;
-    }
-
-    if (!mounted) return;
-    final target = await resolveOfflineSendTarget(context);
-    if (target == null || !mounted) {
-      return;
-    }
-
-    final script = reportService.buildOfflineSendScript(
-      records,
-      target: target,
+    return exportOfflineSendScript(
+      context,
+      loadPending: reportService.getPendingReports,
+      buildScript: (records, target) =>
+          reportService.buildOfflineSendScript(records, target: target),
+      setBusy: (busy) => setState(() => _isExportingPluginReports = busy),
     );
-
-    final saveDialogTitle = context.settingsText(
-      'בחר מיקום לשמירת סקריפט השליחה',
-    );
-    final downloadsDirectory = await getDownloadsDirectory();
-    final path = await saveFileWithExtension(
-      dialogTitle: saveDialogTitle,
-      fileName: script.fileName,
-      initialDirectory: downloadsDirectory?.path,
-      extension: target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
-      bytes: Uint8List.fromList(utf8.encode(script.content)),
-    );
-    if (path == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _isExportingPluginReports = true;
-    });
-
-    try {
-      // קובץ .sh נשמר ללא הרשאת הרצה; מוסיפים אותה כדי שאפשר יהיה להפעילו ישירות.
-      if (target == OfflineSendScriptTarget.unix &&
-          (Platform.isLinux || Platform.isMacOS)) {
-        await Process.run('chmod', ['+x', path]);
-      }
-
-      if (!mounted) return;
-      UiSnack.showSuccess(
-        target == OfflineSendScriptTarget.unix
-            ? ReportMessages.scriptSavedUnix(script.fileName)
-            : ReportMessages.scriptSavedWindows,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      UiSnack.showError(ReportMessages.scriptSaveError(e));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isExportingPluginReports = false;
-        });
-      }
-    }
   }
 
   Future<void> _showPluginReportDetails(
@@ -505,97 +384,40 @@ class _PluginReportsPanelState extends State<PluginReportsPanel> {
     );
   }
 
+  String _pluginReportSummary(
+    BuildContext context,
+    PluginReportRecord record,
+  ) =>
+      '${_pluginReportTypeLabel(context, record.reportType)} · ${record.details}';
+
   Widget _buildPluginPendingReportTile(
     BuildContext context,
     PluginReportRecord record, {
     required bool canSend,
-  }) {
-    final isSending = _sendingPluginReportId == record.reportId;
-    return Column(
-      children: [
-        ListTile(
-          leading: const Icon(FluentIcons.puzzle_piece_24_regular),
-          title: Text(
-            record.pluginName,
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            '${_pluginReportTypeLabel(context, record.reportType)} · '
-            '${record.details}',
-            style: kSettingsSubtitleStyle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        buildReportActions(
-          children: [
-            ActionButton.neutral(
-              text: context.settingsText('צפה'),
-              icon: FluentIcons.eye_24_regular,
-              onPressed: () => _showPluginReportDetails(record, sent: false),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('ערוך'),
-              icon: FluentIcons.edit_24_regular,
-              onPressed: () => _editPendingPluginReport(record),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('מחק'),
-              icon: FluentIcons.delete_24_regular,
-              onPressed: () => _deletePendingPluginReport(record),
-            ),
-            buildManagedActionButton(
-              enabled: canSend,
-              child: ActionButton.recommended(
-                text: context.settingsText('שלח'),
-                icon: FluentIcons.send_24_regular,
-                isLoading: isSending,
-                onPressed: () => _sendPendingPluginReport(record),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  }) => buildPendingReportTile(
+    context,
+    icon: FluentIcons.puzzle_piece_24_regular,
+    title: record.pluginName,
+    subtitle: _pluginReportSummary(context, record),
+    canSend: canSend,
+    isSending: _sendingPluginReportId == record.reportId,
+    onView: () => _showPluginReportDetails(record, sent: false),
+    onEdit: () => _editPendingPluginReport(record),
+    onDelete: () => _deletePendingPluginReport(record),
+    onSend: () => _sendPendingPluginReport(record),
+  );
 
   Widget _buildPluginSentReportTile(
     BuildContext context,
     PluginReportRecord record,
-  ) {
-    return Column(
-      children: [
-        ListTile(
-          leading: const Icon(FluentIcons.checkmark_24_regular),
-          title: Text(
-            record.pluginName,
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            '${_pluginReportTypeLabel(context, record.reportType)} · '
-            '${record.details}',
-            style: kSettingsSubtitleStyle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        buildReportActions(
-          children: [
-            ActionButton.neutral(
-              text: context.settingsText('צפה'),
-              icon: FluentIcons.eye_24_regular,
-              onPressed: () => _showPluginReportDetails(record, sent: true),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('מחק'),
-              icon: FluentIcons.delete_24_regular,
-              onPressed: () => _deleteSentPluginReport(record),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  ) => buildSentReportTile(
+    context,
+    icon: FluentIcons.checkmark_24_regular,
+    title: record.pluginName,
+    subtitle: _pluginReportSummary(context, record),
+    onView: () => _showPluginReportDetails(record, sent: true),
+    onDelete: () => _deleteSentPluginReport(record),
+  );
 }
 
 class _PluginReportEditFields extends StatefulWidget {
