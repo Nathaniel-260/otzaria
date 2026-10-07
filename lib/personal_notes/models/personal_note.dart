@@ -93,6 +93,53 @@ class PersonalNote extends Equatable {
     required this.updatedAt,
   });
 
+  /// פורמט ה-JSON המשותף לייצוא הערות ולגיבוי.
+  factory PersonalNote.fromJson(Map<String, dynamic> json) {
+    return PersonalNote(
+      id: json['id'] as String,
+      bookId: json['bookId'] as String,
+      lineNumber: json['lineNumber'] as int?,
+      displayTitle: json['displayTitle'] as String?,
+      anchorText: json['anchorText'] as String?,
+      anchorPrefix: json['anchorPrefix'] as String?,
+      anchorSuffix: json['anchorSuffix'] as String?,
+      anchorStart: json['anchorStart'] as int?,
+      anchorEnd: json['anchorEnd'] as int?,
+      lastKnownLineNumber: json['lastKnownLineNumber'] as int?,
+      status: PersonalNoteStatus.values.byName(json['status'] as String),
+      content: json['content'] as String,
+      contentPlain:
+          (json['contentPlain'] as String?) ?? (json['content'] as String),
+      contentFormat: PersonalNoteContentFormat.values.byName(
+        json['contentFormat'] as String? ??
+            PersonalNoteContentFormat.plain.name,
+      ),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'bookId': bookId,
+      'lineNumber': lineNumber,
+      'displayTitle': displayTitle,
+      'anchorText': anchorText,
+      'anchorPrefix': anchorPrefix,
+      'anchorSuffix': anchorSuffix,
+      'anchorStart': anchorStart,
+      'anchorEnd': anchorEnd,
+      'lastKnownLineNumber': lastKnownLineNumber,
+      'status': status.name,
+      'content': content,
+      'contentPlain': contentPlain,
+      'contentFormat': contentFormat.name,
+      'createdAt': createdAt.toIso8601String(),
+      'updatedAt': updatedAt.toIso8601String(),
+    };
+  }
+
   /// `true` כאשר ההערה מעוגנת למילים ספציפיות בשורה (ולא לשורה כולה).
   bool get isWordAnchored => anchorText != null && anchorText!.isNotEmpty;
 
