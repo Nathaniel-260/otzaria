@@ -1646,6 +1646,9 @@ class _LibraryBrowserState extends State<LibraryBrowser>
                   showTopics: showTopics,
                   isSelected: isSelected,
                   focusNode: focusNode,
+                  onFocused: _isPreviewPanelVisible(settingsState)
+                      ? () => _showBookPreview(book)
+                      : null,
                   onBookClickCallback: () {
                     if (_isPreviewPanelVisible(settingsState)) {
                       _showBookPreview(book);
@@ -1750,6 +1753,8 @@ class _LibraryBrowserState extends State<LibraryBrowser>
           category: category,
           isSelected: isSelected,
           onCategoryClickCallback: onTap,
+          // onDoubleTap קיים רק כשהתצוגה המקדימה פעילה, ואז onTap הוא בחירה.
+          onFocused: onDoubleTap == null ? null : onTap,
           focusNode: focusNode,
           parentPath: parentPath,
         ),
