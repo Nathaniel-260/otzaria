@@ -265,9 +265,7 @@ class DataRepository {
       // מוצגים גם כשהצגת הקטלוג החיצוני כבויה — עד שהמשתמש מכבה זאת.
       allBooks.addAll(await localHebrewBooks);
     }
-    // ספרים מבחוץ (של תוספים) אחרונים ברשימה: המזהים שלהם אינם של אוצריא,
-    // ולכן אין להם כינויים ודור.
-    final extraBooksStart = allBooks.length;
+    // ספרים מבחוץ (של תוספים) אחרונים ברשימה.
     allBooks.addAll(extraBooks);
 
     // no-op אם הקאשים כבר חוממו בעליית האפליקציה
@@ -284,13 +282,8 @@ class DataRepository {
         buildBookSearchEntry(
           i,
           allBooks[i],
-          acronymsFor: i < extraBooksStart
-              ? AcronymsCache.instance.acronymsFor
-              : (_, _) => null,
-          eraOrderForId: i < extraBooksStart
-              ? GenerationCache.instance.getOrderForBook
-              : (_, source) =>
-                    GenerationCache.instance.getOrderForBook(null, source),
+          acronymsFor: AcronymsCache.instance.acronymsFor,
+          eraOrderForId: GenerationCache.instance.getOrderForBook,
         ),
     ];
 
@@ -349,7 +342,8 @@ BookSearchEntry buildBookSearchEntry(
   required List<String>? Function(BookSource source, int bookId) acronymsFor,
   required int Function(int? bookId, BookSource source) eraOrderForId,
 }) {
-  final id = book.id;
+  // מזהה של ספר חיצוני (היברובוקס/אוצר החכמה/תוסף) אינו מזהה במסד של אוצריא.
+  final id = book is ExternalLibraryBook ? null : book.id;
   return BookSearchEntry(
     index: index,
     title: book.title,
