@@ -103,7 +103,6 @@ import 'package:otzaria/core/diagnostics/developer_diagnostics.dart';
 import 'package:otzaria/core/window_listener.dart';
 import 'package:otzaria/core/window_persistence.dart';
 import 'package:otzaria/core/windowing/app_window_scope.dart';
-import 'package:otzaria/core/user_state/hive_to_user_state_migration.dart';
 import 'package:otzaria/core/user_state/user_state_database.dart';
 import 'package:otzaria/core/user_state/window_bounds.dart';
 import 'package:otzaria/core/user_state/window_session_store.dart';
@@ -1861,31 +1860,19 @@ PluginSystemBloc _createPluginSystemBloc(BuildContext context) {
 }
 
 Future<void> initHive() async {
-  // ⚠️ החלון הראשון, וכל עוד אין חלון נוסף חי. שורש Hive פרטי שנשאר תחת
-  // `<dataRoot>/windows` הוא שארית מהפעלה קודמת ואף אחד לא ימחק אותו
-  // אחרת — נמדדו 69 תיקיות ו-33MB. תנאי `hasOtherWindows` מגן על המסלול
-  // של `RestartWidget`, שמריץ את האתחול מחדש בזמן שחלון משני חי ופתח שם
-  // קבצים.
+  // שורשי חלונות ישנים נמחקים רק כשאין חלון משני חי שמשתמש בקבצים,
+  // גם באתחול מחדש דרך RestartWidget.
   if (!WindowRole.isSecondary && !WindowBus.instance.hasOtherWindows) {
     await deleteStaleWindowRoots();
   }
-  // ⚠️ `hiveRootPath` ולא `getDataRootPath`: בחלון משני box ההגדרות יושב
-  // בתיקייה נפרדת, אבל שאר שורש הנתונים נשאר משותף. ראו
-  // `configureHiveRootForWindow`.
+  // בחלון משני הגדרות Hive יושבות בשורש פרטי; שאר הנתונים משותפים.
   final hiveRoot = await hiveRootPath();
   Hive.init(hiveRoot);
   // המסד נפתח כאן ולא בעצלות: `TabsRepository.loadTabs` קורא אותו
   // סינכרונית מבנאי של bloc.
   await UserStateDatabase.instance.database;
-  // פר-תהליך: המיגרציה משנה שמות של קבצים בשורש המשותף, ולחלון משני אין
-  // שם מה להעביר.
-  if (!WindowRole.isSecondary) {
-    await HiveToUserStateMigration(hiveRoot: hiveRoot).run();
-  }
-  // ⚠️ כאן ולא ב-`TabsBloc`. שני קוראים שונים טוענים את הכרטיסיות
-  // (`TabsBloc` דרך `LoadTabs`, ו-`NavigationBloc` בקונסטרוקטור שלו), והסדר
-  // ביניהם תלוי בתזמון של תור האירועים. איחוד שמוחק סשנים חייב לרוץ פעם
-  // אחת, לפני שניהם.
+  // סידור הסשנים חייב לרוץ פעם אחת לפני TabsBloc ו-NavigationBloc,
+  // כי שניהם טוענים כרטיסיות וסדר הטעינה ביניהם תלוי בתזמון.
   if (_restoresAllWindows) {
     _windowSlotsToRestore = await TabsRepository.compactWindowSessions();
   } else {
