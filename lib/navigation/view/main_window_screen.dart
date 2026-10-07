@@ -24,6 +24,8 @@ import 'package:otzaria/data/data_providers/tantivy_data_provider.dart';
 import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
 import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/indexing/bloc/indexing_state.dart';
+import 'package:otzaria/attached_libraries/external_link_work_status.dart';
+import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/indexing/indexing_work_status.dart';
 import 'package:otzaria/indexing/repository/indexing_repository.dart';
 import 'package:otzaria/core/windowing/window_title_sync.dart';
@@ -628,6 +630,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
 
   StreamSubscription<Object?>? _semanticWorkStatusSub;
   SemanticWorkStatusReporter? _semanticWorkStatus;
+  ExternalLinkWorkStatusReporter? _externalLinkWorkStatus;
 
   SemanticWorkStatusReporter _createSemanticWorkStatus() {
     final cubit = context.read<WorkStatusCubit>();
@@ -653,6 +656,12 @@ class MainWindowScreenState extends State<MainWindowScreen>
             availability,
           );
         });
+    final workStatus = context.read<WorkStatusCubit>();
+    _externalLinkWorkStatus = ExternalLinkWorkStatusReporter(
+      repository: ExternalLinkRepository.instance,
+      upsert: workStatus.upsert,
+      remove: workStatus.remove,
+    );
     _calendarCubit = CalendarCubit();
     _settingsScreenController = SettingsScreenController();
     _tourCubit = TourCubit();
@@ -1820,6 +1829,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     _tourCubit.close();
     _readerLocationTracker?.dispose();
     _semanticWorkStatusSub?.cancel();
+    _externalLinkWorkStatus?.dispose();
     pageController.dispose();
     super.dispose();
   }

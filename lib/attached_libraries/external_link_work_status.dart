@@ -1,5 +1,6 @@
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/work_status/work_status_item.dart';
 
@@ -53,4 +54,50 @@ WorkStatusItem externalLinkWorkStatusItem(
       ),
     ],
   );
+}
+
+/// מציג את בניית אינדקס הקישורים בכרטיס חיווי העבודה, ומסיר אותו בסיומה.
+class ExternalLinkWorkStatusReporter {
+  ExternalLinkWorkStatusReporter({
+    required this.repository,
+    required this.upsert,
+    required this.remove,
+  }) : _listenable = Listenable.merge([
+         repository.buildProgress,
+         repository.buildPaused,
+         repository.buildEconomy,
+       ]) {
+    _listenable.addListener(_update);
+    _update();
+  }
+
+  final ExternalLinkRepository repository;
+  final void Function(WorkStatusItem item) upsert;
+  final void Function(String id) remove;
+  final Listenable _listenable;
+  bool _shown = false;
+
+  void _update() {
+    final progress = repository.buildProgress.value;
+    if (progress.isEmpty) {
+      if (_shown) remove(kExternalLinkWorkStatusId);
+      _shown = false;
+      return;
+    }
+    _shown = true;
+    upsert(
+      externalLinkWorkStatusItem(
+        progress,
+        isPaused: repository.buildPaused.value,
+        isEconomy: repository.buildEconomy.value,
+        onTogglePause: () => repository.buildPaused.value
+            ? repository.resumeBuild()
+            : repository.pauseBuild(),
+        onToggleEconomy: () =>
+            repository.setBuildEconomy(!repository.buildEconomy.value),
+      ),
+    );
+  }
+
+  void dispose() => _listenable.removeListener(_update);
 }

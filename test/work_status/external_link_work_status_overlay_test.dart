@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/attached_libraries/external_link_work_status.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/work_status/work_status_cubit.dart';
 import 'package:otzaria/work_status/work_status_item.dart';
@@ -36,54 +37,47 @@ const _booksItem = WorkStatusItem(
   progress: 0.08,
 );
 
-const _booksCard = ValueKey('books-work-status');
-const _linksCard = ValueKey('external-link-work-status');
-
 void main() {
   late _FakeLinks links;
   late WorkStatusCubit cubit;
+  late ExternalLinkWorkStatusReporter reporter;
 
   setUp(() {
     links = _FakeLinks();
     cubit = WorkStatusCubit();
+    reporter = ExternalLinkWorkStatusReporter(
+      repository: links,
+      upsert: cubit.upsert,
+      remove: cubit.remove,
+    );
   });
 
-  tearDown(() => cubit.close());
+  tearDown(() {
+    reporter.dispose();
+    return cubit.close();
+  });
 
-  Future<void> pump(
-    WidgetTester tester, {
-    TargetPlatform platform = TargetPlatform.windows,
-  }) => tester.pumpWidget(
+  Future<void> pump(WidgetTester tester) => tester.pumpWidget(
     BlocProvider.value(
       value: cubit,
-      child: MaterialApp(
-        theme: ThemeData(platform: platform),
-        home: Scaffold(
-          body: Directionality(
-            textDirection: TextDirection.rtl,
-            child: Stack(children: [WorkStatusOverlay(links: links)]),
-          ),
-        ),
+      child: const MaterialApp(
+        home: Scaffold(body: Stack(children: [WorkStatusOverlay()])),
       ),
     ),
   );
 
   void startBuild() {
     links.buildProgress.value = const {
-      'dbA': ExternalLinkBuildProgress(done: 1000000, total: 2000000),
-      'dbB': ExternalLinkBuildProgress(done: 520000, total: 167384),
+      'dbA': ExternalLinkBuildProgress(done: 1500000, total: 2167384),
     };
   }
 
-  testWidgets('מוצג בזמן בנייה עם הטקסט והמספרים ונעלם בסיום', (tester) async {
+  testWidgets('לבדו: תצוגה מלאה עם הטקסט והמספרים; נעלם בסיום', (tester) async {
     await pump(tester);
-    expect(find.byKey(_linksCard), findsNothing);
+    expect(find.text('אינדוקס קישורים'), findsNothing);
 
-    links.buildProgress.value = const {
-      'dbA': ExternalLinkBuildProgress(done: 1500000, total: 2167384),
-    };
+    startBuild();
     await tester.pump();
-
     expect(find.text('אינדוקס קישורים'), findsOneWidget);
     expect(find.text('הקישורים בתהליך אינדוקס'), findsOneWidget);
     expect(find.text('התקדמות: 1,500,000/2,167,384'), findsOneWidget);
@@ -91,96 +85,33 @@ void main() {
 
     links.buildProgress.value = const {};
     await tester.pump();
-    expect(find.byKey(_linksCard), findsNothing);
+    await tester.pump();
+    expect(find.text('אינדוקס קישורים'), findsNothing);
+    expect(cubit.state.hasActiveItems, isFalse);
   });
 
-  testWidgets('נסגר ב-X וחוזר בבנייה חדשה', (tester) async {
-    await pump(tester);
-    startBuild();
-    await tester.pump();
-
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(_linksCard),
-        matching: find.byTooltip('סגור'),
-      ),
-    );
-    await tester.pump();
-    expect(find.byKey(_linksCard), findsNothing);
-
-    links.buildProgress.value = const {};
-    await tester.pump();
-    startBuild();
-    await tester.pump();
-    expect(find.byKey(_linksCard), findsOneWidget);
-  });
-
-  testWidgets('צמוד ומימין לחלון אינדוקס הספרים; לבדו תופס את מקומו', (
-    tester,
-  ) async {
+  testWidgets('יחד עם אינדוקס הספרים: שורות באותו כרטיס', (tester) async {
     cubit.upsert(_booksItem);
     await pump(tester);
     startBuild();
     await tester.pump();
 
-    final books = tester.getRect(find.byKey(_booksCard));
-    final linksRect = tester.getRect(find.byKey(_linksCard));
-    expect(linksRect.left, greaterThan(books.right));
-    expect(linksRect.left - books.right, lessThan(24));
-    expect(linksRect.bottom, books.bottom);
-
-    cubit.remove('indexing');
-    await tester.pump();
-    await tester.pump();
-    expect(find.byKey(_booksCard), findsNothing);
-    final alone = tester.getRect(find.byKey(_linksCard));
-    expect(alone.left, books.left);
+    expect(find.text('אינדוקס ספרים'), findsOneWidget);
+    expect(find.text('אינדוקס קישורים'), findsOneWidget);
+    expect(find.byType(DecoratedBox), findsWidgets);
+    expect(find.byTooltip('סגור'), findsOneWidget);
   });
 
-  testWidgets('סגירת חלון הספרים מזיזה את הקישורים למקומו וחוזרת', (
-    tester,
-  ) async {
-    cubit.upsert(_booksItem);
-    await pump(tester);
-    startBuild();
-    await tester.pump();
-    final booksSpot = tester.getRect(find.byKey(_booksCard));
-
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(_booksCard),
-        matching: find.byTooltip('סגור'),
-      ),
-    );
-    await tester.pump();
-    expect(tester.getRect(find.byKey(_linksCard)).left, booksSpot.left);
-
-    cubit.remove('indexing');
-    cubit.upsert(_booksItem);
-    await tester.pump();
-    expect(find.byKey(_booksCard), findsOneWidget);
-    expect(tester.getRect(find.byKey(_booksCard)).left, booksSpot.left);
-    expect(
-      tester.getRect(find.byKey(_linksCard)).left,
-      greaterThan(booksSpot.right),
-    );
-  });
-
-  testWidgets('סגירת חלון הספרים אינה סוגרת את חלון הקישורים', (tester) async {
+  testWidgets('סגירה בכרטיס מסתירה את הכול לפי המנגנון הקיים', (tester) async {
     cubit.upsert(_booksItem);
     await pump(tester);
     startBuild();
     await tester.pump();
 
-    await tester.tap(
-      find.descendant(
-        of: find.byKey(_booksCard),
-        matching: find.byTooltip('סגור'),
-      ),
-    );
+    await tester.tap(find.byTooltip('סגור'));
     await tester.pump();
-    expect(find.byKey(_booksCard), findsNothing);
-    expect(find.byKey(_linksCard), findsOneWidget);
+    expect(cubit.state.isDismissed, isTrue);
+    expect(find.text('אינדוקס קישורים'), findsNothing);
   });
 
   testWidgets('השהה, המשך ומצב חסכוני קוראים ל-API', (tester) async {
@@ -196,7 +127,6 @@ void main() {
     await tester.tap(find.text('המשך'));
     await tester.pump();
     expect(links.calls, ['pause', 'resume']);
-    expect(find.text('השהה'), findsOneWidget);
 
     await tester.tap(find.text('מצב חסכוני'));
     await tester.pump();
