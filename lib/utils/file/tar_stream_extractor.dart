@@ -5,13 +5,13 @@ import 'dart:typed_data';
 import 'package:path/path.dart' as p;
 
 /// פורס tar שמגיע בנתחים (ustar, GNU long names ו-pax) ישירות לתיקייה,
-/// בלי לשמור את ה-tar. כל רשומה חייבת לשבת תחת [rootFolder], ונתיב שבורח
-/// מהיעד נדחה. הכתיבה סינכרונית: הפלט של מפענח ה-zstd תקף רק בתוך הקריאה.
+/// בלי לשמור את ה-tar. כל רשומה חייבת לשבת תחת [rootFolder] (null — כל שורש),
+/// ונתיב שבורח מהיעד נדחה. הכתיבה סינכרונית: פלט מפענח ה-zstd תקף רק בקריאה.
 class TarStreamExtractor {
   TarStreamExtractor(this.destination, {required this.rootFolder});
 
   final String destination;
-  final String rootFolder;
+  final String? rootFolder;
 
   static const _block = 512;
   static const _maxMetaEntrySize = 1 << 20;
@@ -214,10 +214,15 @@ class TarStreamExtractor {
         name.startsWith('/') ||
         segments.any((s) => s == '..' || s.contains('\\') || s.contains(':'));
     if (unsafe) throw FormatException('נתיב לא בטוח בארכיון: $name');
-    if (segments.isEmpty || segments.first != rootFolder) {
-      throw FormatException('מבנה הארכיון אינו צפוי: $name');
+    final root = rootFolder;
+    if (root == null) {
+      if (segments.isEmpty) return null;
+    } else {
+      if (segments.isEmpty || segments.first != root) {
+        throw FormatException('מבנה הארכיון אינו צפוי: $name');
+      }
+      if (segments.length == 1) return null;
     }
-    if (segments.length == 1) return null;
     return p.joinAll([destination, ...segments]);
   }
 
