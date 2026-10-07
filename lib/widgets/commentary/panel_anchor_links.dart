@@ -12,12 +12,8 @@ import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:otzaria/widgets/misc/link_preview_overlay.dart';
 import 'package:otzaria/widgets/smart_text/smart_text.dart';
 
-/// קישורים פנימיים (ציטוטי הלינקר וסמני-מספר של הערות) בתוך קטע שמוצג
-/// בחלונית — מפרש או קישור.
-///
-/// בגוף הספר הסימון מוזרק מ-`state.linksByLine`, שממופתח לשורות ספר הבסיס
-/// בלבד. בחלונית הקטע שייך לספר אחר, ולכן הקישורים מגיעים מ-
-/// [TargetLineLinksService] — אותה טעינה שכבר משרתת את תפריט ההקשר.
+/// קישורים פנימיים בקטע בחלונית, שספרו שונה מספר הבסיס.
+/// נטענים דרך [TargetLineLinksService], כמו בתפריט ההקשר.
 mixin PanelAnchorLinksMixin<T extends StatefulWidget> on State<T> {
   StreamSubscription<void>? _anchorSubscription;
   List<Link> _anchorLinks = const [];
@@ -168,7 +164,12 @@ mixin PanelAnchorLinksMixin<T extends StatefulWidget> on State<T> {
             rangesOnly: true,
           );
     // אחרי הציטוטים: אופסטי קישור-משתמש נמדדים על השורה הגולמית.
-    if (_noteLinks.isEmpty) return html;
+    // HTML של טווח אינו שומר גבולות שורות מקור; מספר הערה יכול לחזור.
+    if (_noteLinks.isEmpty ||
+        (anchorSourceLink.index2End ?? anchorSourceLink.index2) >
+            anchorSourceLink.index2) {
+      return html;
+    }
     return addNumberedNoteMarkerLinks(html, lineIndex: lineIndex);
   }
 

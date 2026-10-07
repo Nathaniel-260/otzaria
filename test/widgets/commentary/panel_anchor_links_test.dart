@@ -61,6 +61,7 @@ Future<void> _pumpPanel(
   bool enabled = true,
   String html = 'אבגדהוזחטיכלמנ',
   void Function(OpenedTab)? onOpen,
+  Link? displayed,
 }) async {
   TargetLineLinksService.instance = TargetLineLinksService(
     loader: (_, _, _) async => loaded,
@@ -70,7 +71,7 @@ Future<void> _pumpPanel(
       value: _TestSettingsBloc(SettingsState.initial()),
       child: MaterialApp(
         home: PanelAnchoredText(
-          link: _displayed(),
+          link: displayed ?? _displayed(),
           html: html,
           settings: const RenderSettings(),
           enabled: enabled,
@@ -319,6 +320,83 @@ void main() {
     expect(html, contains('ref=2_0&range=1">אבגדה</a>'));
     expect(html, contains('note-marker?line=2&num=26">(26)</a>'));
   });
+
+  for (final end in <int?>[null, 3]) {
+    testWidgets('סמני הערות בשורה אחת עם br פנימי נשארים פעילים ($end)', (
+      tester,
+    ) async {
+      await _pumpPanel(
+        tester,
+        displayed: Link(
+          heRef: 'שורה עם מעבר פנימי',
+          index1: 1,
+          path2: 'חברותא על ברכות',
+          index2: 3,
+          index2End: end,
+          connectionType: LinkTypes.commentary,
+        ),
+        loaded: [_footnote()],
+        html: 'לפני <small>(26)</small><br>אחרי <small>(27)</small>',
+      );
+
+      expect(_renderedHtml(tester), contains('note-marker?line=2&num=26'));
+      expect(_renderedHtml(tester), contains('note-marker?line=2&num=27'));
+    });
+  }
+
+  for (final type in [LinkTypes.commentary, LinkTypes.footnotes]) {
+    testWidgets('מספר הערה חוזר בטווח אינו משויך לשורה הראשונה ($type)', (
+      tester,
+    ) async {
+      final html = [
+        'שנינו במשנה: <b>רבי טרפון אומר</b>: מברך לפני <small>(2)</small> '
+            'שתיית מים <b>בורא נפשות רבות וחסרונן.</b>',
+        '<b>אמר ליה רבא בר רב חנן לאביי, ואמרי לה, לרב יוסף: הלכתא</b> - '
+            '<b>מאי?</b> האם הלכה כתנא קמא הסובר שיש לברך עליהם בתחלה שהכל, '
+            'או כרבי טרפון הסובר שיש לברך עליהם בתחלה בורא נפשות?',
+        '<b>אמר ליה: פוק חזי מאי עמא דבר!</b> צא וראה היאך נוהגים כולם, '
+            'וכבר נהגו לברך בתחלה שהכל, ולבסוף בורא נפשות רבות.',
+        '<br><center><big><b>הדרן עלך פרק כיצד מברכין</b></big></center>',
+        '<h2>פרק שביעי - שלשה שאכלו</h2>',
+        '<big><b>מתניתין:</b></big>',
+        '<b>שלשה שאכלו</b> פת, והיו יושבין בסעודה <b>כאחת</b> [יחד] '
+            '<small>(1)</small>, <b>חייבין</b> <small>(2)</small> <b>לזמן</b> - '
+            'להזדמן ולהצטרף יחד, כדי לברך "ברכת הזימון" בלשון רבים '
+            '<small>(3)</small>.',
+      ].join('<br>');
+      await _pumpPanel(
+        tester,
+        displayed: Link(
+          heRef: 'חברותא על ברכות, מח ב–נ א',
+          index1: 1,
+          path2: 'חברותא על ברכות',
+          index2: 4227,
+          index2End: 4233,
+          connectionType: type,
+        ),
+        loaded: [
+          for (final (source, target) in [(4227, 2318), (4233, 2320)])
+            Link(
+              heRef: 'הערות על חברותא על ברכות',
+              index1: source,
+              path2: 'הערות על חברותא על ברכות',
+              index2: target,
+              connectionType: LinkTypes.footnotes,
+              targetCategoryId: 1488,
+            ),
+          _anchored(index1: 4227, charStart: 0, charEnd: 5),
+        ],
+        html: html,
+      );
+
+      expect(_renderedHtml(tester), isNot(contains('note-marker')));
+      expect(_renderedHtml(tester), contains('anchor?ref=4226_0&range=1'));
+      expect(
+        _renderedHtml(tester).split('<small>(2)</small>').length,
+        3,
+      );
+    });
+  }
 
   testWidgets('ריחוף על סמן-מספר במפרש מציג את ההערה (issue #2002)', (
     tester,
