@@ -11,12 +11,7 @@ import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
 
-/// DataRepository acts as a centralized data access layer that coordinates between different
-/// data providers (file system, Hive storage, and Tantivy search engine).
-///
-/// This repository implements the Repository pattern to abstract the data source
-/// implementation details from the business logic. It provides a clean API for
-/// accessing and manipulating application data from various sources.
+/// מרכז את הגישה לנתוני הספרייה ממסד הנתונים וממערכת הקבצים.
 class DataRepository {
   /// Handles file system operations like reading book texts and metadata
   final FileSystemData _fileSystemData;
@@ -77,9 +72,7 @@ class DataRepository {
     _lastSuccessfulLibrary = null;
   }
 
-  // Lazy-loaded: only fetched when user actually searches for external books.
-  // Previously these ran getAllBooksWithRelations() eagerly at startup,
-  // competing with library loading for DB I/O.
+  // הקטלוגים החיצוניים נטענים רק בחיפוש כדי שלא יעכבו את העלייה.
   Future<List<Book>>? _hebrewBooksFuture;
   Future<List<Book>>? _localHebrewBooksFuture;
   Future<List<ExternalLibraryBook>>? _otzarBooksFuture;
@@ -265,9 +258,7 @@ class DataRepository {
       // מוצגים גם כשהצגת הקטלוג החיצוני כבויה — עד שהמשתמש מכבה זאת.
       allBooks.addAll(await localHebrewBooks);
     }
-    // ספרים מבחוץ (של תוספים) אחרונים ברשימה: המזהים שלהם אינם של אוצריא,
-    // ולכן אין להם כינויים ודור.
-    final extraBooksStart = allBooks.length;
+    // ספרים מבחוץ (של תוספים) אחרונים ברשימה.
     allBooks.addAll(extraBooks);
 
     // no-op אם הקאשים כבר חוממו בעליית האפליקציה
@@ -284,13 +275,8 @@ class DataRepository {
         buildBookSearchEntry(
           i,
           allBooks[i],
-          acronymsFor: i < extraBooksStart
-              ? AcronymsCache.instance.acronymsFor
-              : (_, _) => null,
-          eraOrderForId: i < extraBooksStart
-              ? GenerationCache.instance.getOrderForBook
-              : (_, source) =>
-                    GenerationCache.instance.getOrderForBook(null, source),
+          acronymsFor: AcronymsCache.instance.acronymsFor,
+          eraOrderForId: GenerationCache.instance.getOrderForBook,
         ),
     ];
 
@@ -339,9 +325,7 @@ class DataRepository {
   String _normalizeForSearch(String input) => _normalizeBookSearchText(input);
 }
 
-/// בונה [BookSearchEntry] לספר בודד. ה-lookups מוזרקים כדי לאפשר בדיקה
-/// בלי DB. הכינויים והדור נלקחים לפי [Book.source] — ל-id אין משמעות מחוץ
-/// למסד של הספר.
+/// בונה רשומת חיפוש; כינויים ודור נקראים רק במרחב המזהים של מסד הספר.
 @visibleForTesting
 BookSearchEntry buildBookSearchEntry(
   int index,
@@ -349,7 +333,11 @@ BookSearchEntry buildBookSearchEntry(
   required List<String>? Function(BookSource source, int bookId) acronymsFor,
   required int Function(int? bookId, BookSource source) eraOrderForId,
 }) {
-  final id = book.id;
+  final isExternalCatalog =
+      book is ExternalLibraryBook ||
+      (book.source.isOfficial && !book.isOfficialLibraryBook);
+  // PDF מקומי מקטלוג חיצוני שומר את מזהה הקטלוג, לא מזהה במסד אוצריא.
+  final id = isExternalCatalog ? null : book.id;
   return BookSearchEntry(
     index: index,
     title: book.title,
@@ -358,6 +346,7 @@ BookSearchEntry buildBookSearchEntry(
     acronyms: id == null ? const [] : acronymsFor(book.source, id) ?? const [],
     eraOrder: eraOrderForId(id, book.source),
     source: book.source,
+    isExternalCatalog: isExternalCatalog,
     categoryPath: book.categoryPath ?? '',
   );
 }
@@ -377,6 +366,7 @@ class BookSearchEntry {
 
   /// מקור הספר — בתוך תת-המיון של הדורות, רשמי לפני אישי לפני מצורף.
   final BookSource source;
+  final bool isExternalCatalog;
 
   /// נתיב הקטגוריות של הספר. בספרים אישיים שם הספר מופיע לעיתים רק על
   /// התיקייה ('חלק א' בתוך תיקייה בשם הספר), ולכן הוא חלק ממרחב החיפוש.
@@ -390,6 +380,7 @@ class BookSearchEntry {
     this.acronyms = const [],
     this.eraOrder = 5,
     this.source = BookSource.official,
+    this.isExternalCatalog = false,
     this.categoryPath = '',
   });
 }
@@ -445,6 +436,7 @@ List<int> filterBookSearchEntries({
       acronyms: entry.acronyms,
       eraOrder: entry.eraOrder,
       source: entry.source,
+      isExternalCatalog: entry.isExternalCatalog,
     );
   });
 
@@ -519,9 +511,13 @@ List<int> filterBookSearchEntries({
                   : 0,
               eraOrder: entry.eraOrder,
               source: entry.source,
+              isExternalCatalog: entry.isExternalCatalog,
               ratio: ratio(normalizedQuery, entry.normalizedTitle),
             ),
         ]..sort((a, b) {
+          if (a.isExternalCatalog != b.isExternalCatalog) {
+            return a.isExternalCatalog ? 1 : -1;
+          }
           if (a.tier != b.tier) return b.tier.compareTo(a.tier);
           if (a.eraOrder != b.eraOrder) return a.eraOrder.compareTo(b.eraOrder);
           // בתוך אותו דור — רשמי, אחריו אישי, ואחריו מסד מצורף.
@@ -569,6 +565,7 @@ class _PreparedBookSearchEntry {
   final List<String> acronyms;
   final int eraOrder;
   final BookSource source;
+  final bool isExternalCatalog;
 
   const _PreparedBookSearchEntry({
     required this.index,
@@ -579,6 +576,7 @@ class _PreparedBookSearchEntry {
     required this.acronyms,
     required this.eraOrder,
     required this.source,
+    required this.isExternalCatalog,
   });
 }
 
@@ -587,6 +585,7 @@ class _ScoredBookSearchEntry {
   final int tier;
   final int eraOrder;
   final BookSource source;
+  final bool isExternalCatalog;
   final int ratio;
 
   const _ScoredBookSearchEntry({
@@ -594,6 +593,7 @@ class _ScoredBookSearchEntry {
     required this.tier,
     required this.eraOrder,
     required this.source,
+    required this.isExternalCatalog,
     required this.ratio,
   });
 }
