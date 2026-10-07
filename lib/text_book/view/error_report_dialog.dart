@@ -711,7 +711,11 @@ $detailsSection
     final normalizedLibraryVersion = libraryVersion.trim().isEmpty
         ? 'unknown'
         : libraryVersion.trim();
-    final correction = source == null ? null : reportData.correction;
+    // הצעת תיקון בלי הצעה (null, מדיווח שמור מגרסה קודמת) נשלחת כדיווח חופשי.
+    final correction =
+        source == null || reportData.correction?.proposedText == null
+        ? null
+        : reportData.correction;
     const fit = DirectErrorReport.fitDisplayField;
     return DirectErrorReport(
       schemaVersion: DirectErrorReport.currentSchemaVersion,
@@ -1469,7 +1473,7 @@ class _RegularReportTabState extends State<RegularReportTab> {
   bool get _canSubmit {
     if (!_isCorrection) return _hasDetails;
     final draft = _draft;
-    return draft != null && draft.isValid && (draft.hasProposal || _hasDetails);
+    return draft != null && draft.isValid && draft.hasProposal;
   }
 
   @override
@@ -1667,15 +1671,9 @@ class _RegularReportTabState extends State<RegularReportTab> {
                       isDense: true,
                       border: const OutlineInputBorder(),
                       labelText: _isCorrection
-                          ? 'הסבר לתיקון (חובה אם אין הצעה)'
+                          ? 'הסבר לתיקון (רשות)'
                           : 'פירוט הטעות (חובה)',
                       hintText: 'מה לא תקין כאן? בלא פירוט לא נוכל לטפל',
-                      helperText:
-                          _isCorrection &&
-                              _draft?.hasProposal == false &&
-                              !_hasDetails
-                          ? ReportMessages.proposalNeedsDetailsOrChange
-                          : null,
                     ),
                   ),
                 ],

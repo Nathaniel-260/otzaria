@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_query_builder.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/utils/smart_lexical_in_book_search.dart';
@@ -20,7 +22,27 @@ class InBookSearchSettings {
     this.searchMode = SearchMode.exact,
     this.distance = 0,
     this.matchPolicy = SearchMatchPolicy.standard,
+    this.optionsForEveryWord,
   });
+
+  /// The settings a new in-book search starts with: the defaults saved with
+  /// "קבע כברירת מחדל", whose word options apply to every word typed.
+  factory InBookSearchSettings.savedDefaults() {
+    if (!Settings.isInitialized) return const InBookSearchSettings();
+    final mode = SearchDefaults.loadModeDefault();
+    return InBookSearchSettings(
+      searchMode: mode,
+      distance: mode == SearchMode.fuzzy
+          ? kMaxFuzzyDistance
+          : SearchDefaults.loadDistanceDefault(),
+      optionsForEveryWord: SearchQueryBuilder.normalizeGlobalOptionsForMode(
+        mode,
+        mode == SearchMode.exact
+            ? SearchDefaults.loadExactDefaults()
+            : SearchDefaults.loadDefaults(),
+      ),
+    );
+  }
 
   /// The settings submitted in the advanced search dialog, with the per-word
   /// options normalized for the chosen mode.
@@ -47,6 +69,27 @@ class InBookSearchSettings {
   final SearchMode searchMode;
   final int distance;
   final SearchMatchPolicy matchPolicy;
+
+  /// Word options that apply to every word of whatever query is typed, or
+  /// null when [searchOptions] were chosen for a specific query.
+  final Map<String, bool>? optionsForEveryWord;
+
+  /// These settings with [optionsForEveryWord] spread over the words of
+  /// [query].
+  InBookSearchSettings forQuery(String query) {
+    final options = optionsForEveryWord;
+    if (options == null) return this;
+    return InBookSearchSettings(
+      searchOptions: SearchQueryBuilder.expandGlobalOptionsToWords(
+        query,
+        options,
+      ),
+      searchMode: searchMode,
+      distance: distance,
+      matchPolicy: matchPolicy,
+      optionsForEveryWord: options,
+    );
+  }
 
   /// Whether these settings need the search engine rather than the local
   /// literal scan.

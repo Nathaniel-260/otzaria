@@ -143,7 +143,7 @@ class LibraryPackageImporter {
     if (shortfalls.isNotEmpty) throw InsufficientSpaceException(shortfalls);
   }
 
-  /// הגודל אחרי חילוץ מכותרת ה-frame שבתחילת החלק הראשון; אומדן כשאינה קריאה.
+  /// גודל התוכן בארכיון קטן ושלם; אחרת אומדן לפי סוג הנכס.
   static Future<int> _extractedSize(
     PackageFolder folder,
     List<LibraryPackagePart> parts,
@@ -152,17 +152,27 @@ class LibraryPackageImporter {
     final compressedSize = parts.fold(0, (sum, part) => sum + part.size);
     int? contentSize;
     try {
-      contentSize = await readZstdFrameContentSize(
-        folder.openRead(parts.first.entry),
+      contentSize = await readZstdArchiveContentSize(
+        _readParts(folder, parts),
+        compressedSize: compressedSize,
       );
     } on Exception {
       // קריאה שנכשלה תיכשל שוב בפריסה עם הודעה משלה; כאן מספיק האומדן.
     }
     return extractedSizeOf(
       compressedSize,
-      frameContentSize: contentSize,
+      archiveContentSize: contentSize,
       fallbackRatio: fallbackRatio,
     );
+  }
+
+  static Stream<List<int>> _readParts(
+    PackageFolder folder,
+    List<LibraryPackagePart> parts,
+  ) async* {
+    for (final part in parts) {
+      yield* folder.openRead(part.entry);
+    }
   }
 
   /// כמו [checkSpace], לנכסים גולמיים שנפרסים ליד [booksTarget].
@@ -175,7 +185,8 @@ class LibraryPackageImporter {
           asset.parts,
           _rawFallback(asset.component),
         ),
-        _ => asset.size,
+        RawAssetFormat.directory => await _directoryBytes(asset.directoryPath!),
+        RawAssetFormat.plain => asset.size,
       };
     }
     final books = await _diskSpace(booksTarget);
@@ -192,6 +203,16 @@ class LibraryPackageImporter {
       ),
     ]);
     if (shortfalls.isNotEmpty) throw InsufficientSpaceException(shortfalls);
+  }
+
+  static Future<int> _directoryBytes(String path) async {
+    var bytes = 0;
+    await for (final entity in Directory(
+      path,
+    ).list(recursive: true, followLinks: false)) {
+      if (entity is File) bytes += await entity.length();
+    }
+    return bytes;
   }
 
   static double _rawFallback(LibraryComponent component) => switch (component) {

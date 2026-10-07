@@ -265,13 +265,14 @@
 | כל הודעה ל-`UiSnack` מגיעה מקטלוג `lib/core/messages/` (issue #1473) | `test/core/messages/uisnack_literal_scan_test.dart` |
 | תעודות ה-CA של נטפרי שנטענות בהפעלה (שלושת הבאנדלים ב-`assets/ca/`) | `test/core/netfree_ca_assets_test.dart` |
 | Error logging | `test/core/main_error_logging_test.dart`, `test/services/direct_error_report_service_test.dart` |
-| דיווח על התוכנה — מודל (חוזה, גבולות, חיתוך גוף, JSON) | `test/app_report/app_report_model_test.dart` |
+| דיווח על התוכנה — מודל (חוזה, גבולות, חיתוך גוף, JSON, צירוף minidump) | `test/app_report/app_report_model_test.dart` |
 | דיווח על התוכנה — חתימת קריסה (נרמול פריימים, hash) | `test/app_report/crash_signature_test.dart` |
 | דיווח על התוכנה — הסתרת מידע אישי (פרופיל, שם משתמש, מייל) | `test/app_report/app_report_redactor_test.dart` |
 | דיווח על התוכנה — איסוף אבחון ולוג (מקטע שנכשל, חלון 7 ימים, ארכיטקטורה) | `test/app_report/app_report_collector_test.dart` |
-| דיווח על התוכנה — שירות השליחה (תור, 409/422/429, היסטוריה, סקריפט אופליין) | `test/app_report/app_report_service_test.dart` |
+| דיווח על התוכנה — שירות השליחה (תור, 409/422/429, היסטוריה, סקריפט אופליין, dump שנדחה נשלח בלעדיו) | `test/app_report/app_report_service_test.dart` |
 | זיהוי יציאה לא נקייה (נעילת הפעלה, ראיות, מגבלת דיווח אוטומטי) | `test/app_report/unclean_exit_detector_test.dart` |
-| טופס הדיווח (BLoC: איסוף, ולידציה לפי מקור, החרגת צרופות, שמירת מייל) | `test/app_report/bloc/app_report_bloc_test.dart` |
+| חתימת קריסה נייטיבית מ-minidump (קוד חריגה, מודול+היסט, קובץ פגום) | `test/app_report/minidump_signature_test.dart` |
+| טופס הדיווח (BLoC: איסוף, ולידציה לפי מקור, החרגת צרופות כולל minidump, שמירת מייל) | `test/app_report/bloc/app_report_bloc_test.dart` |
 | דיאלוג הדיווח הידני (מייל חובה, תצוגה מקדימה, הודעות סיום) | `test/app_report/view/app_report_dialog_test.dart` |
 | הצעת דיווח אחרי קריסה (בלי מייל, בחירת "תמיד"/"אל תשאל") | `test/app_report/view/crash_prompt_dialog_test.dart` |
 | צירוף צילומי מסך לדיווח (הדבקה מכל הטופס, בחירה, הסרה, מכסה וגודל) | `test/app_report/view/app_report_images_section_test.dart` |

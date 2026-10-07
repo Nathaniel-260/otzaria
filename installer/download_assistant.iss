@@ -36,7 +36,7 @@ AppPublisherURL=https://github.com/otzaria/otzaria
 CreateAppDir=no
 Uninstallable=no
 CreateUninstallRegKey=no
-; עמוד הפתיחה הוא מסך הפתיחה המונפש של download_assistant_ui.iss.
+; עמוד הפתיחה הוא מסך הפתיחה המונפש של שכבת התצוגה (otzaria_ui_core.iss).
 DisableWelcomePage=no
 DisableProgramGroupPage=yes
 DisableReadyPage=no
@@ -53,7 +53,7 @@ VersionInfoCompany=sivan22
 VersionInfoProductTextVersion={#TagVersionPart}
 #endif
 SetupIconFile=white_sketch128x128.ico
-; החלון כולו מצויר ב-download_assistant_ui.iss; תמונות האשף של Inno אינן מוצגות.
+; החלון כולו מצויר בשכבת התצוגה; תמונות האשף של Inno אינן מוצגות.
 WizardImageFile=
 WizardSmallImageFile=
 WizardStyle=modern
@@ -371,6 +371,10 @@ hebrew.WorkTitle=הכנת ההתקנה
 hebrew.WorkDesc=רגע, מכינים את הקבצים.
 hebrew.CheckingCached=בודק קבצים שכבר הורדו
 
+; שכבת התצוגה המשותפת לאוצריא: העיצוב ([Files]) והליבה, לפני כל הקוד שמשתמש בהם.
+#include "otzaria_ui_art.iss"
+#include "otzaria_ui_core.iss"
+
 [Code]
 type
   TByHandleFileInformation = record
@@ -495,26 +499,6 @@ begin
   Result := (Length(Suffix) <= Length(S)) and
     (Lowercase(Copy(S, Length(S) - Length(Suffix) + 1, Length(Suffix))) =
       Lowercase(Suffix));
-end;
-
-{ ממשק Windows בעברית בוחר hebrew; כל שפה אחרת — english. }
-function EnglishUi(): Boolean;
-begin
-  Result := ActiveLanguage() = 'english';
-end;
-
-{ בתוך טקסט עברי "37 MB" מוצג הפוך (MB 37) — העטיפה ב-LRE…PDF שומרת אותו
-  כיחידה אחת משמאל לימין. }
-function LtrUnit(const Value: String): String;
-begin
-  Result := Value;
-  if not EnglishUi() then
-    Result := #$202A + Value + #$202C;
-end;
-
-function Msg1(const Name, Arg: String): String;
-begin
-  Result := FmtMessage(CustomMessage(Name), [Arg]);
 end;
 
 { "אוצריא 0.9.98" לפי releaseVersion של המניפסט — לא התג, שיש בו ‎+build. ריק כשאין. }
@@ -2448,7 +2432,7 @@ begin
   Result := not StopRequested;
 end;
 
-{ שכבת התצוגה: קוראת את העמודים שלמטה וכותבת אליהם, ואינה משנה כלל. }
+{ המתאם של שכבת התצוגה: קורא את העמודים שלמטה וכותב אליהם, ואינו משנה כלל. }
 #include "download_assistant_ui.iss"
 
 { "macOS, Linux, Android או Windows מסוג אחר" — מתוך הרשימה עצמה. }
@@ -2578,7 +2562,7 @@ begin
     CustomMessage('DownloadDesc'), @OnDownloadProgress);
   WorkPage := CreateOutputProgressPage(CustomMessage('WorkTitle'),
     CustomMessage('WorkDesc'));
-  UiInitializeWizard();
+  UiAssistantInitializeWizard();
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;

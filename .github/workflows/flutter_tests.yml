@@ -39,6 +39,16 @@ jobs:
           cc -O2 -Wall -Wextra -arch x86_64 -arch arm64 -mmacosx-version-min=12.0 \
             tool/updater/atomic_tree_swap.c -o /tmp/otzaria-atomic-swap
           lipo /tmp/otzaria-atomic-swap -verify_arch x86_64 arm64
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.2
+          cache: true
+      - name: Install dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Test native SHA-256 (macOS)
+        run: flutter test test/utils/file/native_sha256_test.dart
 
   analyze:
     name: Analyze
@@ -494,7 +504,7 @@ jobs:
           }
 
       - name: Run Windows-relevant tests
-        run: flutter test test/core/ test/tabs/ test/navigation/ test/workspaces/ test/personal_notes/
+        run: flutter test test/core/ test/tabs/ test/navigation/ test/workspaces/ test/personal_notes/ test/utils/file/native_sha256_test.dart
 
       # המנוע בבניית האפליקציה בלי SQLite משלו; כשל ברישום אינו נראה בשום טסט
       # יחידה. רץ על הבנייה הנייטיבית שלמעלה, ולכן מוסיף רק קומפילציה וריצה.

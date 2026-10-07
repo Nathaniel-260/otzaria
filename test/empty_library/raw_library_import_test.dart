@@ -347,7 +347,7 @@ void main() {
       expect(scan.components, {LibraryComponent.libraryDb});
     });
 
-    test('תוכן בשורש: אין ירידה לתת-תיקיות החבילה', () async {
+    test('נלווים בשורש מצטרפים לספרייה שבתת-תיקיית החבילה', () async {
       final withRoot = _MemoryFolder(
         'Download',
         files: {
@@ -362,6 +362,7 @@ void main() {
       );
 
       expect((await scanLibrarySource(withRoot)).components, {
+        LibraryComponent.libraryDb,
         LibraryComponent.lexicon,
       });
     });

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:math' as math;
@@ -404,7 +405,7 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
     final cancel = ZstdCancelFlag();
     _activeImportCancel = cancel;
-    final String staging;
+    String? staging;
     try {
       staging = await _packageImporter.stageRaw(
         raw: raw,
@@ -416,17 +417,16 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
           total > 0 ? (done / total).clamp(0.0, 1.0) : 0,
         ),
       );
+      if (importsDb) await _checkDbSchemaOffThread(_dbPathIn(staging));
+      if (Pointer<Uint8>.fromAddress(cancel.address).value != 0) {
+        throw const LibraryImportCancelled();
+      }
+      report('מעביר את הספרייה למקומה...', 1, cancellable: false);
+      await promoteStagedImport(staging, target);
     } finally {
       _activeImportCancel = null;
       cancel.dispose();
-    }
-
-    try {
-      report('מעביר את הספרייה למקומה...', 1, cancellable: false);
-      if (importsDb) await _checkDbSchemaOffThread(_dbPathIn(staging));
-      await promoteStagedImport(staging, target);
-    } finally {
-      await _packageImporter.discardRaw(staging);
+      if (staging != null) await _packageImporter.discardRaw(staging);
     }
     await _handleDirectorySelection(
       target,
@@ -864,18 +864,18 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
 
     final sizes = <ArchiveSize>[];
     int? largestFile;
-    // נכס בלי Content-Length היה נספר כאפס — אז הגדלים שנמדדו בטוחים יותר.
+    // בלי Content-Length משתמשים בגדלים שנמדדו במקום לספור את הנכס כאפס.
     if (assets == null || assets.any((asset) => asset.compressedSize <= 0)) {
       sizes.addAll(measuredLibraryDownload);
     } else {
       for (final asset in assets) {
         final compressed = asset.compressedSize;
         final contentSize = asset.isCompressed
-            ? await _probeFrameContentSize(asset)
+            ? await _probeArchiveContentSize(asset)
             : compressed;
         final extracted = extractedSizeOf(
           compressed,
-          frameContentSize: contentSize,
+          archiveContentSize: contentSize,
           fallbackRatio: _fallbackExpansion(asset),
         );
         sizes.add((compressed: compressed, extracted: extracted));
@@ -951,14 +951,18 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
     return ExpansionFallback.database;
   }
 
-  /// גודל התוכן מכותרת ה-frame, בקריאת הבייטים הראשונים בלבד. הקריאה נעצרת
-  /// אחרי הכותרת גם כשה-Range אבד ב-redirect של כתובת חלק.
-  Future<int?> _probeFrameContentSize(_DownloadAsset asset) async {
-    final url = asset.split?.parts.first.downloadUrl ?? asset.resolvedUrl;
+  /// גודל מלא מוכח רק לארכיון קטן שאינו מפוצל; הגדולים נשארים אומדן.
+  Future<int?> _probeArchiveContentSize(_DownloadAsset asset) async {
+    if (asset.split != null ||
+        asset.compressedSize <= 0 ||
+        asset.compressedSize > zstdSizeProbeMaxBytes) {
+      return null;
+    }
+    final url = asset.resolvedUrl;
     if (url == null) return null;
     try {
       final request = http.Request('GET', Uri.parse(url))
-        ..headers['Range'] = 'bytes=0-${zstdFrameHeaderMaxBytes - 1}';
+        ..headers['Range'] = 'bytes=0-${asset.compressedSize - 1}';
       final response = await _httpClient
           .send(request)
           .timeout(downloadConnectTimeout);
@@ -966,8 +970,9 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
         await response.stream.listen((_) {}).cancel();
         return null;
       }
-      return await readZstdFrameContentSize(
+      return await readZstdArchiveContentSize(
         response.stream,
+        compressedSize: asset.compressedSize,
       ).timeout(downloadConnectTimeout);
     } catch (_) {
       return null;

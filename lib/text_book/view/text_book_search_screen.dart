@@ -236,6 +236,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
     super.initState();
     searchTextController.text = widget.initialQuery;
     _syncSearchConfigurationFromWidget();
+    if (widget.initialQuery.isEmpty) {
+      _settings = InBookSearchSettings.savedDefaults();
+    }
     _syncBlocSearchTextState();
 
     scrollControler = widget.scrollControler;
@@ -1025,6 +1028,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           !_isSearching,
       errorMessage: _searchErrorMessage,
       onSearchTextChanged: (value) {
+        _settings = _settings.forQuery(searchableInBookQuery(value) ?? '');
         final activeParameters = _activeSearchParameters;
         context.read<TextBookBloc>().add(
           UpdateSearchText(
@@ -1047,7 +1051,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           _selectedSearchResultIndex = null;
           _selectedResultLine = null;
           _selectedResultOffset = null;
-          _settings = const InBookSearchSettings();
+          _settings = InBookSearchSettings.savedDefaults();
         });
         context.read<TextBookBloc>().add(
           UpdateSearchText(
@@ -1055,9 +1059,9 @@ class TextBookSearchViewState extends State<TextBookSearchView>
             searchOptions: const {},
             alternativeWords: const {},
             spacingValues: const {},
-            searchMode: SearchMode.exact,
-            searchDistance: 0,
-            matchPolicy: SearchMatchPolicy.standard,
+            searchMode: _searchMode,
+            searchDistance: _searchDistance,
+            matchPolicy: _matchPolicy,
             searchWholeWord: _wholeWord,
           ),
         );
@@ -1101,6 +1105,7 @@ class TextBookSearchViewState extends State<TextBookSearchView>
           searchOptions: _searchOptions,
           alternativeWords: _alternativeWords,
           spacingValues: _spacingValues,
+          optionsForEveryWord: _settings.optionsForEveryWord,
         );
 
         if (!mounted || result == null) {

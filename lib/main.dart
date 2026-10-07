@@ -127,6 +127,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
 import 'package:otzaria/plugins/database/plugin_database_bootstrap.dart';
 import 'package:logging/logging.dart';
+import 'package:otzaria/update/app_release_version.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/misc/app_cursors.dart';
@@ -228,7 +229,7 @@ Map<String, String?> _flutterErrorDetailsForLog(FlutterErrorDetails details) {
 }
 
 String _formatAppVersion(PackageInfo packageInfo) {
-  final version = packageInfo.version.trim();
+  final version = canonicalAppVersion(packageInfo);
   final buildNumber = packageInfo.buildNumber.trim();
 
   if (version.isEmpty) {
@@ -486,7 +487,8 @@ Future<void> _initializeSentry() async {
           defaultValue:
               'https://79d3003f822fa62bce0c928656308121@o4510914530902016.ingest.us.sentry.io/4510914532868096',
         );
-        options.release = '${info.appName}@${info.version}+${info.buildNumber}';
+        options.release =
+            '${info.appName}@${canonicalAppVersion(info)}+${info.buildNumber}';
         // Privacy: Do not collect IP addresses and request headers
         options.sendDefaultPii = false;
         // Sentry משמש לדיווח שגיאות בלבד; עסקאות ביצועים אינן נשלחות.

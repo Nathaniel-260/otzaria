@@ -10,6 +10,7 @@ import 'package:otzaria/data/repository/data_repository.dart';
 import 'package:otzaria/library/models/library.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/search/models/search_configuration.dart';
+import 'package:otzaria/search/search_defaults.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria/search/utils/result_text_status.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
@@ -256,6 +257,71 @@ Future<void> main() async {
       expect(repository.requests, isEmpty);
     },
   );
+
+  group('ברירת המחדל השמורה חלה על חיפוש חדש בספר (issue #1937)', () {
+    tearDown(() {
+      SearchDefaults.saveDistanceDefault(0);
+      SearchDefaults.saveExactDefaults(const {});
+    });
+
+    testWidgets('בלי ברירת מחדל שמורה ההקלדה נשארת חיפוש מקומי', (
+      tester,
+    ) async {
+      final repository = _RecordingSearchRepository(results: const []);
+      var simpleRunnerCalls = 0;
+      final harness = await pumpSearchView(
+        tester,
+        searchRepository: repository,
+        simpleSearchRunner: (content, query) async {
+          simpleRunnerCalls++;
+          return const [];
+        },
+      );
+
+      await harness.type('תדע זרעך');
+      await harness.settle();
+
+      expect(simpleRunnerCalls, greaterThan(0));
+      expect(repository.requests, isEmpty);
+    });
+
+    testWidgets('מרווח שנקבע כברירת מחדל חל על הקלדה בספר', (tester) async {
+      SearchDefaults.saveDistanceDefault(3);
+      final repository = _RecordingSearchRepository(results: const []);
+      final harness = await pumpSearchView(
+        tester,
+        searchRepository: repository,
+      );
+
+      await harness.type('תדע זרעך');
+      await harness.settle();
+
+      expect(repository.requests, isNotEmpty);
+      expect(repository.requests.last.distance, 3);
+    });
+
+    testWidgets(
+      'אפשרויות שנקבעו כברירת מחדל חלות על כל מילה בשאילתה שהוקלדה',
+      (tester) async {
+        SearchDefaults.saveExactDefaults(const {'קידומות דקדוקיות': true});
+        final repository = _RecordingSearchRepository(results: const []);
+        final harness = await pumpSearchView(
+          tester,
+          searchRepository: repository,
+        );
+
+        await harness.type('תדע זרעך');
+        await harness.settle();
+
+        expect(repository.requests, isNotEmpty);
+        expect(repository.requests.last.searchOptions, {
+          'תדע_0': {'קידומות דקדוקיות': true},
+          'זרעך_1': {'קידומות דקדוקיות': true},
+        });
+      },
+      skip: !engineReady,
+    );
+  });
 
   testWidgets(
     'חיפוש מנוע ממתין לזיהוי הספר במקום להציג "אין תוצאות"',
@@ -565,6 +631,7 @@ class _SearchRequest {
     required this.scope,
     required this.wordMatchMode,
     required this.wordMatchCount,
+    this.searchOptions,
   });
 
   final String query;
@@ -575,6 +642,7 @@ class _SearchRequest {
   final SearchScope scope;
   final WordMatchMode wordMatchMode;
   final int? wordMatchCount;
+  final Map<String, Map<String, bool>>? searchOptions;
 }
 
 class _RecordingSearchRepository extends SearchRepository {
@@ -619,6 +687,7 @@ class _RecordingSearchRepository extends SearchRepository {
         scope: scope,
         wordMatchMode: wordMatchMode,
         wordMatchCount: wordMatchCount,
+        searchOptions: searchOptions,
       ),
     );
     return results;

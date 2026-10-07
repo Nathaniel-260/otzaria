@@ -18,8 +18,41 @@ public struct PreparationStatus: Equatable {
     public var bytesPerSecond: Double?
     public var secondsRemaining: TimeInterval?
 
+    public init(
+        phase: PreparationPhase, title: String, detail: String, doneBytes: Int64, totalBytes: Int64,
+        bytesPerSecond: Double? = nil, secondsRemaining: TimeInterval? = nil
+    ) {
+        self.phase = phase
+        self.title = title
+        self.detail = detail
+        self.doneBytes = doneBytes
+        self.totalBytes = totalBytes
+        self.bytesPerSecond = bytesPerSecond
+        self.secondsRemaining = secondsRemaining
+    }
+
     public var fraction: Double {
         totalBytes > 0 ? min(1, Double(doneBytes) / Double(totalBytes)) : 0
+    }
+
+    public static let checkingCacheTitle = "בודק קבצים שכבר הורדו"
+    public static let verifyingPartialTitle = "בודק את החלק שכבר ירד"
+    public static let downloadingTitle = "מוריד את הקבצים"
+    public static let copyingTitle = "מעתיק לתיקייה שנבחרה"
+    public static let assemblingTitle = "מחבר את הקבצים"
+    public static let verifyingAssemblyTitle = "בודק את הקובץ המאוחד"
+
+    public static let englishTitles: [String: String] = [
+        checkingCacheTitle: "Checking files that were already downloaded",
+        verifyingPartialTitle: "Checking the part that was already downloaded",
+        downloadingTitle: "Downloading the files",
+        copyingTitle: "Copying to the chosen folder",
+        assemblingTitle: "Joining the files",
+        verifyingAssemblyTitle: "Checking the joined file",
+    ]
+
+    public func title(english: Bool) -> String {
+        english ? (Self.englishTitles[title] ?? title) : title
     }
 }
 
@@ -31,6 +64,17 @@ public struct PreparationResult: Equatable {
     public let keptSplitAssets: [String]
     /// ההסברים של הרכיבים שהוכנו, לעמוד הסיום.
     public var outputNotes: [String] = []
+
+    public init(
+        outputDirectory: URL, producedFiles: [URL], revealTarget: URL, keptSplitAssets: [String],
+        outputNotes: [String] = []
+    ) {
+        self.outputDirectory = outputDirectory
+        self.producedFiles = producedFiles
+        self.revealTarget = revealTarget
+        self.keptSplitAssets = keptSplitAssets
+        self.outputNotes = outputNotes
+    }
 }
 
 /// הכנת ההתקנה מקצה לקצה: מטמון ← הורדה ← הרכבה/העתקה לתיקיית היעד.
@@ -101,7 +145,7 @@ public final class PreparationRunner {
             try cache.prepare()
             try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         } catch {
-            throw AssistantError("לא ניתן היה להעתיק את הקבצים לתיקייה שנבחרה.", technical: "\(error)")
+            throw AssistantError(AssistantError.copyFailed, technical: "\(error)")
         }
         let skipped = alreadyAssembledParts()
         var needed: [DownloadItem] = []
@@ -130,7 +174,7 @@ public final class PreparationRunner {
                         guard done - lastPost >= 32 * 1024 * 1024 || done == item.size else { return }
                         lastPost = done
                         self.post(PreparationStatus(
-                            phase: .checkingCache, title: "בודק קבצים שכבר הורדו", detail: item.caption,
+                            phase: .checkingCache, title: PreparationStatus.checkingCacheTitle, detail: item.caption,
                             doneBytes: base + done, totalBytes: hashTotal
                         ))
                     },
@@ -180,7 +224,7 @@ public final class PreparationRunner {
             let verifying = progress.verifyingTotal > 0 && progress.activeCaptions.isEmpty
             self.update?(PreparationStatus(
                 phase: .downloading,
-                title: verifying ? "בודק את החלק שכבר ירד" : "מוריד את הקבצים",
+                title: verifying ? PreparationStatus.verifyingPartialTitle : PreparationStatus.downloadingTitle,
                 detail: progress.activeCaptions.joined(separator: ", "),
                 doneBytes: verifying ? progress.verifyingBytes : progress.presentBytes,
                 totalBytes: verifying ? progress.verifyingTotal : progress.totalBytes,
@@ -227,12 +271,12 @@ public final class PreparationRunner {
                 let destination = self.directory(for: folder).appendingPathComponent(item.name)
                 let base = done
                 post(PreparationStatus(
-                    phase: .copying, title: "מעתיק לתיקייה שנבחרה", detail: item.name,
+                    phase: .copying, title: PreparationStatus.copyingTitle, detail: item.name,
                     doneBytes: base, totalBytes: total
                 ))
                 try placeWithProgress(item, to: destination) { copied in
                     self.post(PreparationStatus(
-                        phase: .copying, title: "מעתיק לתיקייה שנבחרה", detail: item.name,
+                        phase: .copying, title: PreparationStatus.copyingTitle, detail: item.name,
                         doneBytes: base + copied, totalBytes: total
                     ))
                 }
@@ -252,7 +296,7 @@ public final class PreparationRunner {
                             guard appended - lastPost >= 32 * 1024 * 1024 || appended == size else { return }
                             lastPost = appended
                             self.post(PreparationStatus(
-                                phase: .assembling, title: "מחבר את הקבצים", detail: caption,
+                                phase: .assembling, title: PreparationStatus.assemblingTitle, detail: caption,
                                 doneBytes: base + appended, totalBytes: total
                             ))
                         },
@@ -260,7 +304,7 @@ public final class PreparationRunner {
                             guard verified == 0 || verified - lastPost >= 32 * 1024 * 1024 || verified == size else { return }
                             lastPost = verified
                             self.post(PreparationStatus(
-                                phase: .verifyingAssembly, title: "בודק את הקובץ המאוחד", detail: caption,
+                                phase: .verifyingAssembly, title: PreparationStatus.verifyingAssemblyTitle, detail: caption,
                                 doneBytes: verified, totalBytes: size
                             ))
                         },
@@ -272,7 +316,7 @@ public final class PreparationRunner {
                     throw error
                 } catch {
                     throw AssistantError(
-                        "לא ניתן היה לכתוב את הקובץ המאוחד. ייתכן שאין מספיק מקום פנוי.",
+                        AssistantError.writeJoinedFailed,
                         technical: "\(name): \(error)"
                     )
                 }
@@ -299,7 +343,7 @@ public final class PreparationRunner {
             throw error
         } catch {
             throw AssistantError(
-                "לא ניתן היה להעתיק את הקבצים לתיקייה שנבחרה.",
+                AssistantError.copyFailed,
                 technical: "\(item.name): \(error)"
             )
         }

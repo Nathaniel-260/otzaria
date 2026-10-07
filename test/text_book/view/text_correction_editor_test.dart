@@ -134,7 +134,7 @@ void main() {
       end: 3,
     );
 
-    test('[T3] מחיקה = "" וללא הצעה = null', () {
+    test('[T3] מחיקה = ""', () {
       expect(
         evaluateCorrectionDraft(
           original: original,
@@ -142,14 +142,6 @@ void main() {
           editedText: 'x',
         ).correction.proposedText,
         '',
-      );
-      expect(
-        evaluateCorrectionDraft(
-          original: original,
-          mode: ProposalMode.none,
-          editedText: 'x',
-        ).correction.proposedText,
-        isNull,
       );
     });
 
@@ -283,7 +275,7 @@ void main() {
       expect(find.text('שלח ישירות לאוצריא'), findsNothing);
     });
 
-    testWidgets('[T3] "מחיקת הקטע" שולח "" ו"ללא הצעה" שולח null', (
+    testWidgets('[T3] "מחיקת הקטע" שולח ""; אין אפשרות "ללא הצעה"', (
       tester,
     ) async {
       final submissions = await pumpTab(tester);
@@ -296,22 +288,8 @@ void main() {
         '',
       );
 
-      await tester.tap(find.text('ללא הצעה'));
-      await tester.pumpAndSettle();
-      // בלי הצעה חובה לפרט.
-      expect(find.text('שמור לשליחה מאוחרת'), findsNothing);
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const ValueKey('report-details-field')),
-          matching: find.byType(TextField),
-        ),
-        'יש כאן טעות',
-      );
-      await tester.pumpAndSettle();
-      final none = await saveForLater(tester, submissions);
-      expect(none.correction, isNotNull);
-      expect(none.correction!.proposedText, isNull);
-      expect(none.errorDetails, 'יש כאן טעות');
+      // הצעת תיקון בלי הצעה היא דיווח חופשי — אין לה מצב נפרד.
+      expect(find.text('ללא הצעה'), findsNothing);
     });
 
     testWidgets('חריגה מהתקרה מציגה הודעה וחוסמת, בלי לחתוך', (tester) async {
@@ -440,11 +418,12 @@ void main() {
       expect(drafts.last.correction.proposedText, '');
     });
 
-    testWidgets('"ללא הצעה" שמור נשאר ללא הצעה', (tester) async {
+    testWidgets('"ללא הצעה" שמור מגרסה קודמת נפתח בעריכת טקסט', (tester) async {
       final drafts = await pumpRestored(tester, null);
 
-      expect(proposalField(), findsNothing);
-      expect(drafts.last.hasProposal, isFalse);
+      expect(proposalField(), findsOneWidget);
+      expect(drafts.last.hasProposal, isTrue);
+      expect(drafts.last.isValid, isFalse, reason: 'זהה למקור עד שמשנים');
     });
   });
 }

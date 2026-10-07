@@ -1,5 +1,6 @@
 # Fetch the pinned Download Assistant art (Otzaria/otzaria-design) into
-# installer\assistant_art before ISCC compiles installer\download_assistant.iss.
+# installer\assistant_art before ISCC compiles installer\download_assistant.iss or the
+# Otzaria installers (installer\otzaria*.iss), which share the same UI layer and art.
 #
 #   pwsh tool/release/fetch_assistant_art.ps1 [-PinFile <pin.json>] [-Destination <dir>]
 #

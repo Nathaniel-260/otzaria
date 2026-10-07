@@ -158,8 +158,11 @@ List<TextDiffSegment> _lcsDiff(List<String> a, List<String> b) {
   return result;
 }
 
-/// אופן ההצעה: טקסט חלופי, מחיקה מכוונת (""), או ללא הצעה (null).
-enum ProposalMode { replace, delete, none }
+/// אופן ההצעה: טקסט חלופי או מחיקה מכוונת ("").
+///
+/// אין מצב "ללא הצעה": הצעת תיקון בלי הצעה היא בעצם דיווח חופשי, ולכן מי שאין לו
+/// הצעה בוחר "דיווח חופשי" (לבקשת "יום חדש מתחיל").
+enum ProposalMode { replace, delete }
 
 /// מצב העורך: ההצעה הנוכחית ושגיאה שחוסמת שליחה (null = תקין).
 class TextCorrectionDraft {
@@ -183,18 +186,16 @@ TextCorrectionDraft evaluateCorrectionDraft({
   final proposed = switch (mode) {
     ProposalMode.replace => editedText,
     ProposalMode.delete => '',
-    ProposalMode.none => null,
   };
   final correction = original.withProposedText(proposed);
   String? error;
-  if (hasLoneSurrogate(original.originalLine) ||
-      (proposed != null && hasLoneSurrogate(proposed))) {
+  if (hasLoneSurrogate(original.originalLine) || hasLoneSurrogate(proposed)) {
     error = ReportMessages.invalidCharacters;
   } else if (original.originalLine.length > max) {
     error = ReportMessages.originalTooLong(max);
-  } else if (proposed != null && proposed.length > max) {
+  } else if (proposed.length > max) {
     error = ReportMessages.proposalTooLong(max);
-  } else if (proposed != null && proposed == original.target) {
+  } else if (proposed == original.target) {
     error = ReportMessages.proposalIdentical;
   }
   return TextCorrectionDraft(correction: correction, error: error);
@@ -226,13 +227,11 @@ class _TextCorrectionEditorState extends State<TextCorrectionEditor> {
   late final TextEditingController _controller = TextEditingController(
     text: _restoredText ?? widget.original.target,
   );
-  late ProposalMode _mode = !widget.restoreProposal
-      ? ProposalMode.replace
-      : switch (widget.original.proposedText) {
-          null => ProposalMode.none,
-          '' => ProposalMode.delete,
-          _ => ProposalMode.replace,
-        };
+  // דיווח שמור מגרסה קודמת עם "ללא הצעה" (null) נפתח בעריכת טקסט.
+  late ProposalMode _mode =
+      widget.restoreProposal && widget.original.proposedText == ''
+      ? ProposalMode.delete
+      : ProposalMode.replace;
 
   String? get _restoredText {
     final proposed = widget.original.proposedText;
@@ -350,11 +349,6 @@ class _TextCorrectionEditorState extends State<TextCorrectionEditor> {
               value: ProposalMode.delete,
               label: 'מחיקת הקטע',
               icon: FluentIcons.delete_24_regular,
-            ),
-            SegmentOption(
-              value: ProposalMode.none,
-              label: 'ללא הצעה',
-              icon: FluentIcons.dismiss_circle_24_regular,
             ),
           ],
           currentValue: _mode,

@@ -34,6 +34,13 @@ List<AltTocStructure> sidebarStructureOrder(List<AltTocStructure> structures) =>
       ...structures.where((s) => s.key != 'SimanNames'),
     ];
 
+final Expando<String> _matchTextCache = Expando<String>();
+
+/// הטקסט המנורמל של [entry] לאיתור. אינו תלוי בשאילתה, ולכן נשמר בין הקשות.
+@visibleForTesting
+String altTocEntryMatchText(AltTocEntry entry) =>
+    _matchTextCache[entry] ??= normalizeFindText(entry.text ?? '');
+
 class AltTocSidebarView extends StatefulWidget {
   final TextBook book;
   final void Function() closeLeftPaneCallback;
@@ -248,8 +255,7 @@ class _AltTocSidebarViewState extends State<AltTocSidebarView>
     final results = <({int structureId, AltTocEntry entry})>[];
     for (final structure in _structures) {
       for (final entry in _flattenEntries(structure.id)) {
-        final entryText = normalizeFindText(entry.text ?? '');
-        if (entryText.contains(normalizedQuery)) {
+        if (altTocEntryMatchText(entry).contains(normalizedQuery)) {
           results.add((structureId: structure.id, entry: entry));
         }
       }

@@ -12,6 +12,7 @@ import 'package:otzaria/plugins/models/plugin_report_record.dart';
 import 'package:otzaria/services/offline_report_script_builder.dart';
 import 'package:otzaria/services/sent_reports_counter.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
+import 'package:otzaria/update/app_release_version.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
 /// תוצאת מסירה של דיווח תוסף: נשלח עכשיו או נשמר בתור לשליחה מאוחרת.
@@ -123,7 +124,7 @@ class PluginReportService {
 
     String? appVersion;
     try {
-      appVersion = (await PackageInfo.fromPlatform()).version;
+      appVersion = canonicalAppVersion(await PackageInfo.fromPlatform());
     } catch (_) {}
 
     final email = reporterEmail?.trim() ?? '';

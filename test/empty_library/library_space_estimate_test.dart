@@ -61,33 +61,40 @@ void main() {
       final data = Uint8List(300000);
       final archive = zstdCompress(lib!, data);
       expect(
-        await readZstdFrameContentSize(Stream.value(archive.sublist(0, 18))),
+        await readZstdArchiveContentSize(
+          Stream.value(archive),
+          compressedSize: archive.length,
+        ),
         data.length,
       );
     }, skip: lib == null ? 'libzstd אינו זמין' : false);
   });
 
   group('extractedSizeOf', () {
-    test('כותרת אמינה גוברת על האומדן', () {
+    test('גודל ארכיון מלא גובר על האומדן', () {
       expect(
         extractedSizeOf(
           1807000000,
-          frameContentSize: _currentDbBytes,
+          archiveContentSize: _currentDbBytes,
           fallbackRatio: ExpansionFallback.database,
         ),
         _currentDbBytes,
       );
     });
 
-    test('בלי כותרת, או כותרת קטנה מהדחוס (כמה frames) — האומדן', () {
-      for (final header in [null, 1000]) {
+    test('בלי גודל מלא — האומדן', () {
+      expect(extractedSizeOf(1000000, fallbackRatio: 2.5), 2500000);
+    });
+
+    test('גודל מלא קטן מהארכיון עדיין ידוע, כולל תוכן ריק', () {
+      for (final known in [0, 1000]) {
         expect(
           extractedSizeOf(
             1000000,
-            frameContentSize: header,
+            archiveContentSize: known,
             fallbackRatio: 2.5,
           ),
-          2500000,
+          known,
         );
       }
     });
@@ -279,9 +286,15 @@ void main() {
     LibraryPackageImporter importer(Map<String, DiskSpaceInfo> volumes) =>
         LibraryPackageImporter(diskSpace: (path) async => volumes[path]!);
 
-    test('בלי אינדקס: רק גודל הספרייה מהכותרת נדרש', () async {
+    test('בלי אינדקס: אומדן הספרייה בלבד נדרש', () async {
+      await expectLater(
+        importer({
+          'books': const DiskSpaceInfo(volumeId: 'sd', freeBytes: 4 * _gib),
+        }).checkSpace(packages(withIndex: false), 'books', null),
+        throwsA(isA<InsufficientSpaceException>()),
+      );
       await importer({
-        'books': const DiskSpaceInfo(volumeId: 'sd', freeBytes: 4 * _gib),
+        'books': const DiskSpaceInfo(volumeId: 'sd', freeBytes: 5 * _gib),
       }).checkSpace(packages(withIndex: false), 'books', null);
     });
 
@@ -290,7 +303,7 @@ void main() {
           await importer({
                 'books': const DiskSpaceInfo(
                   volumeId: 'sd',
-                  freeBytes: 4 * _gib,
+                  freeBytes: 5 * _gib,
                 ),
                 'index': const DiskSpaceInfo(
                   volumeId: 'int',

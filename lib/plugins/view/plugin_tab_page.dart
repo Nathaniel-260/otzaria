@@ -23,6 +23,7 @@ import 'package:otzaria/plugins/services/plugin_runtime_dispatcher.dart';
 import 'package:otzaria/plugins/services/plugin_unsaved_changes_registry.dart';
 import 'package:otzaria/plugins/storage/plugin_system_database.dart';
 import 'package:otzaria/plugins/repository/plugin_registry_repository.dart';
+import 'package:otzaria/update/app_release_version.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:otzaria/plugins/bridge/plugin_bridge_adapter.dart';
 import 'package:otzaria/tools/calendar/bloc/calendar_cubit.dart';
@@ -1144,7 +1145,7 @@ class _PluginTabPageState extends State<PluginTabPage> {
               'version': widget.plugin.version,
             },
             'app': {
-              'version': packageInfo.version,
+              'version': canonicalAppVersion(packageInfo),
               'platform': Platform.operatingSystem,
               // שפת הממשק הפעילה (he-IL לתאימות; 'language' — קוד השפה)
               ...pluginLocalePayload(

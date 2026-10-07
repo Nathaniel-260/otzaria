@@ -73,7 +73,8 @@ abstract class ReportMessages {
   static String reportSubject(String bookTitle) => 'דיווח על טעות: $bookTitle';
 
   static const String proposalIdentical =
-      'ההצעה זהה למקור. יש לשנות את הטקסט, לבחור "מחיקת הקטע" או "ללא הצעה".';
+      'ההצעה זהה למקור. יש לשנות את הטקסט או לבחור "מחיקת הקטע". '
+      'אם אין הצעה — יש לבחור "דיווח חופשי".';
 
   static String proposalTooLong(int maxLength) =>
       'ההצעה ארוכה מדי (מעל $maxLength תווים). יש לקצר אותה — היא לא תיחתך.';

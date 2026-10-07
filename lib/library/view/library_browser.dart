@@ -944,6 +944,10 @@ class _LibraryBrowserState extends State<LibraryBrowser>
 
   // ── Topics filter chips ───────────────────────────────────────────────────
 
+  // סמן הזהות אינו מחזיק ספרים ודרכם ספרייה ישנה אחרי רענון וניקוי החיפוש.
+  WeakReference<List<Book>>? _topicsSourceResults;
+  List<String> _relevantTopicsCache = const [];
+
   Widget? _buildTopicsSelection(
     BuildContext context,
     LibraryState state,
@@ -966,8 +970,12 @@ class _LibraryBrowserState extends State<LibraryBrowser>
       'אחרונים',
       'מחברי זמננו',
     ];
-    final allTopics = _getAllTopics(state.searchResults!);
-    final relevant = categoryTopics.where(allTopics.contains).toList();
+    if (!identical(state.searchResults, _topicsSourceResults?.target)) {
+      _topicsSourceResults = WeakReference(state.searchResults!);
+      final allTopics = _getAllTopics(state.searchResults!);
+      _relevantTopicsCache = categoryTopics.where(allTopics.contains).toList();
+    }
+    final relevant = _relevantTopicsCache;
     if (relevant.isEmpty) return null;
 
     return FilterChipsSelector<String>(

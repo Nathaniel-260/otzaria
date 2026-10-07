@@ -134,7 +134,7 @@ const kAndroidFullBundlePrefix = 'otzaria-android-full';
 
 final _volumeFolderName = RegExp('^$kAndroidFullBundlePrefix-part[0-9]+');
 
-/// סורק את [folder], ואם אין בו דבר — מאחד את תיקיות החבילה שבו ואת
+/// סורק את [folder] ואת תיקיות החבילה שבו ואת
 /// otzaria-android-full שבכל אחת: מנהלי קבצים מחלצים כל כרך לתיקייה משלו.
 Future<LibrarySourceScan> scanLibrarySource(PackageFolder folder) async {
   final singleVolume = folder.displayName
@@ -143,8 +143,8 @@ Future<LibrarySourceScan> scanLibrarySource(PackageFolder folder) async {
       .take(2)
       .any(_volumeFolderName.hasMatch);
   final scan = await _scanSource(folder, singleVolume);
-  if (!scan.isEmpty) return scan;
-  final members = <PackageFolder>[];
+  if (scan.packages.packages != null) return scan;
+  final members = <PackageFolder>[folder];
   for (final name in (await folder.folderNames())..sort()) {
     if (!name.startsWith(kAndroidFullBundlePrefix)) continue;
     final volume = await folder.child(name);
@@ -153,11 +153,49 @@ Future<LibrarySourceScan> scanLibrarySource(PackageFolder folder) async {
     final inner = await volume.child(kAndroidFullBundlePrefix);
     if (inner != null) members.add(inner);
   }
-  if (members.isEmpty) return scan;
-  if (members.length == 1) return _scanSource(members.single, singleVolume);
+  if (members.length == 1) return scan;
+  if (scan.isEmpty && members.length == 2) {
+    return _scanSource(members.last, singleVolume);
+  }
   final merged = MergedPackageFolder(members, displayName: folder.displayName);
-  final mergedScan = await _scanSource(merged, singleVolume);
+  var mergedScan = await _scanSource(merged, singleVolume);
   final conflicts = await merged.conflicts();
+  final rootNames = {for (final entry in await folder.list()) entry.name};
+  if (!scan.isEmpty &&
+      conflicts.every(rootNames.contains) &&
+      !mergedScan.components.contains(LibraryComponent.libraryDb)) {
+    // התנגשות או מניפסט חלקי אינם גוברים על מקור שלם בפני עצמו.
+    for (final member in members) {
+      final candidate = identical(member, folder)
+          ? scan
+          : await _scanSource(member, singleVolume);
+      if (candidate.packages.packages != null) return candidate;
+      if (candidate.raw.assets.containsKey(LibraryComponent.libraryDb)) {
+        mergedScan = LibrarySourceScan(
+          folder: merged,
+          raw: RawLibraryScan(
+            assets: {
+              ...mergedScan.raw.assets,
+              ...candidate.raw.assets,
+              ...scan.raw.assets,
+            },
+          ),
+          singleVolume: singleVolume,
+        );
+        break;
+      }
+    }
+  }
+  if (mergedScan.packages.packages == null &&
+      mergedScan.components.contains(LibraryComponent.libraryDb)) {
+    return LibrarySourceScan(
+      folder: merged,
+      raw: RawLibraryScan(
+        assets: {...mergedScan.raw.assets, ...scan.raw.assets},
+      ),
+      singleVolume: singleVolume,
+    );
+  }
   if (conflicts.isEmpty ||
       mergedScan.components.contains(LibraryComponent.libraryDb)) {
     return mergedScan;
@@ -253,6 +291,12 @@ RawLibraryAsset? _single(
 }
 
 Future<RawLibraryAsset?> _extractedTalmud(PackageFolder folder) async {
+  if (folder is MergedPackageFolder) {
+    for (final member in folder.members) {
+      final asset = await _extractedTalmud(member);
+      if (asset != null) return asset;
+    }
+  }
   if (folder is! DirectoryPackageFolder) return null;
   final dir = Directory(
     p.join(folder.path, DatabaseConstants.talmudBavliFolderName),

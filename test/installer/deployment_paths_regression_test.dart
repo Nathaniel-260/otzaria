@@ -37,6 +37,10 @@ bool acceptsLibraryDirectory(String script, String path) {
 
 void main() {
   final script = File('installer/otzaria.iss').readAsStringSync();
+  // ההודעות של המתקין ב-[CustomMessages] של שכבת התצוגה.
+  final messages = File(
+    'installer/otzaria_ui_installer.iss',
+  ).readAsStringSync();
   for (final fixture in <String, bool>{
     r'D:': false,
     'D:\\': false,
@@ -72,7 +76,8 @@ void main() {
         next,
         contains("if HasLibraryPayload and (GetLibraryBooksPath() = '')"),
       );
-      expect(next, contains('אין להתקין ספרייה בשורש כונן או שיתוף'));
+      expect(next, contains("CustomMessage('UnsafeLibraryRoot')"));
+      expect(messages, contains('אין להתקין ספרייה בשורש כונן או שיתוף'));
     },
   );
   test('missing part000 cannot bypass library or index validation', () {
@@ -127,8 +132,9 @@ void main() {
       expect(resolve, contains("AddBackslash(GetDataDir(''))"));
       expect(
         routine(script, 'function NextButtonClick('),
-        contains('עדכנו תחילה את התוכנה בלבד'),
+        contains("CustomMessage('UnsafeLibraryRoot')"),
       );
+      expect(messages, contains('עדכנו תחילה את התוכנה בלבד'));
     },
   );
   test(

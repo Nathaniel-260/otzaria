@@ -226,13 +226,13 @@ jobs:
           if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
             if (Get-Command winget -ErrorAction SilentlyContinue) {
               Write-Host "Installing Inno Setup via winget..."
-              winget install -e --id JRSoftware.InnoSetup --silent --accept-package-agreements --accept-source-agreements
+              winget install -e --id JRSoftware.InnoSetup --version 6.7.1 --silent --accept-package-agreements --accept-source-agreements
             } else {
               Write-Host "winget not found, installing via Chocolatey..."
-              choco install innosetup -y --no-progress
+              choco upgrade innosetup --version 6.7.1 --allow-downgrade -y --no-progress
             }
           }
-          $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
+          $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup 6\ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
                    Select-Object -First 1 -ExpandProperty FullName)
           if (-not $iscc) { throw "ISCC.exe not found after installation" }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -466,6 +466,8 @@ jobs:
       - name: Build Inno Setup installer
         shell: pwsh
         run: |
+          # העיצוב של שכבת התצוגה (installer/assistant_art.pin.json). כאן כישלון קטלני: המתקין אינו נבנה בלעדיו.
+          & ./tool/release/fetch_assistant_art.ps1
           Write-Host "Building FULL installer with library and VC++ Redistributable..."
           & "$env:ISCC" installer\otzaria_full.iss
           if ($LASTEXITCODE -ne 0) {
@@ -639,14 +641,14 @@ jobs:
           if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
             if (Get-Command winget -ErrorAction SilentlyContinue) {
               Write-Host "Installing Inno Setup via winget..."
-              winget install -e --id JRSoftware.InnoSetup --silent --accept-package-agreements --accept-source-agreements
+              winget install -e --id JRSoftware.InnoSetup --version 6.7.1 --silent --accept-package-agreements --accept-source-agreements
             } else {
               Write-Host "winget not found, installing via Chocolatey..."
-              choco install innosetup -y --no-progress
+              choco upgrade innosetup --version 6.7.1 --allow-downgrade -y --no-progress
             }
           }
           # הסקריפט של הפרויקט מתקין לעיתים per-user — מחפשים גם שם.
-          $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup*\ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
+          $iscc = (Get-ChildItem "C:\Program Files*\Inno Setup 6\ISCC.exe", "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" -Recurse -ErrorAction SilentlyContinue |
                    Select-Object -First 1 -ExpandProperty FullName)
           if (-not $iscc) { throw "ISCC.exe not found after installation" }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -810,6 +812,7 @@ jobs:
           .\installer\download_full_installer_assets.ps1
           if ($LASTEXITCODE -ne 0) { throw "FULL installer assets download failed" }
           Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "installer\MicrosoftEdgeWebview2Setup.exe"
+          & ./tool/release/fetch_assistant_art.ps1
           & "$env:ISCC" /DAppArch=arm64 installer\otzaria_full.iss
           if ($LASTEXITCODE -ne 0) { throw "ARM64 FULL installer build failed" }
           Remove-Item -Path "installer\library_db" -Recurse -Force
@@ -2509,7 +2512,7 @@ jobs:
         shell: pwsh
         run: |
           .\installer\install_inno_setup.ps1
-          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup*\ISCC.exe" -Recurse |
+          $iscc = Get-ChildItem "C:\Program Files*\Inno Setup 6\ISCC.exe" -Recurse |
             Select-Object -First 1 -ExpandProperty FullName
           if (-not $iscc) { throw 'ISCC.exe not found after installation' }
           "ISCC=$iscc" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -2557,6 +2560,8 @@ jobs:
       - name: Build regular installer
         shell: pwsh
         run: |
+          # העיצוב של שכבת התצוגה (installer/assistant_art.pin.json). כאן כישלון קטלני: המתקין אינו נבנה בלעדיו.
+          & ./tool/release/fetch_assistant_art.ps1
           & "$env:ISCC" installer\otzaria.iss
           if ($LASTEXITCODE -ne 0) {
             throw 'Regular installer build failed'
@@ -2566,6 +2571,8 @@ jobs:
         if: needs.build_windows_arm64.result == 'success'
         shell: pwsh
         run: |
+          # העיצוב של שכבת התצוגה (installer/assistant_art.pin.json). כאן כישלון קטלני: המתקין אינו נבנה בלעדיו.
+          & ./tool/release/fetch_assistant_art.ps1
           & "$env:ISCC" /DAppArch=arm64 installer\otzaria.iss
           if ($LASTEXITCODE -ne 0) {
             throw 'ARM64 installer build failed'
@@ -3244,6 +3251,14 @@ jobs:
     if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && needs.build_android.result == 'success' && github.event_name != 'release' && github.event_name != 'pull_request'"
     needs: [bump_version, check_version, build_android]
     uses: ./.github/workflows/deploy-google-play.yml
+    with:
+      ref: ${{ needs.bump_version.outputs.sha }}
+    secrets: inherit
+
+  trigger_app_store_deploy:
+    if: "!cancelled() && needs.check_version.outputs.is_version == 'true' && needs.build_android.result == 'success' && github.event_name != 'release' && github.event_name != 'pull_request'"
+    needs: [bump_version, check_version, build_android]
+    uses: ./.github/workflows/deploy-app-store.yml
     with:
       ref: ${{ needs.bump_version.outputs.sha }}
     secrets: inherit

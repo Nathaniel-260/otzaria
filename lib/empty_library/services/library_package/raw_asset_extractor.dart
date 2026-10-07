@@ -98,6 +98,7 @@ Future<void> extractRawAssetJob(
   var reported = 0;
   DynamicLibrary? zstd;
   for (final asset in job.assets) {
+    if (isCancelled?.call() ?? false) throw const LibraryImportCancelled();
     onProgress(asset.component, done, total);
     await _extractAsset(
       asset,
@@ -113,6 +114,7 @@ Future<void> extractRawAssetJob(
       },
     );
   }
+  if (isCancelled?.call() ?? false) throw const LibraryImportCancelled();
   if (job.assets.isNotEmpty) {
     onProgress(job.assets.last.component, total, total);
   }
@@ -128,7 +130,15 @@ Future<void> _extractAsset(
   final target = p.join(destination, asset.targetName);
   switch (asset.format) {
     case RawAssetFormat.directory:
-      await copyDirectoryEntries(asset.directoryPath!, target);
+      await copyDirectoryEntries(
+        asset.directoryPath!,
+        target,
+        checkCancelled: () {
+          if (isCancelled?.call() ?? false) {
+            throw const LibraryImportCancelled();
+          }
+        },
+      );
     case RawAssetFormat.plain:
       final out = File(target).openSync(mode: FileMode.write);
       try {
@@ -164,8 +174,7 @@ Future<void> _extractAsset(
         );
         decoder.close();
         tar.close();
-        // ה-digest הוא מה שבדיקת העדכונים משווה מול ה-release; בלעדיו התלמוד
-        // היה מורד שוב.
+        // בדיקת העדכונים משווה את ה-digest מול ה-release.
         await File(
           DatabaseConstants.talmudBavliVersionFilePath(target),
         ).writeAsString(digest!);

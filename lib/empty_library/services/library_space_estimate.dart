@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/utils/text/byte_size_text.dart';
@@ -9,7 +10,7 @@ import 'package:path/path.dart' as p;
 /// גודל הקובץ המרבי ב-FAT32: 4GiB פחות בייט.
 const int fat32MaxFileBytes = 0xFFFFFFFF;
 
-/// יחסי התפיחה למקרה שגודל התוכן אינו רשום בכותרת ה-frame. נמדדו על
+/// יחסי התפיחה כשגודל הארכיון המלא אינו ידוע. נמדדו על
 /// הגרסאות הנוכחיות ועוגלו כלפי מעלה; כולם נבדקים מול [measuredLibraryDownload].
 abstract final class ExpansionFallback {
   /// seforim.db: נמדד 2.07 (1.807GB ← 3.739GB). גם ארכיון הספרייה של המסייע.
@@ -39,9 +40,6 @@ const List<ArchiveSize> measuredLibraryDownload = [
   (compressed: 6000000, extracted: 37600000),
   (compressed: 57000000, extracted: 57000000),
 ];
-
-/// אורך כותרת frame מרבי: magic, descriptor, window, dictionary id, content size.
-const int zstdFrameHeaderMaxBytes = 18;
 
 /// `Frame_Content_Size` מכותרת ה-frame הראשון, או null כשאינו רשום
 /// (דחיסה מצינור) או כשהבייטים אינם frame של zstd.
@@ -75,28 +73,92 @@ int? zstdFrameContentSize(List<int> header) {
   return fcsBytes == 2 ? value + 256 : value;
 }
 
-/// קורא רק את תחילת [stream] (קובץ, SAF או HTTP) ומפענח את גודל התוכן.
-Future<int?> readZstdFrameContentSize(Stream<List<int>> stream) async {
-  final header = <int>[];
-  await for (final chunk in stream) {
-    header.addAll(chunk);
-    if (header.length >= zstdFrameHeaderMaxBytes) break;
+/// מגבלת הקריאה לבדיקת גודל מלא; ארכיונים גדולים נשארים בגדר אומדן.
+const int zstdSizeProbeMaxBytes = 4 << 20;
+
+/// גודל התוכן רק כשהארכיון כולו קטן ונקרא, ולכל frame יש גודל מפורש.
+/// אין פענוח של התוכן ואין סריקה נוספת של ארכיונים גדולים.
+Future<int?> readZstdArchiveContentSize(
+  Stream<List<int>> stream, {
+  required int compressedSize,
+}) async {
+  if (compressedSize <= 0 || compressedSize > zstdSizeProbeMaxBytes) {
+    return null;
   }
-  return zstdFrameContentSize(header);
+  final bytes = BytesBuilder(copy: false);
+  await for (final chunk in stream) {
+    if (bytes.length + chunk.length > compressedSize) return null;
+    bytes.add(chunk);
+  }
+  if (bytes.length != compressedSize) return null;
+  return _zstdArchiveContentSize(bytes.takeBytes());
 }
 
-/// הגודל אחרי חילוץ: מהכותרת כשהיא אמינה, אחרת לפי [fallbackRatio].
-/// כותרת קטנה מהדחוס מעידה על כמה frames, והראשון אינו מייצג את כולם.
+int? _zstdArchiveContentSize(List<int> bytes) {
+  int littleEndian(int offset, int length) {
+    var value = 0;
+    for (var i = length - 1; i >= 0; i--) {
+      value = (value << 8) | bytes[offset + i];
+    }
+    return value;
+  }
+
+  var offset = 0;
+  var total = 0;
+  while (offset < bytes.length) {
+    if (bytes.length - offset < 8) return null;
+    final magic = littleEndian(offset, 4);
+    if (magic & 0xFFFFFFF0 == 0x184D2A50) {
+      offset += 8 + littleEndian(offset + 4, 4);
+      if (offset > bytes.length) return null;
+      continue;
+    }
+    if (magic != 0xFD2FB528) return null;
+    final descriptor = bytes[offset + 4];
+    if (descriptor & 8 != 0) return null;
+    final singleSegment = descriptor & 0x20 != 0;
+    final fcsBytes = switch (descriptor >> 6) {
+      0 => singleSegment ? 1 : 0,
+      1 => 2,
+      2 => 4,
+      _ => 8,
+    };
+    final headerBytes =
+        5 +
+        (singleSegment ? 0 : 1) +
+        const [0, 1, 2, 4][descriptor & 3] +
+        fcsBytes;
+    if (offset + headerBytes > bytes.length) return null;
+    final contentSize = zstdFrameContentSize(
+      bytes.sublist(offset, offset + headerBytes),
+    );
+    if (contentSize == null || contentSize < 0 || total + contentSize < total) {
+      return null;
+    }
+    total += contentSize;
+    offset += headerBytes;
+    var last = false;
+    while (!last) {
+      if (offset + 3 > bytes.length) return null;
+      final block = littleEndian(offset, 3);
+      last = block & 1 != 0;
+      final type = (block >> 1) & 3;
+      if (type == 3 || block >> 3 > 128 << 10) return null;
+      offset += 3 + (type == 1 ? 1 : block >> 3);
+      if (offset > bytes.length) return null;
+    }
+    if (descriptor & 4 != 0) offset += 4;
+    if (offset > bytes.length) return null;
+  }
+  return total;
+}
+
+/// הגודל המלא כשידוע, אחרת אומדן לפי [fallbackRatio] — אינו גבול עליון.
 int extractedSizeOf(
   int compressedSize, {
-  int? frameContentSize,
+  int? archiveContentSize,
   required double fallbackRatio,
-}) {
-  if (frameContentSize != null && frameContentSize >= compressedSize) {
-    return frameContentSize;
-  }
-  return (compressedSize * fallbackRatio).ceil();
-}
+}) => archiveContentSize ?? (compressedSize * fallbackRatio).ceil();
 
 /// מרווח ביטחון: 5% ולא פחות מ-256MiB (מטא-דאטה של מערכת הקבצים, WAL).
 int withSafetyMargin(int bytes) =>

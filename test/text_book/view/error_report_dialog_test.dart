@@ -1166,6 +1166,37 @@ void main() {
     expect(report.contentDigest, hasLength(64));
   });
 
+  test('הצעת תיקון בלי הצעה (null) נשלחת כדיווח חופשי', () {
+    const line = 'א ב ג';
+    final report = ErrorReportHelper.buildDirectReport(
+      senderEmail: 'user@example.com',
+      reportData: ReportedErrorData(
+        selectedText: 'ב',
+        errorDetails: 'יש כאן טעות',
+        correction: TextCorrection.wholeLine(
+          originalLine: line,
+          proposedText: null,
+        ),
+      ),
+      bookTitle: 'ספר',
+      currentRef: 'א',
+      bookDetails: const {},
+      lineNumber: 1,
+      contextText: line,
+      libraryVersion: '27',
+      source: ReportSourceSnapshot(
+        bookId: 1,
+        lineIndex: 0,
+        heRef: null,
+        originalLine: line,
+      ),
+    );
+
+    expect(report.reportKind, DirectErrorReportKind.freeText);
+    expect(report.correction, isNull);
+    expect(report.toApiPayload()['report_kind'], 'free_text');
+  });
+
   test('created_at של דיווח חדש נשלח ב-UTC עם Z', () {
     final report = ErrorReportHelper.buildDirectReport(
       senderEmail: 'user@example.com',

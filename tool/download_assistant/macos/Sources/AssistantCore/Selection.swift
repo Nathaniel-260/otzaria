@@ -389,13 +389,14 @@ public func plannedOutputFiles(
 }
 
 /// ה-outputNote של הרכיבים שנבחרו, בסדר המניפסט ובלי כפולים.
-public func plannedOutputNotes(_ manifest: ReleaseManifest, _ selectedIds: [String]) -> [String] {
+public func plannedOutputNotes(
+    _ manifest: ReleaseManifest, _ selectedIds: [String], english: Bool = false
+) -> [String] {
     let selected = Set(selectedIds)
     var notes: [String] = []
-    for component in manifest.components
-    where selected.contains(component.id) && !component.outputNote.isEmpty
-        && !notes.contains(component.outputNote) {
-        notes.append(component.outputNote)
+    for component in manifest.components where selected.contains(component.id) {
+        let note = component.displayOutputNote(english: english)
+        if !note.isEmpty && !notes.contains(note) { notes.append(note) }
     }
     return notes
 }

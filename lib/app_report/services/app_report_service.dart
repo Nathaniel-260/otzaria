@@ -93,7 +93,7 @@ class AppReportService {
   static const int maxSentReportsToKeep = 100;
   static const Duration timeout = Duration(seconds: 10);
 
-  /// צילומי מסך הם עד מגה-בתים רבים; בחיבור איטי 10 שניות לא מספיקות להעלאה.
+  /// צילומי מסך ו-minidump הם מגה-בתים רבים; בחיבור איטי 10 שניות לא מספיקות.
   static const Duration timeoutWithImages = Duration(minutes: 2);
   static const Duration _flushInterval = Duration(minutes: 5);
   static const int _maxQueuedFlushPerRun = 20;
@@ -160,12 +160,12 @@ class AppReportService {
       );
     }
 
-    var current = report;
-    var attempt = await _trySend(current);
+    var (current, attempt) = await _trySendDroppingRejectedMinidump(report);
     // 409: התוכן הזה לא נקלט תחת המזהה — הגשה חדשה במזהה חדש.
     if (attempt.kind == _AttemptKind.idConflict) {
-      current = current.copyWith(reportId: AppReport.generateReportId());
-      attempt = await _trySend(current);
+      (current, attempt) = await _trySendDroppingRejectedMinidump(
+        current.copyWith(reportId: AppReport.generateReportId()),
+      );
     }
 
     switch (attempt.kind) {
@@ -290,12 +290,14 @@ class AppReportService {
             pendingKind,
           )).where((candidate) => candidate.id == row.id).firstOrNull;
           if (currentRow == null) return false;
-          final report = _decode(currentRow);
-          if (await _sentReport(report.reportId) != null) {
+          final queued = _decode(currentRow);
+          if (await _sentReport(queued.reportId) != null) {
             await _reports.deleteIds([currentRow.id]);
             return false;
           }
-          final attempt = await _trySend(report);
+          final (report, attempt) = await _trySendDroppingRejectedMinidump(
+            queued,
+          );
           switch (attempt.kind) {
             case _AttemptKind.success:
               await _reports.deleteIds([currentRow.id]);
@@ -315,6 +317,9 @@ class AppReportService {
               await _reports.deleteIds([currentRow.id]);
               return false;
             case _AttemptKind.transient:
+              if (queued.minidump != null && report.minidump == null) {
+                await _reports.updatePayload(currentRow.id, report.toJson());
+              }
               return true;
           }
         });
@@ -345,7 +350,10 @@ class AppReportService {
     return buildOfflineReportScript(
       target: target,
       endpoint: endpoint.toString(),
-      payloads: reports.map((r) => r.toApiPayload()).toList(),
+      // ה-dump הוא מגה-בתים של base64 — הסקריפט נשלח בלעדיו.
+      payloads: reports
+          .map((r) => r.copyWith(minidump: null).toApiPayload())
+          .toList(),
       ids: reports.map((r) => r.reportId).toList(),
       idField: 'reportId',
       baseFileName: 'otzaria_send_app_reports',
@@ -427,6 +435,21 @@ class AppReportService {
     }
   }
 
+  /// dump שהשרת דחה (422 על השדה, או 413 מגוף גדול מדי) לא יפיל את הדיווח
+  /// כולו: שולחים שוב בלעדיו. מחזיר את הדיווח שנשלח בפועל.
+  Future<(AppReport, _Attempt)> _trySendDroppingRejectedMinidump(
+    AppReport report,
+  ) async {
+    final attempt = await _trySend(report);
+    final dumpRejected =
+        attempt.kind == _AttemptKind.permanent &&
+        (attempt.rejectedField == 'attachments.minidump' ||
+            attempt.httpStatus == HttpStatus.requestEntityTooLarge);
+    if (report.minidump == null || !dumpRejected) return (report, attempt);
+    final withoutDump = report.copyWith(minidump: null);
+    return (withoutDump, await _trySend(withoutDump));
+  }
+
   Future<_Attempt> _trySend(AppReport report) async {
     final String body;
     try {
@@ -452,7 +475,11 @@ class AppReportService {
             },
             body: utf8.encode(body),
           )
-          .timeout(report.images.isEmpty ? timeout : timeoutWithImages);
+          .timeout(
+            report.images.isEmpty && report.minidump == null
+                ? timeout
+                : timeoutWithImages,
+          );
       final status = response.statusCode;
       final decoded = _decodeBody(response.bodyBytes);
 

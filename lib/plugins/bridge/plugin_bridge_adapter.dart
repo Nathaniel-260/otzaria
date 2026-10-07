@@ -19,6 +19,7 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:kosher_dart/kosher_dart.dart';
 import 'package:http/http.dart' as http;
+import 'package:otzaria/update/app_release_version.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:otzaria/plugins/models/installed_plugin.dart';
@@ -933,7 +934,7 @@ class PluginBridgeAdapter {
       case 'getInfo':
         final packageInfo = await PackageInfo.fromPlatform();
         return {
-          'version': packageInfo.version,
+          'version': canonicalAppVersion(packageInfo),
           'buildNumber': packageInfo.buildNumber,
           'platform': Platform.operatingSystem,
         };
@@ -5535,7 +5536,7 @@ class PluginBridgeAdapter {
         if (includeSystemInfo) {
           final packageInfo = await PackageInfo.fromPlatform();
           finalBody += '\n\n---\n';
-          finalBody += 'גרסה: ${packageInfo.version}\n';
+          finalBody += 'גרסה: ${canonicalAppVersion(packageInfo)}\n';
           finalBody += 'פלטפורמה: ${Platform.operatingSystem}\n';
           finalBody += 'תוסף: ${plugin.name} (${plugin.pluginId})\n';
         }

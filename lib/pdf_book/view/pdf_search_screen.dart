@@ -376,6 +376,12 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       distance: widget.initialSearchDistance,
       matchPolicy: widget.initialMatchPolicy,
     );
+    // מסכת PDF מצורפת אינה מאונדקסת, וברירת מחדל שדורשת מנוע הייתה חוסמת בה.
+    if (!_isBundledTalmudPdf &&
+        searchableInBookQuery(widget.searchController.text) == null) {
+      _settings = InBookSearchSettings.savedDefaults();
+      _syncSearchOptions(context.read<PdfBookBloc>());
+    }
     // התצורה הממתינה כבר משוקפת בערכי האתחול; אין להחילה שוב.
     widget.incomingSearchConfiguration?.value = null;
     widget.incomingSearchConfiguration?.addListener(
@@ -713,21 +719,25 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
       // The preference is global; a toggle in another tab leaves a stale value.
       _wholeWord = InBookSearchPreferences.loadWholeWord();
     });
-    pdfBookBloc.add(
-      UpdateSearchOptions(
-        searchOptions: settings.searchOptions,
-        alternativeWords: settings.alternativeWords,
-        spacingValues: settings.spacingValues,
-        searchMode: settings.searchMode,
-        searchDistance: settings.distance,
-        matchPolicy: settings.matchPolicy,
-      ),
-    );
+    _syncSearchOptions(pdfBookBloc);
 
     // שינוי תוכניתי של ה-controller אינו מפעיל את onChanged של השדה, ולכן
     // החיפוש מורץ כאן ישירות.
     syncSearchControllerQuery(widget.searchController, query);
     _searchTextUpdated();
+  }
+
+  void _syncSearchOptions(PdfBookBloc pdfBookBloc) {
+    pdfBookBloc.add(
+      UpdateSearchOptions(
+        searchOptions: _searchOptions,
+        alternativeWords: _alternativeWords,
+        spacingValues: _spacingValues,
+        searchMode: _searchMode,
+        searchDistance: _searchDistance,
+        matchPolicy: _matchPolicy,
+      ),
+    );
   }
 
   Future<void> _searchTextUpdated() async {
@@ -739,6 +749,10 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
     // תדליק אותו מחדש אם תרוץ.
     _simpleSearchReversed = false;
     final searchable = searchableInBookQuery(widget.searchController.text);
+    _settings = _settings.forQuery(searchable ?? '');
+    if (_settings.optionsForEveryWord != null) {
+      _syncSearchOptions(context.read<PdfBookBloc>());
+    }
 
     // בלי ההודעה הזו מסלול המנוע במסכת PDF מצורפת מציג "אין תוצאות" גנרי.
     if (searchable != null && !_isSimpleSearch && _isBundledTalmudPdf) {
@@ -1011,18 +1025,11 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
           _searchResults = [];
           _resultsTruncated = false;
           _searchErrorMessage = null;
-          _settings = const InBookSearchSettings();
+          _settings = _isBundledTalmudPdf
+              ? const InBookSearchSettings()
+              : InBookSearchSettings.savedDefaults();
         });
-        context.read<PdfBookBloc>().add(
-          const UpdateSearchOptions(
-            searchOptions: {},
-            alternativeWords: {},
-            spacingValues: {},
-            searchMode: SearchMode.exact,
-            searchDistance: 0,
-            matchPolicy: SearchMatchPolicy.standard,
-          ),
-        );
+        _syncSearchOptions(context.read<PdfBookBloc>());
         _schedulePdfHighlight(null);
       },
       searchFieldActions: [
@@ -1046,6 +1053,7 @@ class PdfBookSearchViewState extends State<PdfBookSearchView> {
           searchOptions: _searchOptions,
           alternativeWords: _alternativeWords,
           spacingValues: _spacingValues,
+          optionsForEveryWord: _settings.optionsForEveryWord,
         );
 
         if (!mounted || result == null) {

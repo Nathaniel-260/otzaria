@@ -234,6 +234,10 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     ];
   }
 
+  /// נתיב הקטגוריה שהאינדוקס צורב ב-facet של הספר.
+  static String _indexedCategoryPath(Book book) =>
+      book.category?.path ?? book.categoryPath ?? '';
+
   Future<void> _runRefresh(
     RefreshLibrary event,
     Emitter<LibraryState> emit,
@@ -250,14 +254,12 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         state.currentCategory,
       );
 
-      // צלם את מפתחות הספרים לפני הרענון לצורך זיהוי ספרים חדשים
+      // צלם את מפתחות הספרים ונתיביהם לפני הרענון לזיהוי ספרים חדשים ומוזזים
       final previousLibrary = await _repository.librarySnapshotForRefresh();
-      final keysBeforeRefresh = previousLibrary == null
-          ? <String>{}
-          : previousLibrary
-                .getIndexableBooks()
-                .map((b) => IndexingRepository.catalogueOrderKey(b))
-                .toSet();
+      final pathsBeforeRefresh = <String, String>{
+        for (final b in previousLibrary?.getIndexableBooks() ?? const <Book>[])
+          IndexingRepository.catalogueOrderKey(b): _indexedCategoryPath(b),
+      };
 
       final libraryPath = Settings.getValue<String>(
         SettingsRepository.keyLibraryPath,
@@ -285,20 +287,43 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         );
       }
 
-      // זיהוי ספרים חדשים שנוספו ברענון
-      final newBooksToIndex = fullLibrary
-          .getIndexableBooks()
-          .where(
-            (b) => !keysBeforeRefresh.contains(
-              IndexingRepository.catalogueOrderKey(b),
-            ),
-          )
-          .toList();
+      final indexableBooks = fullLibrary.getIndexableBooks();
+      final newBooksToIndex = <Book>[];
+      final movedBookKeys = <String>{};
+      for (final b in indexableBooks) {
+        final key = IndexingRepository.catalogueOrderKey(b);
+        final before = pathsBeforeRefresh[key];
+        if (before == null) {
+          newBooksToIndex.add(b);
+        } else if (before != _indexedCategoryPath(b)) {
+          // הנתיב נצרב ב-facet באינדקס: ספר שעבר קטגוריה (למשל במיזוג ספרים
+          // אישיים לעץ) לא יימצא בסינון לפי קטגוריה עד שיאונדקס מחדש.
+          movedBookKeys.add(key);
+        }
+      }
+
+      if (movedBookKeys.isNotEmpty && previousLibrary != null) {
+        final previousOrder = IndexingRepository.buildCatalogueOrderResolver(
+          previousLibrary,
+        );
+        final currentOrder = IndexingRepository.buildCatalogueOrderResolver(
+          fullLibrary,
+        );
+        // מזהי השורות מקודדים מיקום קטלוגי: גם שכני הספר המוזז חייבים
+        // לעבור יחד לסדר החדש, אחרת מזהי שורות מספרים שונים יתנגשו.
+        for (final book in indexableBooks) {
+          final key = IndexingRepository.catalogueOrderKey(book);
+          if (pathsBeforeRefresh.containsKey(key) &&
+              previousOrder.orderFor(key) != currentOrder.orderFor(key)) {
+            movedBookKeys.add(key);
+          }
+        }
+      }
 
       // מיפוי מפתחות הספרים שהשתנו (שדווחו ע"י הקורא) לספרים מהקטלוג הטרי
       final changedBooksToIndex = booksToReindex(
-        fullLibrary.getIndexableBooks(),
-        changedBookKeys: event.changedBookKeys,
+        indexableBooks,
+        changedBookKeys: {...event.changedBookKeys, ...movedBookKeys},
         changedAttachedSlugs: event.changedAttachedSlugs,
       );
 
