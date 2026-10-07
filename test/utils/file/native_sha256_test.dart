@@ -11,8 +11,7 @@ void main() {
   setUpAll(() => dir = Directory.systemTemp.createTempSync('native_sha_'));
   tearDownAll(() => dir.deleteSync(recursive: true));
 
-  final nativeSupported =
-      Platform.isWindows || Platform.isMacOS || Platform.isIOS;
+  final nativeSupported = Platform.isWindows;
   const chunk = 8 * 1024 * 1024;
   final rnd = Random(7);
 
@@ -49,5 +48,12 @@ void main() {
       loadNative: () => throw ArgumentError('simulated load failure'),
     );
     expect(digest, sha256.convert(bytes).toString());
+  });
+
+  test('קובץ חסר: PathNotFoundException ולא נבלע', () async {
+    await expectLater(
+      sha256OfFileFast('${dir.path}/missing'),
+      throwsA(isA<PathNotFoundException>()),
+    );
   });
 }

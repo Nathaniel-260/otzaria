@@ -16,17 +16,20 @@ class AttachedUpdateArtifactMismatch implements Exception {
 
 /// Stops once the output exceeds [maxOutputBytes] ([ZstdOutputLimitExceeded]):
 /// a check afterwards would let a small archive fill the disk first.
-typedef AttachedUpdateDecompressor = Future<void> Function(
-  String archivePath,
-  String outputPath,
-  int maxOutputBytes,
-);
+typedef AttachedUpdateDecompressor =
+    Future<void> Function(
+      String archivePath,
+      String outputPath,
+      int maxOutputBytes,
+    );
 
 /// בונה את קובץ ה-.db מהחלקים המשורשרים (פלט [AttachedUpdateFetcher.downloadParts]):
 /// פריסת zstd בזרם — אותו מסלול FFI של עדכון הספרייה הרשמי, בלי טעינה ל-RAM —
 /// ואז בדיקת גודל ו-sha256 של התוצאה ב-isolate.
 class AttachedUpdateArtifactBuilder {
-  const AttachedUpdateArtifactBuilder({this.decompress = _zstdStream});
+  const AttachedUpdateArtifactBuilder({
+    this.decompress = _zstdStream,
+  });
 
   final AttachedUpdateDecompressor decompress;
 

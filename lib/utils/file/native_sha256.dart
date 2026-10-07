@@ -5,9 +5,10 @@ import 'package:crypto/crypto.dart';
 import 'package:ffi/ffi.dart';
 import 'package:flutter/foundation.dart';
 
-/// SHA-256 של קובץ, כ-hex קטן. ב-Windows וב-macOS/iOS מחושב ב-API המערכת
-/// (bcrypt / CommonCrypto), כי package:crypto (Dart טהור) לוקח כמה דקות ל-1GB
-/// (#2080). בשאר הפלטפורמות, או אם טעינת הספרייה נכשלה, נופל ל-package:crypto.
+/// SHA-256 של קובץ, כ-hex קטן. ב-Windows מחושב ב-bcrypt של המערכת, כי
+/// package:crypto (Dart טהור) לוקח כמה דקות ל-1GB (#2080). בשאר הפלטפורמות,
+/// או אם טעינת הספרייה נכשלה, נופל ל-package:crypto.
+/// macOS/iOS (CommonCrypto) לא נכללים: לא נבדקו בפועל.
 ///
 /// [loadNative] ניתן להחלפה לבדיקות. כשל קריאה/חישוב אינו נבלע, רק כשל טעינה.
 Future<String> sha256OfFileFast(
@@ -28,7 +29,6 @@ Future<String> sha256OfFileFast(
 
 NativeSha256 Function()? get _platformNative {
   if (Platform.isWindows) return _bcrypt;
-  if (Platform.isMacOS || Platform.isIOS) return _commonCrypto;
   return null;
 }
 
@@ -46,8 +46,9 @@ const _chunkBytes = 8 * 1024 * 1024;
 String _hashFile(String path, NativeSha256 hasher) {
   final buffer = calloc<Uint8>(_chunkBytes);
   final out = calloc<Uint8>(32);
-  final file = File(path).openSync();
+  RandomAccessFile? file;
   try {
+    file = File(path).openSync();
     hasher.init();
     final view = buffer.asTypedList(_chunkBytes);
     for (var n = file.readIntoSync(view); n > 0; n = file.readIntoSync(view)) {
@@ -59,7 +60,7 @@ String _hashFile(String path, NativeSha256 hasher) {
         .map((b) => b.toRadixString(16).padLeft(2, '0'))
         .join();
   } finally {
-    file.closeSync();
+    file?.closeSync();
     hasher.dispose();
     calloc.free(buffer);
     calloc.free(out);
@@ -184,31 +185,5 @@ NativeSha256 _bcrypt() {
       calloc.free(alg);
       calloc.free(hash);
     },
-  );
-}
-
-NativeSha256 _commonCrypto() {
-  final lib = DynamicLibrary.open('/usr/lib/libSystem.dylib');
-  final init = lib
-      .lookupFunction<
-        Int32 Function(Pointer<Void>),
-        int Function(Pointer<Void>)
-      >('CC_SHA256_Init');
-  final update = lib
-      .lookupFunction<
-        Int32 Function(Pointer<Void>, Pointer<Uint8>, Uint32),
-        int Function(Pointer<Void>, Pointer<Uint8>, int)
-      >('CC_SHA256_Update');
-  final fin = lib
-      .lookupFunction<
-        Int32 Function(Pointer<Uint8>, Pointer<Void>),
-        int Function(Pointer<Uint8>, Pointer<Void>)
-      >('CC_SHA256_Final');
-  final ctx = calloc<Uint8>(128); // sizeof(CC_SHA256_CTX) == 104
-  return NativeSha256(
-    () => init(ctx.cast()),
-    (data, n) => update(ctx.cast(), data, n),
-    (out) => fin(out, ctx.cast()),
-    () => calloc.free(ctx),
   );
 }
