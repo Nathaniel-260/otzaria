@@ -965,6 +965,81 @@ void main() {
       expect(links.incompleteSlugs.value, isEmpty);
     });
 
+    /// כותב ל-meta את סימון `!building` של [slug] עם [suffix], כמו שהיה נשאר
+    /// אחרי קריסה (בלי סיומת) או ניסיון אוטומטי שקדם לה.
+    void setBuildingMarker(String slug, String suffix) {
+      final base = metaSignature(slug)!.split('\u0001').first;
+      final db = sqlite3.sqlite3.open(cachePath());
+      db.execute(
+        'UPDATE attached_external_link_meta SET targetsSignature = ? '
+        'WHERE sourceSlug = ?',
+        [base + suffix, slug],
+      );
+      db.close();
+    }
+
+    /// בנייה שנקטעה אחרי מנה ראשונה: אינדקס חלקי ונקודת המשך שמורה.
+    Future<({String slug, List<String> full})> interruptedBuild() async {
+      final library = await attach(attachedDb('ext', rows: fourPerLine()));
+      await links.sync();
+      final full = indexSnapshot(library.slug);
+      slowBuild(batchSize: 3);
+      await rebuildAndCancel(library.slug);
+      expect(indexRows(library.slug), lessThan(full.length));
+      return (slug: library.slug, full: full);
+    }
+
+    test('המשך אוטומטי: קריסה (בלי סיומת) עם התקדמות ממשיכה', () async {
+      final build = await interruptedBuild();
+      setBuildingMarker(build.slug, '');
+
+      expect(await links.sync(autoResume: true), {build.slug});
+      expect(indexSnapshot(build.slug), build.full);
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test('המשך אוטומטי: התקדמות מאז הניסיון הקודם ממשיכה', () async {
+      final build = await interruptedBuild();
+      setBuildingMarker(build.slug, '\u0001auto=1');
+
+      expect(await links.sync(autoResume: true), {build.slug});
+      expect(indexSnapshot(build.slug), build.full);
+    });
+
+    test(
+      'המשך אוטומטי: בלי התקדמות (גם קריסה באמצע ניסיון) לא ממשיך',
+      () async {
+        final build = await interruptedBuild();
+        final rows = indexRows(build.slug);
+        setBuildingMarker(build.slug, '\u0001auto=$rows');
+
+        expect(await links.sync(autoResume: true), isEmpty);
+        expect(links.incompleteSlugs.value, {build.slug});
+        expect(indexRows(build.slug), rows);
+      },
+    );
+
+    test('המשך אוטומטי: עצירה ידנית לא ממשיכה, והמשך ידני כן', () async {
+      final build = await interruptedBuild();
+      expect(metaSignature(build.slug), contains('\u0001stop'));
+
+      expect(await links.sync(autoResume: true), isEmpty);
+      expect(links.incompleteSlugs.value, {build.slug});
+
+      links.requestResume(build.slug);
+      await links.sync();
+      expect(indexSnapshot(build.slug), build.full);
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test('בלי autoResume אין המשך אוטומטי', () async {
+      final build = await interruptedBuild();
+      setBuildingMarker(build.slug, '');
+
+      expect(await links.sync(), isEmpty);
+      expect(links.incompleteSlugs.value, {build.slug});
+    });
+
     test('מצב חסכוני אינו משנה את התוצאה הסופית', () async {
       final batch = ExternalLinkRepository.insertBatchSize;
       addTearDown(() => ExternalLinkRepository.insertBatchSize = batch);

@@ -1239,7 +1239,7 @@ Future<void> _runDeferredAttachedLibraryUpdates() async {
 /// אינדקס הקישורים ההפוכים של מסדים מצורפים (cache.db) — נבנה רק למסד שהשתנה.
 Future<void> _syncExternalLinkIndex() async {
   try {
-    await ExternalLinkRepository.instance.sync();
+    await ExternalLinkRepository.instance.sync(autoResume: true);
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('External link index', error, stackTrace);
   }
