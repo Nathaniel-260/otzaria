@@ -8,6 +8,8 @@ import 'package:otzaria/plugins/services/bundled_plugin_seed_service.dart';
 import 'package:otzaria/plugins/services/plugin_protocol_registration_service.dart';
 import 'package:otzaria/semantic_search/models/semantic_import_layout.dart';
 import 'package:otzaria/settings/settings_exports.dart';
+import 'package:path/path.dart' as p;
+import 'package:yaml/yaml.dart';
 
 /// טסטים על סקריפטי ה-Inno Setup. הם אינם נבנים ב-CI של הטסטים, ולכן ההגנה
 /// היחידה עליהם היא קריאת הטקסט ואימות האינוריאנטות שמקשרות ביניהם לבין
@@ -363,6 +365,161 @@ void main() {
         }
       });
     }
+  });
+
+  group('תיקיית יעד ארוכה מדי נחסמת לפני ההעתקה (MAX_PATH)', () {
+    const include = 'install_dir_length_check.iss';
+
+    for (final name in _scripts) {
+      test('$name: הבדיקה רצה בעמוד בחירת התיקייה, גם בהתקנה שקטה', () {
+        final script = _script(name);
+        expect(
+          _sections(script, 'Code').join(),
+          contains('function InstallDirTooLong(): Boolean;'),
+        );
+
+        final body = _routine(script, 'function NextButtonClick(');
+        final checkAt = body.indexOf(
+          'CurPageID = wpSelectDir) and InstallDirTooLong()',
+        );
+        expect(
+          checkAt,
+          greaterThan(0),
+          reason: 'הבדיקה נעלמה מ-NextButtonClick',
+        );
+        expect(
+          checkAt,
+          lessThan(body.indexOf('WizardSilent')),
+          reason:
+              'אחרי היציאה בהתקנה שקטה, /DIR ארוך נכשל באמצע ההעתקה '
+              'במקום להיעצר מראש',
+        );
+        expect(body.substring(checkAt), contains('Result := False'));
+      });
+
+      test('$name: הבדיקה סורקת את התיקייה שממנה מועתקים הקבצים', () {
+        expect(
+          _section(_script(name), 'Files'),
+          contains(r'Source: "..\build\windows\{#AppArch}\runner\Release\*'),
+        );
+        expect(
+          _read(include),
+          contains(
+            r'"..\build\windows\" + AppArch + "\runner\Release"',
+          ),
+        );
+      });
+    }
+
+    test('הודעת הנתיב משתמשת בתרגום ובמתאם ההודעות המשותף', () {
+      final helper = _read(include);
+      final body = _routine(helper, 'function InstallDirTooLong(');
+      expect(body, contains('InstTellSuppressible('));
+      expect(body, isNot(contains('SuppressibleMsgBox(')));
+      expect(body, contains("CustomMessage('InstallDirTooLongTitle')"));
+      expect(
+        body,
+        contains("FmtMessage(CustomMessage('InstallDirTooLongText'),"),
+      );
+      expect(body, contains('IntToStr(Length(WizardDirValue))'));
+      expect(body, contains('IntToStr({#MaxInstallDirLength})'));
+      expect(
+        body,
+        contains('Result := Length(WizardDirValue) > {#MaxInstallDirLength}'),
+      );
+      expect(
+        helper,
+        contains(
+          'procedure InstTellSuppressible(const Title, Text: String); forward;',
+        ),
+      );
+      expect(
+        helper.indexOf('procedure InstTellSuppressible('),
+        lessThan(helper.indexOf('function InstallDirTooLong(')),
+      );
+
+      final messages = _messages(helper, 'CustomMessages');
+      expect(messages['hebrew']!['InstallDirTooLongTitle'], isNotEmpty);
+      expect(messages['english']!['InstallDirTooLongTitle'], isNotEmpty);
+      for (final lang in ['hebrew', 'english']) {
+        final text = messages[lang]!['InstallDirTooLongText']!;
+        expect(text, contains('%1'));
+        expect(text, contains('%2'));
+        expect(text, contains('%n%n'));
+      }
+      expect(
+        helper,
+        matches(
+          RegExp(
+            r'#ifdef OtzariaUiProduct\s+english\.InstallDirTooLongTitle=[^\n]+\n'
+            r'english\.InstallDirTooLongText=[^\n]+\n#endif',
+          ),
+        ),
+        reason: 'אנגלית נכללת רק כששכבת התצוגה מגדירה את השפה',
+      );
+    });
+
+    test('המתאם הישן שומר על הודעה ניתנת להשתקה ומפנה מקום למתאם המעוצב', () {
+      const fallback = 'installer_message_fallback.iss';
+      final text = _read(fallback);
+      expect(text.trim(), startsWith('#ifndef OtzariaUiProduct'));
+      expect(text.trim(), endsWith('#endif'));
+      final body = _routine(text, 'procedure InstTellSuppressible(');
+      expect(body, contains('SuppressibleMsgBox(Text, mbError, MB_OK, IDOK)'));
+      expect(body, isNot(contains('UiTell(')));
+      for (final name in _scripts) {
+        final script = _script(name);
+        final fallbackAt = script.indexOf(text);
+        expect(
+          fallbackAt,
+          greaterThan(script.indexOf('function NextButtonClick(')),
+        );
+        expect(_sections(script, 'Code').join(), contains(text));
+        final implementation = RegExp(
+          r'procedure InstTellSuppressible\([^;]+;\s*begin',
+        );
+        final adapterAt = implementation.firstMatch(script)!.start;
+        expect(
+          adapterAt,
+          lessThanOrEqualTo(fallbackAt + text.indexOf('procedure')),
+          reason: 'המתאם המעוצב חייב להופיע לפני ה-fallback הלא פעיל',
+        );
+      }
+    });
+
+    test('שמות הנכסים שלנו קצרים מספיק לתיקיות התקנה עמוקות', () {
+      // Flutter שומר כל נכס ב-data\flutter_assets בשם מקודד-URI, ולכן כל אות
+      // עברית בשם עולה 6 תווים בנתיב. 100 משאיר לתיקיית היעד 158 תווים.
+      const maxInstalledPath = 100;
+      final flutter =
+          (loadYaml(File('pubspec.yaml').readAsStringSync())
+                  as YamlMap)['flutter']
+              as YamlMap;
+      final keys = <String>[
+        for (final entry in (flutter['assets'] as YamlList).cast<String>())
+          if (!entry.endsWith('/'))
+            entry
+          else if (Directory(entry).existsSync())
+            for (final file in Directory(entry).listSync().whereType<File>())
+              '$entry${p.basename(file.path)}',
+        for (final family in flutter['fonts'] as YamlList)
+          for (final font in (family as YamlMap)['fonts'] as YamlList)
+            (font as YamlMap)['asset'] as String,
+      ];
+      expect(keys, isNotEmpty);
+
+      final tooLong = {
+        for (final key in keys)
+          key: 'data/flutter_assets/${Uri.encodeFull(key)}'.length,
+      }..removeWhere((_, length) => length <= maxInstalledPath);
+      expect(
+        tooLong,
+        isEmpty,
+        reason:
+            'נתיב ההתקנה של הנכסים האלה ארוך מ-$maxInstalledPath תווים, '
+            'והתקנה לתיקייה עמוקה תיכשל — יש לתת להם שם קצר באנגלית',
+      );
+    });
   });
 
   group('GetDataDir — מקור האמת למיקום הנתונים', () {
