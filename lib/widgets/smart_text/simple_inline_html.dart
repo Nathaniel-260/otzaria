@@ -6,20 +6,12 @@ import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/widgets/smart_text/raised_markers.dart';
 
 /// יחסי הגדלים של fwfh ל-`<small>`/`<sup>` ול-`<big>`.
-///
-/// שלושת מסלולי הרינדור — המסלול המהיר כאן, HtmlWidget, והקריאה הרציפה —
-/// חייבים להתלכד עליהם: כל טקסט בסוגריים נעטף ב-`<small>`, ולכן פער ביחס
-/// משנה את גודל הסוגריים לפי המסלול שבו השורה במקרה עברה.
+/// זהים בשלושת מסלולי הרינדור כדי ששורות שכנות לא ישנו את גודל הסוגריים.
 const double kHtmlSmallerFontScale = 5 / 6;
 const double kHtmlLargerFontScale = 6 / 5;
 
-/// ממיר HTML פשוט (טקסט + תגי עיצוב בסיסיים בלבד) ל-[TextSpan] ישירות,
-/// כדי לעקוף את עלות הפרסור ובניית העץ של HtmlWidget עבור רוב שורות הספרים.
-///
-/// כל markup שאינו ברשימה הלבנה (תגים עם attributes, קישורים, spans, כותרות
-/// בתוך שורה, entities) מחזיר null — והקורא נופל חזרה ל-HtmlWidget המלא.
-/// יוצאי הדופן: תגי הסימונים המורמים (ראו raised_markers.dart) ותגי הדגשת
-/// החיפוש, שמזוהים במדויק — כך שורות עם סימונים או התאמות נשארות במסלול המהיר.
+/// ממיר תגי עיצוב פשוטים, סימונים מורמים והדגשות חיפוש ל-[TextSpan].
+/// markup שאינו נתמך מחזיר null כדי שהקורא ישתמש ב-HtmlWidget.
 class SimpleInlineHtml {
   SimpleInlineHtml._();
 
@@ -71,33 +63,47 @@ class SimpleInlineHtml {
 
   /// מנסה להמיר את [html]. מחזיר null אם נדרש HtmlWidget.
   ///
-  /// התוצאה (גם null) ממוטמנת ב-LRU: כל שורה נראית מפורסרת מחדש בכל build.
+  /// התוצאה (גם null) נשמרת ב-LRU; קלט ריק או תוצאה חריגה אינם נשמרים.
   static TextSpan? tryParse(String html, TextStyle baseStyle) {
+    if (html.isEmpty || html.length > _cacheMaxChars) {
+      return _tryParseUncached(html, baseStyle);
+    }
     // גופן מערכת משתנה מזוהה ברקע ומשנה את fontVariations של הבולד.
     final key = (
       html,
       baseStyle,
       AppFonts.boldFontVariations(baseStyle.fontFamily) != null,
     );
-    if (_cache.containsKey(key)) {
-      final cached = _cache.remove(key);
-      return _cache[key] = cached;
+    final cached = _cache.remove(key);
+    if (cached != null) {
+      _cache[key] = cached;
+      return cached.$1;
     }
     final result = _tryParseUncached(html, baseStyle);
-    _cache[key] = result;
+    // אומדן לעץ שטוח: כל ילד מחויב כספאן וסגנון, גם אם אין לו סגנון משלו.
+    final nodes = 1 + 2 * (result?.children?.length ?? 0);
+    if (nodes > _cacheMaxNodes) return result;
+    _cache[key] = (result, nodes);
     _cacheChars += html.length;
-    while (_cacheChars > _cacheMaxChars && _cache.length > 1) {
+    _cacheNodes += nodes;
+    while (_cacheChars > _cacheMaxChars ||
+        _cacheNodes > _cacheMaxNodes ||
+        _cache.length > _cacheMaxEntries) {
       final oldestKey = _cache.keys.first;
-      _cache.remove(oldestKey);
+      final removed = _cache.remove(oldestKey)!;
       _cacheChars -= oldestKey.$1.length;
+      _cacheNodes -= removed.$2;
     }
     return result;
   }
 
-  static final LinkedHashMap<(String, TextStyle, bool), TextSpan?> _cache =
-      LinkedHashMap();
+  static final LinkedHashMap<(String, TextStyle, bool), (TextSpan?, int)>
+  _cache = LinkedHashMap();
   static int _cacheChars = 0;
+  static int _cacheNodes = 0;
   static const int _cacheMaxChars = 2 * 1024 * 1024;
+  static const int _cacheMaxEntries = 4096;
+  static const int _cacheMaxNodes = 32 * 1024;
 
   static TextSpan? _tryParseUncached(String html, TextStyle baseStyle) {
     if (html.contains('&')) {
