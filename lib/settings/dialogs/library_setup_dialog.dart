@@ -122,16 +122,13 @@ Future<LibraryFolderScan> scanLibraryFolder(PackageFolder folder) async {
 String? _firstLocalFile(LibrarySourceScan source) {
   final packages = source.packages.packages;
   if (packages != null) {
-    final folder = source.folder;
-    return folder is DirectoryPackageFolder
-        ? p.join(folder.path, packages.library.parts.first.name)
-        : null;
+    return source.folder.localPath(packages.library.parts.first.entry);
   }
   for (final asset in source.raw.assets.values) {
-    final folder = asset.folder;
-    if (folder is DirectoryPackageFolder && asset.parts.isNotEmpty) {
-      return p.join(folder.path, asset.parts.first.name);
-    }
+    final path = asset.parts.isEmpty
+        ? null
+        : asset.folder.localPath(asset.parts.first.entry);
+    if (path != null) return path;
   }
   return null;
 }
@@ -383,9 +380,15 @@ class _LibrarySetupDialogContentState
     final file = scan.problemFile ?? '';
     return switch (scan.problem!) {
       LibraryPackageProblem.incompleteParts => context.settingsText(
-        Platform.isAndroid
-            ? 'חסר הקובץ {file} — יש לחלץ את כל קובצי ה-ZIP לאותה תיקייה ולבחור אותה'
+        _source?.source?.singleVolume ?? false
+            ? 'חסר הקובץ {file} — כנראה ששאר קובצי ה-ZIP חולצו לתיקיות שלצד התיקייה שנבחרה. יש לבחור את התיקייה שמכילה את כולן'
+            : Platform.isAndroid
+            ? 'חסר הקובץ {file} — יש לחלץ את כל קובצי ה-ZIP ולבחור את התיקייה שאליה חולצו, גם אם כל אחד חולץ לתיקייה משלו'
             : 'חסר הקובץ {file} — יש להכין את התיקייה מחדש במסייע ההורדה',
+        args: {'file': file},
+      ),
+      LibraryPackageProblem.conflictingParts => context.settingsText(
+        'הקובץ {file} נמצא בשתי תיקיות בגדלים שונים — יש למחוק את התיקיות שחולצו ולחלץ מחדש את כל קובצי ה-ZIP',
         args: {'file': file},
       ),
       LibraryPackageProblem.invalidManifest => context.settingsText(

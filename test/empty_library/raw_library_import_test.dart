@@ -12,6 +12,7 @@ import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_bloc.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_event.dart';
 import 'package:otzaria/empty_library/bloc/empty_library_state.dart';
+import 'package:otzaria/empty_library/services/library_package/library_package.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_importer.dart';
 import 'package:otzaria/empty_library/services/library_package/library_source.dart';
@@ -54,6 +55,9 @@ class _MemoryFolder extends PackageFolder {
 
   @override
   Future<PackageFolder?> child(String name) async => children[name];
+
+  @override
+  bool get usesPlatformChannel => true;
 
   @override
   Stream<List<int>> openRead(PackageFileEntry entry) async* {
@@ -343,27 +347,182 @@ void main() {
       expect(scan.components, {LibraryComponent.libraryDb});
     });
 
-    test('כמה תיקיות חבילה, או תוכן בשורש: אין ירידה לתת-תיקייה', () async {
-      final nested = _MemoryFolder('b', files: {dbName: utf8.encode('db')});
-      final ambiguous = _MemoryFolder(
-        'Download',
-        children: {
-          kAndroidFullBundlePrefix: nested,
-          '$kAndroidFullBundlePrefix (1)': nested,
-        },
-      );
+    test('תוכן בשורש: אין ירידה לתת-תיקיות החבילה', () async {
       final withRoot = _MemoryFolder(
         'Download',
         files: {
           DatabaseConstants.lexicalDatabaseFileName: [1],
         },
-        children: {kAndroidFullBundlePrefix: nested},
+        children: {
+          kAndroidFullBundlePrefix: _MemoryFolder(
+            'b',
+            files: {dbName: utf8.encode('db')},
+          ),
+        },
       );
 
-      expect((await scanLibrarySource(ambiguous)).isEmpty, isTrue);
       expect((await scanLibrarySource(withRoot)).components, {
         LibraryComponent.lexicon,
       });
+    });
+
+    test('כמה תיקיות חבילה מאוחדות; קובץ זהה בכמה מהן נלקח פעם אחת', () async {
+      final nested = _MemoryFolder('b', files: {dbName: utf8.encode('db')});
+      final folder = _MemoryFolder(
+        'Download',
+        children: {
+          kAndroidFullBundlePrefix: nested,
+          '$kAndroidFullBundlePrefix (1)': _MemoryFolder(
+            'c',
+            files: {
+              dbName: utf8.encode('db'),
+              DatabaseConstants.lexicalDatabaseFileName: [1],
+            },
+          ),
+        },
+      );
+
+      final scan = await scanLibrarySource(folder);
+
+      expect(scan.components, {
+        LibraryComponent.libraryDb,
+        LibraryComponent.lexicon,
+      });
+      expect(scan.folder.usesPlatformChannel, isTrue);
+    });
+
+    test('כרכים בתיקיות נפרדות (SAF): החבילה המלאה נפרסת מכולם', () async {
+      if (lib == null) return markTestSkipped('libzstd אינו זמין');
+      final library = _split(
+        'otzaria-0.9.98-library.tar.zst',
+        zstdCompress(
+          lib,
+          buildTar({
+            'books/$dbName': utf8.encode('new-db'),
+            'books/$talmud/ברכות.pdf': pdf,
+          }),
+        ),
+        60000,
+      );
+      final index = _split(
+        'otzaria-0.9.98-library-index.tar.zst',
+        zstdCompress(lib, buildTar({'index/meta.json': utf8.encode('{}')})),
+        60000,
+      );
+      final first = {
+        'otzaria-android.apk': [1, 2, 3],
+        'README.txt': utf8.encode('readme'),
+        for (final MapEntry(:key, :value) in library.entries)
+          if (!key.endsWith('part-001')) key: value,
+      };
+      final second = {
+        'README.txt': utf8.encode('readme'),
+        for (final MapEntry(:key, :value) in library.entries)
+          if (key.endsWith('part-001')) key: value,
+        ...index,
+      };
+      _MemoryFolder volume(String name, Map<String, List<int>> files) =>
+          _MemoryFolder(
+            name,
+            children: {
+              kAndroidFullBundlePrefix: _MemoryFolder(
+                '$name/inner',
+                files: files,
+              ),
+            },
+          );
+      final folder = _MemoryFolder(
+        'Download',
+        children: {
+          '$kAndroidFullBundlePrefix-part1': volume('v1', first),
+          '$kAndroidFullBundlePrefix-part2': volume('v2', second),
+        },
+      );
+
+      final scan = await scanLibrarySource(folder);
+      final packages = scan.packages.packages!;
+      expect(packages.index, isNotNull);
+      expect(packages.folder.usesPlatformChannel, isTrue);
+
+      final libraryDest = p.join(temp.path, 'lib');
+      final indexDest = p.join(temp.path, 'idx');
+      await extractPackageJob(
+        PackageExtractionJob(
+          packages: packages,
+          libraryDestination: libraryDest,
+          indexDestination: indexDest,
+        ),
+        zstd: lib,
+        onProgress: (_, _, _) {},
+      );
+      expect(
+        File(p.join(libraryDest, 'books', dbName)).readAsStringSync(),
+        'new-db',
+      );
+      expect(
+        File(
+          p.join(libraryDest, 'books', talmud, 'ברכות.pdf'),
+        ).readAsBytesSync(),
+        pdf,
+      );
+      expect(
+        File(p.join(indexDest, 'index', 'meta.json')).existsSync(),
+        isTrue,
+      );
+    });
+
+    test('אותו קובץ בגדלים שונים בשני כרכים: בעיה עם שם הקובץ', () async {
+      final library = _split(
+        'otzaria-0.9.98-library.tar.zst',
+        _noise(300, 4),
+        100,
+      );
+      const part = 'otzaria-0.9.98-library.tar.zst.part-001';
+      final folder = _MemoryFolder(
+        'Download',
+        children: {
+          '$kAndroidFullBundlePrefix-part1': _MemoryFolder(
+            'v1',
+            files: library,
+          ),
+          '$kAndroidFullBundlePrefix-part2': _MemoryFolder(
+            'v2',
+            files: {
+              part: [1, 2],
+            },
+          ),
+        },
+      );
+
+      final scan = await scanLibrarySource(folder);
+
+      expect(scan.packages.problem, LibraryPackageProblem.conflictingParts);
+      expect(scan.packages.problemFile, part);
+      expect(scan.components, isEmpty);
+    });
+
+    test('נבחר כרך אחד: חלק חסר מסומן ככרך בודד', () async {
+      final library = _split(
+        'otzaria-0.9.98-library.tar.zst',
+        _noise(300, 5),
+        100,
+      )..remove('otzaria-0.9.98-library.tar.zst.part-002');
+      final picked = _MemoryFolder(
+        'Download/$kAndroidFullBundlePrefix-part1',
+        children: {
+          kAndroidFullBundlePrefix: _MemoryFolder('inner', files: library),
+        },
+      );
+      final parent = _MemoryFolder(
+        'Download',
+        children: {'$kAndroidFullBundlePrefix-part1': picked},
+      );
+
+      final scan = await scanLibrarySource(picked);
+
+      expect(scan.packages.problem, LibraryPackageProblem.incompleteParts);
+      expect(scan.singleVolume, isTrue);
+      expect((await scanLibrarySource(parent)).singleVolume, isFalse);
     });
   });
 

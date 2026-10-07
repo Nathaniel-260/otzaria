@@ -429,6 +429,64 @@ void main() {
     );
   }
 
+  blocTest<EmptyLibraryBloc, EmptyLibraryState>(
+    'כל כרך חולץ לתיקייה משלו: בחירת תיקיית האב מייבאת את החבילה המלאה',
+    setUp: () async {
+      if (lib == null) return;
+      writeLibrary(lib);
+      writeIndex(lib);
+      final volume1 = await Directory(
+        p.join(
+          source.path,
+          'otzaria-android-full-part1',
+          'otzaria-android-full',
+        ),
+      ).create(recursive: true);
+      final volume2 = await Directory(
+        p.join(
+          source.path,
+          'otzaria-android-full-part2',
+          'otzaria-android-full',
+        ),
+      ).create(recursive: true);
+      await File(
+        p.join(volume1.path, 'otzaria-android.apk'),
+      ).writeAsBytes(_noise(5000, 9));
+      for (final file in source.listSync().whereType<File>()) {
+        final name = p.basename(file.path);
+        final toFirst =
+            name == '$_library.part-000' || name == '$_library.manifest.json';
+        file.renameSync(p.join((toFirst ? volume1 : volume2).path, name));
+      }
+      for (final volume in [volume1, volume2]) {
+        await File(p.join(volume.path, 'README.txt')).writeAsString('readme');
+      }
+      final scan = await scanLibrarySource(DirectoryPackageFolder(source.path));
+      packages = scan.packages.packages!;
+      expect(packages.folder, isA<MergedPackageFolder>());
+      expect(packages.library.parts.length, greaterThan(1));
+    },
+    build: build,
+    act: (bloc) async {
+      if (lib == null) return markTestSkipped('libzstd אינו זמין');
+      bloc.add(
+        ImportLibraryPackageRequested(packages: packages, targetPath: books),
+      );
+      await settle(bloc);
+    },
+    verify: (bloc) {
+      if (lib == null) return;
+      expect(bloc.state, isA<EmptyLibraryDirectorySelected>());
+      expect(File(p.join(books, _dbName)).readAsStringSync(), 'new-db');
+      expect(
+        File(p.join(books, 'תלמוד בבלי', 'ברכות.pdf')).lengthSync(),
+        400000,
+      );
+      expect(reopenedLibrary, [('new-db', '{"new":true}')]);
+      expectNoLeftovers();
+    },
+  );
+
   group('ספרייה קיימת', () {
     setUp(() async {
       await Directory(books).create(recursive: true);

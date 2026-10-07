@@ -8,7 +8,6 @@ import 'package:flutter/services.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/empty_library/services/library_package/library_package_extractor.dart';
 import 'package:otzaria/empty_library/services/library_package/library_source.dart';
-import 'package:otzaria/empty_library/services/library_package/package_folder.dart';
 import 'package:otzaria/utils/file/tar_stream_extractor.dart';
 import 'package:otzaria/utils/file/zstd_library.dart';
 import 'package:otzaria/utils/file/zstd_patch_decoder.dart';
@@ -43,7 +42,7 @@ Future<void> runRawAssetJobInIsolate(
   required ZstdCancelFlag cancel,
   DynamicLibrary Function() openZstd = openZstandardLib,
 }) async {
-  final token = job.assets.any((a) => a.folder is SafPackageFolder)
+  final token = job.assets.any((a) => a.folder.usesPlatformChannel)
       ? RootIsolateToken.instance
       : null;
   final port = ReceivePort();

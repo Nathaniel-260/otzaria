@@ -101,11 +101,16 @@ class LibrarySourceScan {
     required this.folder,
     this.packages = const LibraryPackageScan(),
     this.raw = const RawLibraryScan(),
+    this.singleVolume = false,
   });
 
   final PackageFolder folder;
   final LibraryPackageScan packages;
   final RawLibraryScan raw;
+
+  /// נבחרה תיקייה של כרך אחד (`otzaria-android-full-part2`), ולכן חלקים
+  /// חסרים כנראה חולצו לתיקיות הכרכים שלצידה.
+  final bool singleVolume;
 
   bool get isEmpty => packages.isEmpty && raw.isEmpty;
 
@@ -127,21 +132,52 @@ class LibrarySourceScan {
 /// כרכי ה-ZIP של חבילת אנדרואיד המלאה נפתחים לתיקייה בשם הזה.
 const kAndroidFullBundlePrefix = 'otzaria-android-full';
 
-/// סורק את [folder], ואם אין בו דבר — את תת-תיקיית החבילה היחידה שבו, כי
-/// המשתמש בוחר לעיתים את התיקייה שאליה חילץ את הכרכים.
+final _volumeFolderName = RegExp('^$kAndroidFullBundlePrefix-part[0-9]+');
+
+/// סורק את [folder], ואם אין בו דבר — מאחד את תיקיות החבילה שבו ואת
+/// otzaria-android-full שבכל אחת: מנהלי קבצים מחלצים כל כרך לתיקייה משלו.
 Future<LibrarySourceScan> scanLibrarySource(PackageFolder folder) async {
-  final scan = await _scanSource(folder);
+  final singleVolume = folder.displayName
+      .split(RegExp(r'[\\/]'))
+      .reversed
+      .take(2)
+      .any(_volumeFolderName.hasMatch);
+  final scan = await _scanSource(folder, singleVolume);
   if (!scan.isEmpty) return scan;
-  final bundles = [
-    for (final name in await folder.folderNames())
-      if (name.startsWith(kAndroidFullBundlePrefix)) name,
-  ];
-  if (bundles.length != 1) return scan;
-  final bundle = await folder.child(bundles.single);
-  return bundle == null ? scan : _scanSource(bundle);
+  final members = <PackageFolder>[];
+  for (final name in (await folder.folderNames())..sort()) {
+    if (!name.startsWith(kAndroidFullBundlePrefix)) continue;
+    final volume = await folder.child(name);
+    if (volume == null) continue;
+    members.add(volume);
+    final inner = await volume.child(kAndroidFullBundlePrefix);
+    if (inner != null) members.add(inner);
+  }
+  if (members.isEmpty) return scan;
+  if (members.length == 1) return _scanSource(members.single, singleVolume);
+  final merged = MergedPackageFolder(members, displayName: folder.displayName);
+  final mergedScan = await _scanSource(merged, singleVolume);
+  final conflicts = await merged.conflicts();
+  if (conflicts.isEmpty ||
+      mergedScan.components.contains(LibraryComponent.libraryDb)) {
+    return mergedScan;
+  }
+  final missing = mergedScan.packages.problemFile;
+  return LibrarySourceScan(
+    folder: merged,
+    packages: LibraryPackageScan(
+      problem: LibraryPackageProblem.conflictingParts,
+      problemFile: conflicts.contains(missing)
+          ? missing
+          : (conflicts.toList()..sort()).first,
+    ),
+  );
 }
 
-Future<LibrarySourceScan> _scanSource(PackageFolder folder) async {
+Future<LibrarySourceScan> _scanSource(
+  PackageFolder folder,
+  bool singleVolume,
+) async {
   final packages = await scanLibraryPackages(folder);
   return LibrarySourceScan(
     folder: folder,
@@ -149,6 +185,7 @@ Future<LibrarySourceScan> _scanSource(PackageFolder folder) async {
     raw: packages.packages != null
         ? const RawLibraryScan()
         : await scanRawLibraryAssets(folder),
+    singleVolume: singleVolume,
   );
 }
 

@@ -422,6 +422,72 @@ void main() {
       expect(_actionOnPressed(tester, 'אישור'), isNotNull);
     });
 
+    /// חלקי ספרייה ומניפסט, כמו בכרכי ה-ZIP של חבילת אנדרואיד המלאה.
+    Map<String, List<int>> splitLibrary() {
+      final dir = Directory(p.join(temp.path, 'split'))..createSync();
+      writeSplitAsset(
+        dir,
+        'otzaria-0.9.98-library.tar.zst',
+        Uint8List(300),
+        partSize: 100,
+      );
+      return {
+        for (final file in dir.listSync().whereType<File>())
+          p.basename(file.path): file.readAsBytesSync(),
+      };
+    }
+
+    testWidgets('נבחר כרך אחד: הפניה לתיקייה שמכילה את כל הכרכים', (
+      tester,
+    ) async {
+      const part = 'otzaria-0.9.98-library.tar.zst.part-001';
+      final files = splitLibrary()..remove(part);
+      await pickFolder(
+        tester,
+        _MemoryFolder(
+          'otzaria-android-full-part1',
+          const {},
+          children: {
+            'otzaria-android-full': _MemoryFolder('inner', files),
+          },
+        ),
+      );
+      expect(
+        find.text(
+          'חסר הקובץ $part — כנראה ששאר קובצי ה-ZIP חולצו לתיקיות שלצד התיקייה שנבחרה. יש לבחור את התיקייה שמכילה את כולן',
+        ),
+        findsOneWidget,
+      );
+      expect(_actionOnPressed(tester, 'אישור'), isNull);
+    });
+
+    testWidgets('אותו חלק בשני כרכים בגדלים שונים: הסבר ואישור מושבת', (
+      tester,
+    ) async {
+      const part = 'otzaria-0.9.98-library.tar.zst.part-001';
+      final files = splitLibrary();
+      await pickFolder(
+        tester,
+        _MemoryFolder(
+          'Download',
+          const {},
+          children: {
+            'otzaria-android-full-part1': _MemoryFolder('v1', files),
+            'otzaria-android-full-part2': _MemoryFolder('v2', {
+              part: Uint8List(40),
+            }),
+          },
+        ),
+      );
+      expect(
+        find.text(
+          'הקובץ $part נמצא בשתי תיקיות בגדלים שונים — יש למחוק את התיקיות שחולצו ולחלץ מחדש את כל קובצי ה-ZIP',
+        ),
+        findsOneWidget,
+      );
+      expect(_actionOnPressed(tester, 'אישור'), isNull);
+    });
+
     testWidgets('בלי קובץ הספרייה: הסבר ברור ואישור מושבת', (tester) async {
       await pickFolder(
         tester,
