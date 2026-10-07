@@ -258,7 +258,6 @@
 | חיתוך HTML לפי טווח הבחירה (שימור עיצוב בהעתקה חלקית) | `test/utils/text/html_slice_test.dart` |
 | גודל פענוח תמונות (cacheWidth על נכסים כבדים) | `test/utils/ui/image_decode_size_test.dart` |
 | Hebrew text utils (migration) | `test/migration/hebrew_text_utils_test.dart` |
-| Text book searcher (in-book search) | `test/text_book/models/text_book_searcher_test.dart` |
 | Note text utils | `test/personal_notes/note_text_utils_test.dart` |
 | Shortcut validator | `test/shortcuts/shortcut_validator_test.dart` |
 | Core (activation queue/channel, error log) | `test/core/` |
