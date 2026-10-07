@@ -87,14 +87,15 @@ class AppCard extends StatelessWidget {
     }
 
     if (onTap != null) {
+      late FocusNode cardFocusNode;
       if (requestFocusOnTap) {
         final tappable = content;
         // ה-Builder יושב בתוך ה-InkWell, ולכן Focus.of מחזיר את צומת הכרטיס.
         content = Builder(
-          builder: (cardContext) => Listener(
-            onPointerDown: (_) => Focus.of(cardContext).requestFocus(),
-            child: tappable,
-          ),
+          builder: (cardContext) {
+            cardFocusNode = Focus.of(cardContext);
+            return tappable;
+          },
         );
       }
       return Material(
@@ -104,6 +105,9 @@ class AppCard extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
+          onTapUp: requestFocusOnTap
+              ? (_) => cardFocusNode.requestFocus()
+              : null,
           focusNode: focusNode,
           onFocusChange: onFocusChange,
           mouseCursor: SystemMouseCursors.click,
