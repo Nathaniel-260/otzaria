@@ -25,6 +25,7 @@ import 'package:otzaria/pdf_book/utils/pdf_links_window.dart';
 import 'package:otzaria/printing/printing_helpers.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
+import 'package:otzaria/utils/navigation/talmud_bavli_open_format.dart';
 import 'package:path/path.dart' as path;
 import 'package:sqlite3/sqlite3.dart' as sqlite3;
 
@@ -2542,6 +2543,158 @@ void main() {
           personalCategories.single.subCategories,
           isEmpty,
           reason: 'התיקיות עצמן ממוזגות — רק הספר הבודד נשאר כאן',
+        );
+      },
+    );
+
+    test(
+      'PDF בבלי של שקלים ועדיות מוצב בסדר שלו אחרי המסכת שלפניו',
+      () async {
+        final tempDir = await Directory.systemTemp.createTemp(
+          'otzaria_talmud_pdf_seder',
+        );
+        final libraryPath = path.join(tempDir.path, 'library');
+        final dataRootPath = path.join(tempDir.path, 'data_root');
+        final dbPath = path.join(
+          libraryPath,
+          DatabaseConstants.databaseFileName,
+        );
+        final database = MyDatabase.withPath(dbPath);
+        final repository = SeforimRepository(database);
+        final provider = DatabaseLibraryProvider.instance;
+        final previousLibraryPath = Settings.getValue<String>(
+          SettingsRepository.keyLibraryPath,
+        );
+        final previousFolderName = Settings.getValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+        );
+        final previousEffectiveDbPath = Settings.getValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+        );
+        final previousDataRootPath = AppPaths.cachedDataRootPath;
+
+        addTearDown(() => tempDir.delete(recursive: true));
+        addTearDown(() => database.close());
+        addTearDown(() => provider.clearCache());
+        addTearDown(() => provider.sqliteProvider.dispose());
+        addTearDown(
+          () => AppPaths.debugOverrideDataRootPath(previousDataRootPath),
+        );
+        addTearDown(() => UserBooksDatabaseHolder.instance.close());
+        addTearDown(() async {
+          await Settings.setValue<String>(
+            SettingsRepository.keyDbEffectivePath,
+            previousEffectiveDbPath ?? '',
+          );
+        });
+        addTearDown(() async {
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryFolderName,
+            previousFolderName ?? '',
+          );
+        });
+        addTearDown(() async {
+          await Settings.setValue<String>(
+            SettingsRepository.keyLibraryPath,
+            previousLibraryPath ?? '',
+          );
+        });
+
+        final talmudDir = Directory(
+          path.join(libraryPath, DatabaseConstants.talmudBavliFolderName),
+        );
+        await talmudDir.create(recursive: true);
+        for (final title in [
+          'פסחים',
+          'שקלים',
+          'יומא',
+          'שבועות',
+          'עדיות',
+          'עבודה זרה',
+        ]) {
+          await File(path.join(talmudDir.path, '$title.pdf')).writeAsString('');
+        }
+        await provider.sqliteProvider.dispose();
+        provider.clearCache();
+        await UserBooksDatabaseHolder.instance.close();
+        AppPaths.debugOverrideDataRootPath(dataRootPath);
+        await repository.ensureInitialized();
+
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryPath,
+          libraryPath,
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyLibraryFolderName,
+          '',
+        );
+        await Settings.setValue<String>(
+          SettingsRepository.keyDbEffectivePath,
+          '',
+        );
+
+        final sourceId = await repository.insertSource('local-test', -10);
+        final talmudCategoryId = await repository.insertCategory(
+          const migration_models.Category(
+            title: DatabaseConstants.talmudBavliFolderName,
+            parentId: null,
+            level: 0,
+            orderIndex: 1,
+          ),
+        );
+        var bookId = 1;
+        for (final (seder, sederOrder, tractates) in [
+          ('סדר מועד', 10, ['פסחים', 'יומא']),
+          ('סדר נזיקין', 20, ['שבועות', 'עבודה זרה']),
+          ('סדר טהרות', 30, <String>[]),
+        ]) {
+          final sederId = await repository.insertCategory(
+            migration_models.Category(
+              title: seder,
+              parentId: talmudCategoryId,
+              level: 1,
+              orderIndex: sederOrder,
+            ),
+          );
+          for (final (i, title) in tractates.indexed) {
+            await repository.insertBook(
+              migration_models.Book(
+                id: bookId++,
+                categoryId: sederId,
+                sourceId: sourceId,
+                title: title,
+                order: (sederOrder + i).toDouble(),
+                filePath: path.join(tempDir.path, '$title.txt'),
+                fileType: 'txt',
+              ),
+            );
+          }
+        }
+
+        await provider.initialize();
+        final library = await provider.buildLibraryCatalog({}, libraryPath);
+        final talmud = library.subCategories.singleWhere(
+          (c) => c.title == DatabaseConstants.talmudBavliFolderName,
+        );
+        List<String> visibleTitles(String seder) {
+          final textTitles = talmudBavliTextTitles(library);
+          final books =
+              talmud.subCategories
+                  .singleWhere((c) => c.title == seder)
+                  .books
+                  .where(
+                    (b) => !isTalmudBavliPdfLibraryDuplicate(b, textTitles),
+                  )
+                  .toList()
+                ..sort((a, b) => a.order.compareTo(b.order));
+          return books.map((b) => b.title).toList();
+        }
+
+        expect(visibleTitles('סדר מועד'), ['פסחים', 'שקלים', 'יומא']);
+        expect(visibleTitles('סדר נזיקין'), ['שבועות', 'עדיות', 'עבודה זרה']);
+        expect(
+          talmud.subCategories.where((c) => c.title == 'מסכתות נוספות'),
+          isEmpty,
         );
       },
     );
