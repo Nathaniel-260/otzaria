@@ -251,7 +251,8 @@ void main() {
       LibraryComponent.lexicon,
       LibraryComponent.talmudBavli,
     });
-    expect(report.missing, {LibraryComponent.searchIndex});
+    // האינדקס נבנה בתוכנה, ולכן ייבוא מלא אינו מציג סיכום חוסרים.
+    expect(report.missing, isEmpty);
     expectNoLeftovers();
   });
 
@@ -280,7 +281,6 @@ void main() {
       LibraryComponent.talmudBavli,
       LibraryComponent.catalog,
       LibraryComponent.lexicon,
-      LibraryComponent.searchIndex,
     });
     expectNoLeftovers();
   });

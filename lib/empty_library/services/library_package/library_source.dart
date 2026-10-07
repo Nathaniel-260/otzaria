@@ -12,7 +12,8 @@ import 'package:seforim_library_updater/seforim_library_updater.dart'
 /// רכיבי הספרייה שהייבוא מזהה ומדווח עליהם.
 enum LibraryComponent { libraryDb, talmudBavli, catalog, lexicon, searchIndex }
 
-/// מה הייבוא התקין, ואילו רכיבים חסרים בספרייה אחריו.
+/// מה הייבוא התקין, ואילו רכיבים חסרים בספרייה אחריו. האינדקס אינו נחשב
+/// חסר: כשאינו בחבילה התוכנה בונה אותו.
 class LibraryImportReport extends Equatable {
   const LibraryImportReport({required this.imported, required this.missing});
 

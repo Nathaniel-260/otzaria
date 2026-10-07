@@ -842,13 +842,12 @@ String _missingRemedy(BuildContext context, LibraryComponent component) {
     LibraryComponent.catalog =>
       DatabaseConstants.externalCatalogArchiveFileName,
     LibraryComponent.lexicon => DatabaseConstants.lexicalDatabaseFileName,
-    LibraryComponent.searchIndex => null,
+    LibraryComponent.searchIndex => throw ArgumentError.value(
+      component,
+      'component',
+      'האינדקס נבנה בתוכנה ואינו מדווח כחסר',
+    ),
   };
-  if (file == null) {
-    return context.settingsText(
-      'התוכנה תבנה את אינדקס החיפוש; עד לסיום הבנייה החיפוש בספרים לא יפעל במלואו',
-    );
-  }
   return context.settingsText(
     'יורד אוטומטית בבדיקת העדכונים הבאה כשיש חיבור לאינטרנט, או שניתן להוסיף את {file} לתיקייה ולייבא שוב',
     args: {'file': file},
@@ -863,6 +862,7 @@ class _ComponentRow extends StatelessWidget {
     required this.present,
     this.detailLtr = false,
     this.required = false,
+    this.neutral = false,
   });
 
   final String label;
@@ -870,6 +870,9 @@ class _ComponentRow extends StatelessWidget {
   final bool present;
   final bool detailLtr;
   final bool required;
+
+  /// לא נמצא, אך התוכנה תשלים אותו בעצמה.
+  final bool neutral;
 
   @override
   Widget build(BuildContext context) {
@@ -882,6 +885,8 @@ class _ComponentRow extends StatelessWidget {
           Icon(
             present
                 ? FluentIcons.checkmark_circle_24_regular
+                : neutral
+                ? FluentIcons.info_24_regular
                 : required
                 ? FluentIcons.error_circle_24_regular
                 : FluentIcons.dismiss_circle_24_regular,
@@ -954,6 +959,7 @@ class _SourceComponents extends StatelessWidget {
                     detail: _missingConsequence(context, component),
                     present: false,
                     required: component == LibraryComponent.libraryDb,
+                    neutral: component == LibraryComponent.searchIndex,
                   ),
             ],
           ),

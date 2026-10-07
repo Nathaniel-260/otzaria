@@ -851,9 +851,11 @@ class EmptyLibraryBloc extends Bloc<EmptyLibraryEvent, EmptyLibraryState> {
               ? null
               : LibraryImportReport(
                   imported: imported,
+                  // האינדקס נבנה בתוכנה כשאינו בחבילה, ולכן אינו רכיב חסר.
                   missing: {
                     for (final component in LibraryComponent.values)
-                      if (!imported.contains(component) &&
+                      if (component != LibraryComponent.searchIndex &&
+                          !imported.contains(component) &&
                           !present!.contains(component))
                         component,
                   },

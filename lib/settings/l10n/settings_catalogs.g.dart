@@ -557,7 +557,6 @@ const Map<String, Map<String, String>> kSettingsCatalogs = {
     'התוכנה יכולה להתחבר לרשת': 'Otzaria can access the internet',
     'התוכנה מנותקת לגמרי מהרשת': 'Otzaria is fully disconnected from the internet',
     'התוכנה תבנה את אינדקס החיפוש אחרי ההתקנה': 'The app will build the search index after installation',
-    'התוכנה תבנה את אינדקס החיפוש; עד לסיום הבנייה החיפוש בספרים לא יפעל במלואו': 'The app will build the search index; until it finishes, searching the books will not fully work',
     'התוכנה תשתמש בצבעים בהירים': 'The system will use light colors',
     'התוכנה תשתמש בצבעים כהים': 'The system will use dark colors',
     'התוכנה תתאים את המראה באופן אוטומטי להגדרות מערכת ההפעלה': 'Otzaria will match your system\'s theme automatically',

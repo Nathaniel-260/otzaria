@@ -473,6 +473,7 @@ void main() {
       expect(find.text('הותקנו'), findsOneWidget);
       expect(find.text('חסרים'), findsOneWidget);
       expect(find.text('ספריית הספרים (seforim.db)'), findsOneWidget);
+      expect(find.text('אינדקס חיפוש'), findsNothing);
       expect(
         find.textContaining(DatabaseConstants.talmudBavliArchiveFileName),
         findsOneWidget,

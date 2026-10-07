@@ -257,7 +257,6 @@
   "חיפוש בספריות נוספות לא יפעל": "Searching additional libraries will not work",
   "החיפוש המקורב לא יפעל (ייעשה שימוש בחיפוש רגיל)": "Approximate search will not work (regular search will be used)",
   "התוכנה תבנה את אינדקס החיפוש אחרי ההתקנה": "The app will build the search index after installation",
-  "התוכנה תבנה את אינדקס החיפוש; עד לסיום הבנייה החיפוש בספרים לא יפעל במלואו": "The app will build the search index; until it finishes, searching the books will not fully work",
   "יורד אוטומטית בבדיקת העדכונים הבאה כשיש חיבור לאינטרנט, או שניתן להוסיף את {file} לתיקייה ולייבא שוב": "Downloaded automatically at the next update check when online, or add {file} to the folder and import again",
   "מה נמצא בתיקייה": "Found in the Folder",
   "לא נמצא בתיקייה — יישמר מהספרייה הנוכחית": "Not in the folder — kept from the current library",
