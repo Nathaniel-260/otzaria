@@ -6,6 +6,7 @@ import 'package:otzaria/app_report/models/app_report_minidump.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/widgets/controls/action_buttons.dart';
 import 'package:otzaria/widgets/misc/app_selection_area.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 
 /// תצוגה מקדימה של מה שיישלח: מפת האבחון וקטע יומן השגיאות, כל אחד עם
 /// תיבת סימון להחרגה. הטקסטים טכניים ולכן מוצגים LTR.
@@ -99,7 +100,7 @@ class _AppReportPreviewSectionState extends State<AppReportPreviewSection> {
               ? (value) => widget.onErrorLogChanged(value ?? false)
               : null,
           title: _AttachmentTitle(
-            icon: FluentIcons.document_bullet_list_24_regular,
+            icon: OtzariaIcons.document_bullet_list_24_filled,
             label: 'לצרף קטע מיומן השגיאות',
           ),
           subtitle: (errorLog?.isEmpty ?? true)
