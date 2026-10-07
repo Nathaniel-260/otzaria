@@ -161,6 +161,28 @@ void main() {
     );
   });
 
+  test('שולחן פעיל אינו מבטל את העברת הכרטיסיות (issue #2049)', () async {
+    final workspaces = await Hive.openBox<dynamic>('workspaces');
+    await workspaces.put('key-workspaces', [
+      {'id': 'w1', 'name': 'שולחן'},
+    ]);
+    await workspaces.put('key-current-workspace-id', 'w1');
+    await workspaces.close();
+    final tabs = await Hive.openBox<dynamic>('tabs');
+    await tabs.put('key-tabs', [
+      {'type': 'text', 'title': 'א'},
+    ]);
+    await tabs.close();
+
+    await migration.run();
+
+    final main = (await WindowSessionStore(
+      database: db,
+    ).load(UserStateSlot.single))!;
+    expect(jsonDecode(main.tabsJson), hasLength(1));
+    expect(main.activeWorkspaceId, 'w1');
+  });
+
   test('ללא קובצי Hive — לא קורה דבר', () async {
     expect(await migration.run(), 0);
   });
