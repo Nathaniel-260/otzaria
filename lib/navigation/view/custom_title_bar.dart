@@ -155,41 +155,32 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   /// בודק אם הנקודה הגלובלית פוגעת ברכיב של שורת הטאבים — טאב או חץ גלילה
   /// (מסומן ב-[_kTabHitMarker]). משמש כדי לדלג על maximize בלחיצה כפולה עליהם,
   /// בלי להסתמך על gesture arena.
-  bool _hitTestTab(BuildContext context, Offset globalPosition) {
-    final result = HitTestResult();
-    WidgetsBinding.instance.hitTestInView(
-      result,
-      globalPosition,
-      View.of(context).viewId,
-    );
-    for (final entry in result.path) {
-      final target = entry.target;
-      if (target is RenderMetaData && target.metaData == _kTabHitMarker) {
-        return true;
-      }
-    }
-    return false;
-  }
+  bool _hitTestTab(BuildContext context, Offset globalPosition) =>
+      _hitTestMarker(context, globalPosition, _kTabHitMarker);
 
   /// בודק אם הנקודה הגלובלית פוגעת בכפתור הסגירה של טאב (מסומן ב-
   /// [_kTabCloseButtonHitMarker]). משמש כדי שלחיצה על ה-X לא תבחר את הטאב
   /// ב-onPointerDown — בחירה שם גורמת ל-rebuild שמשמיד את ה-IconButton
   /// לפני שה-onPressed שלו יורה, כך שהטאב מתחלף במקום להיסגר.
-  bool _hitTestCloseButton(BuildContext context, Offset globalPosition) {
+  bool _hitTestCloseButton(BuildContext context, Offset globalPosition) =>
+      _hitTestMarker(context, globalPosition, _kTabCloseButtonHitMarker);
+
+  /// האם הנקודה הגלובלית פוגעת ב-[RenderMetaData] שסומן ב-[marker].
+  bool _hitTestMarker(
+    BuildContext context,
+    Offset globalPosition,
+    String marker,
+  ) {
     final result = HitTestResult();
     WidgetsBinding.instance.hitTestInView(
       result,
       globalPosition,
       View.of(context).viewId,
     );
-    for (final entry in result.path) {
-      final target = entry.target;
-      if (target is RenderMetaData &&
-          target.metaData == _kTabCloseButtonHitMarker) {
-        return true;
-      }
-    }
-    return false;
+    return result.path
+        .map((entry) => entry.target)
+        .whereType<RenderMetaData>()
+        .any((target) => target.metaData == marker);
   }
 
   /// maximize/restore בלחיצה כפולה על האזור הריק שבשורת הטאבים (כמו DragToMoveArea).
