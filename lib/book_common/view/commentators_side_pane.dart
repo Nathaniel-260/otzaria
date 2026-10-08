@@ -1,3 +1,4 @@
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/widgets/navigation/nav_panel_search.dart';
 import 'package:otzaria/widgets/navigation/nav_side_panel.dart';
@@ -34,11 +35,11 @@ class CommentatorsSidePane extends StatelessWidget {
             (
               icon: OtzariaIcons.apps_list_24_regular,
               iconFilled: OtzariaIcons.apps_list_24_filled,
-              label: 'מפרשים',
+              label: 'סינון מפרשים',
             ),
             (
-              icon: OtzariaIcons.search_24_regular,
-              iconFilled: OtzariaIcons.search_24_filled,
+              icon: FluentIcons.search_24_regular,
+              iconFilled: FluentIcons.search_24_filled,
               label: 'חיפוש',
             ),
           ],
