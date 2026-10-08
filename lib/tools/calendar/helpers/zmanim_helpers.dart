@@ -66,7 +66,12 @@ ZmanimCalendarContext buildZmanimCalendarContextForCoordinates(
 /// מחשב את כל הזמנים ההלכתיים הרלוונטיים ליום נתון ועיר נתונה, לפי
 /// ה-[kZmanimRegistry]. הרישום הוא מקור-האמת היחיד — כל זמן מחושב פעם
 /// אחת מתוך פונקציית החישוב שלו, ונשמר תחת מזהה ההגדרה.
-Map<String, String> calculateDailyTimes(DateTime date, String city) {
+/// [only] מגביל את החישוב למזהים אלה בלבד (כ-100 זמנים בחישוב מלא).
+Map<String, String> calculateDailyTimes(
+  DateTime date,
+  String city, {
+  Set<String>? only,
+}) {
   final context = buildZmanimCalendarContext(date, city);
   if (context == null) return {};
   return _computeDailyTimes(
@@ -74,6 +79,7 @@ Map<String, String> calculateDailyTimes(DateTime date, String city) {
     date: date,
     city: city,
     inIsrael: isCityInIsrael(city),
+    only: only,
   );
 }
 
@@ -109,6 +115,7 @@ Map<String, String> _computeDailyTimes({
   required DateTime date,
   required String city,
   required bool inIsrael,
+  Set<String>? only,
 }) {
   final zmanimCalendar = context.zmanimCalendar;
   final tzLocation = context.tzLocation;
@@ -125,6 +132,7 @@ Map<String, String> _computeDailyTimes({
 
   final Map<String, String> times = {};
   for (final def in kZmanimRegistry) {
+    if (only != null && !only.contains(def.id)) continue;
     if (def.isRelevant != null && !def.isRelevant!(jewishCalendar)) continue;
     DateTime? dt;
     try {
@@ -147,7 +155,8 @@ Map<String, String> _computeDailyTimes({
   }
 
   // ספירת העומר מוצגת ככפתור ייעודי (לא ככרטיס זמן), ולכן מחושבת בנפרד.
-  if (jewishCalendar.getDayOfOmer() != -1) {
+  if ((only == null || only.contains('omerCounting')) &&
+      jewishCalendar.getDayOfOmer() != -1) {
     final omer = zmanimCalendar.getTzais();
     if (omer != null) {
       times['omerCounting'] = formatZmanTime(omer, tzLocation);
