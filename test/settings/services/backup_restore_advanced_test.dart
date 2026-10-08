@@ -391,6 +391,27 @@ void main() {
       expect(restored.first.content, 'תוכן ההערה');
     });
 
+    test('הערות רבות משוחזרות בכתיבה מרוכזת אחת', () async {
+      final db = PersonalNotesDatabase.instance;
+      for (var i = 0; i < 3; i++) {
+        await db.insertNote(buildNote(id: 'note-$i', bookId: 'ספר-${i % 2}'));
+      }
+      final backup = await createBackup(notes: true);
+      for (var i = 0; i < 3; i++) {
+        await db.deleteNote('note-$i');
+      }
+
+      final before = db.revision.value;
+      await BackupService.restoreFromBackup(backup.path);
+
+      expect(db.revision.value - before, 1, reason: 'כתיבה אחת לכל ההערות');
+      expect((await db.loadNotes('ספר-0')).map((n) => n.id), [
+        'note-0',
+        'note-2',
+      ]);
+      expect((await db.loadNotes('ספר-1')).map((n) => n.id), ['note-1']);
+    });
+
     test('"שמור וזכור": מפתחות sz משוחזרים', () async {
       await box.put('sz:progress_by_id', '{"1":{"1":{"learn":true}}}');
       final backup = await createBackup(shamorZachor: true);
