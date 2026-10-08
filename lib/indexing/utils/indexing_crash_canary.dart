@@ -9,22 +9,37 @@ class IndexingCrashedBefore implements Exception {
   String toString() => 'אינדוקס הספר הפיל את התוכנה פעמיים ברצף; הספר דולג';
 }
 
-/// הספרים שבאמצע אינדוקס, בקובץ שנותר רק כשהתהליך מת באמצע הריצה.
+/// מוני קריסות של ספרים שבאינדוקס וחסימות שטרם נחתמו באינדקס.
 class IndexingCrashCanary {
   IndexingCrashCanary._(this._file) : _attempts = _read(_file);
 
   /// הריצה הפעילה; סגירה מסודרת של התוכנה מסיימת אותה ([finish]).
   static IndexingCrashCanary? current;
 
-  static void start(String? indexPath) => current = indexPath == null
-      ? null
-      : IndexingCrashCanary._(File('$indexPath.in_flight.json'));
+  static void start(
+    String? indexPath, {
+    Iterable<String> Function()? pendingKeys,
+  }) {
+    current = indexPath == null
+        ? null
+        : IndexingCrashCanary._(File('$indexPath.in_flight.json'));
+    final canary = current;
+    if (canary != null && canary.recovering && pendingKeys != null) {
+      final keys = pendingKeys().toSet();
+      final previousCount = canary._attempts.length;
+      canary._attempts.removeWhere((key, _) => !keys.contains(key));
+      if (canary._attempts.length != previousCount) canary._write();
+    }
+  }
+
+  static const finishRequest = 'finishIndexingCrashCanary';
 
   static const maxAttempts = 2;
 
   final File _file;
   final Map<String, int> _attempts;
   final Set<String> _inFlight = {};
+  final Set<String> _skipped = {};
   RandomAccessFile? _raf;
 
   /// ריצה קודמת מתה באמצע: מאנדקסים ספר-ספר, כדי שרק האשם ייספר.
@@ -38,11 +53,11 @@ class IndexingCrashCanary {
     }
   }
 
-  /// false לספר שכבר הפיל [maxAttempts] ריצות; המונה שלו מתאפס.
+  /// false לספר שכבר הפיל [maxAttempts] ריצות; החסימה נשמרת עד commit.
   bool begin(String key) {
     final attempts = _attempts[key] ?? 0;
     if (attempts >= maxAttempts) {
-      end(key);
+      _skipped.add(key);
       return false;
     }
     if (_inFlight.add(key)) {
@@ -53,8 +68,26 @@ class IndexingCrashCanary {
   }
 
   void end(String key) {
-    _inFlight.remove(key);
+    if (_skipped.contains(key)) return;
+    if (!_inFlight.remove(key)) return;
     if (_attempts.remove(key) != null) _write();
+  }
+
+  /// רק דילוגים שנחתמו באינדקס יכולים לאבד את חסימת הקריסה.
+  void committed(Set<String> indexedKeys) {
+    if (_skipped.isEmpty) return;
+    final saved = _skipped.where(indexedKeys.contains).toList();
+    if (saved.isEmpty) return;
+    saved.forEach(_attempts.remove);
+    _skipped.removeAll(saved);
+    _write();
+  }
+
+  /// מנקה רק ספרים שה-reader קרא מהאינדקס החתום בדיסק.
+  void forgetIndexed(Iterable<String> committedKeys) {
+    final previousCount = _attempts.length;
+    committedKeys.forEach(_attempts.remove);
+    if (_attempts.length != previousCount) _write();
   }
 
   /// הריצה הסתיימה (או התוכנה נסגרה) בלי שהתהליך מת — מה שבטיסה לא הפיל אותו.
@@ -63,6 +96,7 @@ class IndexingCrashCanary {
     _inFlight.toList().forEach(end);
     try {
       _raf?.closeSync();
+      _raf = null;
     } catch (_) {}
   }
 

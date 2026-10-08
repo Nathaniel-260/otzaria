@@ -14,6 +14,7 @@ import 'package:otzaria/core/windowing/window_manager_app_window_controller.dart
 import 'package:otzaria/core/windowing/last_active_window.dart';
 import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/core/windowing/window_bus.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/core/user_state/user_state_database.dart';
 import 'package:otzaria/data/data_providers/cache_database_holder.dart';
 import 'package:otzaria/data/data_providers/sqlite_data_provider.dart';
@@ -293,10 +294,8 @@ class AppWindowListener extends WindowListener {
       // לכן הוא רץ אחרי האישור ולפני חימושו.
       await prepareUpdateForClose?.call();
 
-      // כמה חלונות יכולים להיסגר יחד בלי ששום חלון יריץ כיבוי תהליך;
-      // מנקים canaries לפני ההכרעה מי האחרון כדי שלא יישארו בטעות.
+      // סגירת חלון מנקה את מעקב התוספים והאתחול של ה-isolate שלו.
       PluginCrashGuard.markCleanShutdownSync();
-      IndexingCrashCanary.current?.finish();
       StartupCrashCounter.markStableSync();
 
       // מכריעים פעם אחת: ספירה חוזרת אחרי ה-flush עלולה להשלים חצי כיבוי.
@@ -344,6 +343,17 @@ class AppWindowListener extends WindowListener {
       _armForceExitWatchdog,
       timeout: const Duration(seconds: 1),
     );
+
+    IndexingCrashCanary.current?.finish();
+    final owner = WindowBus.instance.ownerPort;
+    if (WindowRole.isSecondary && owner != null) {
+      // האינדוקס ממשיך ב-isolate הראשי גם כשהחלון שלו מוסתר.
+      await WindowBus.instance.requestPort(
+        owner,
+        const {'type': IndexingCrashCanary.finishRequest},
+        timeout: const Duration(seconds: 1),
+      );
+    }
 
     // סוגרים את כל ה-HTTP clients המתמשכים לפני כל ניקוי אחר. כל socket
     // פתוח מחזיק handle של kernel + state של TLS; ב-Windows admin install

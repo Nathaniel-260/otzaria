@@ -396,7 +396,6 @@ class IndexingRepository {
     }
 
     _tantivyDataProvider.isIndexing.value = true;
-    IndexingCrashCanary.start(_tantivyDataProvider.activeIndexPath);
     bool cancelled = false;
     // כשל כתיבה מרוקן את חוצץ ה-writer; commit אחריו היה חותם מצב חלקי.
     bool writeBufferDiscarded = false;
@@ -404,12 +403,7 @@ class IndexingRepository {
 
     // חילוץ ה-PDF איטי בסדר גודל מאינדוקס ספר טקסט, ולכן חילוצי ה-PDF הבאים
     // רצים מראש ברקע בזמן שהמנוע מאנדקס את הספרים שלפניהם.
-    final prefetcher = PdfExtractionPrefetcher(
-      extract: extractPdfPagesGuarded,
-      maxInFlight: IndexingCrashCanary.current?.recovering ?? false
-          ? 0
-          : PdfExtractionPrefetcher.defaultMaxInFlight,
-    );
+    PdfExtractionPrefetcher? prefetcher;
     var processedBooks = 0;
     var actuallyIndexed = 0;
     var indexedSinceCommit = 0;
@@ -418,6 +412,31 @@ class IndexingRepository {
     final failures = <IndexingFailure>[];
 
     try {
+      IndexingCrashCanary.start(
+        _tantivyDataProvider.activeIndexPath,
+        pendingKeys: () =>
+            (includePdfBooks
+                    ? allBooks
+                    : booksForIndexing(
+                        library.getIndexableBooks(),
+                        includePdfBooks: true,
+                        hidden: hiddenStore.load(),
+                        library: library,
+                      ))
+                .map(buildIndexedBookFilePath),
+      );
+      final canary = IndexingCrashCanary.current;
+      if (canary?.recovering ?? false) {
+        canary!.forgetIndexed(
+          await (await _tantivyDataProvider.engine).getIndexedFilePaths(),
+        );
+      }
+      prefetcher = PdfExtractionPrefetcher(
+        extract: extractPdfPagesGuarded,
+        maxInFlight: IndexingCrashCanary.current?.recovering ?? false
+            ? 0
+            : PdfExtractionPrefetcher.defaultMaxInFlight,
+      );
       final catalogueOrder = buildCatalogueOrderResolver(library);
       await Future.wait([
         GenerationCache.instance.warmUp(),
@@ -603,6 +622,9 @@ class IndexingRepository {
               ..start();
             final index = await _tantivyDataProvider.engine;
             await index.commit();
+            IndexingCrashCanary.current?.committed(
+              _tantivyDataProvider.indexedFilePaths,
+            );
             debugPrint(
               '💾 commit אחרי $indexedSinceCommit ספרים: ${commitStopwatch.elapsedMilliseconds}ms',
             );
@@ -668,6 +690,9 @@ class IndexingRepository {
           ..reset()
           ..start();
         await index.commit();
+        IndexingCrashCanary.current?.committed(
+          _tantivyDataProvider.indexedFilePaths,
+        );
         debugPrint('💾 commit סופי: ${commitStopwatch.elapsedMilliseconds}ms');
         _stampCatalogueOrderAfterCommit();
         final optimizeStopwatch = Stopwatch()..start();
@@ -682,11 +707,14 @@ class IndexingRepository {
         // וההתקדמות נעצרת במכפלות של סף ה-commit.
         final index = await _tantivyDataProvider.engine;
         await index.commit();
+        IndexingCrashCanary.current?.committed(
+          _tantivyDataProvider.indexedFilePaths,
+        );
         debugPrint('💾 commit אחרי ביטול: $indexedSinceCommit ספרים');
         _stampCatalogueOrderAfterCommit();
       }
     } finally {
-      prefetcher.dispose();
+      prefetcher?.dispose();
       IndexingCrashCanary.current?.finish();
       _tantivyDataProvider.isIndexing.value = false;
       await LibraryLineSource.reportLibraryFallbacks();
@@ -801,15 +829,15 @@ class IndexingRepository {
     void Function()? onActualIndexingStarted,
     Future<PdfExtraction>? preExtracted,
   }) async {
-    // preExtracted — חילוץ שהוזנק מראש (prefetch) בזמן שהספרים הקודמים
-    // אונדקסו; בהיעדרו מחלצים כאן. שני המסלולים עוברים דרך העטיפה
-    // ששומרת את השגיאה בתוצאה, כדי שסמנטיקת ה-sidecar/הפצת-שגיאה תישאר
-    // זהה.
+    // חילוץ מוקדם וישיר שומרים שגיאות בתוצאה; חסימת קריסה חלה גם על OCR.
     final extracted = await (preExtracted ?? extractPdfPagesGuarded(book));
     final pages = extracted.pages;
     final outline = extracted.outline;
     final openError = extracted.error;
     final openStackTrace = extracted.stackTrace;
+    if (openError is IndexingCrashedBefore) {
+      Error.throwWithStackTrace(openError, openStackTrace!);
+    }
 
     if (openError != null) {
       debugPrint('❌ שגיאה בפתיחת PDF לאינדוקס: ${book.title}: $openError');
@@ -1908,6 +1936,9 @@ class IndexingRepository {
         final index = await _tantivyDataProvider.engine;
         final commitStopwatch = Stopwatch()..start();
         await index.commit();
+        IndexingCrashCanary.current?.committed(
+          _tantivyDataProvider.indexedFilePaths,
+        );
         debugPrint('💾 commit: ${commitStopwatch.elapsedMilliseconds}ms');
         _stampCatalogueOrderAfterCommit();
       } else if (shouldCommitCancelledRun(
@@ -1917,6 +1948,9 @@ class IndexingRepository {
         // בלי commit בביטול, כל הספרים שבריצה הזו אבדים ויאונדקסו מאפס.
         final index = await _tantivyDataProvider.engine;
         await index.commit();
+        IndexingCrashCanary.current?.committed(
+          _tantivyDataProvider.indexedFilePaths,
+        );
         debugPrint('💾 commit אחרי ביטול: $actuallyIndexed ספרים');
         _stampCatalogueOrderAfterCommit();
       }
