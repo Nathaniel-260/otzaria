@@ -333,6 +333,8 @@ class CopyUtils {
       if (lastHeaderByLevel.containsKey(2)) break;
 
       final line = content[i];
+      // שורה ריקה היא placeholder של תוכן שלא נטען; עדיף הנתיב המלא מה-TOC.
+      if (line.isEmpty) return '';
       for (final match in hTag.allMatches(line).toList().reversed) {
         try {
           final level = int.parse(match.group(1)!);
