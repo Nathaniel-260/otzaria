@@ -2957,9 +2957,9 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
     _activeLinksTargetBookTitlesSignature =
         event.targetBookTitlesSignature ?? _allTargetBookTitlesSignature;
 
-    // טעינת דורות הספרים מראש למטמון, כדי שתפריט ההקשר יוכל למיין
-    // את הקישורים לפי סדר הדורות באופן סינכרוני.
-    _preloadLinkEras(processedLinks.links);
+    // טעינת דורות הספרים מראש למטמון, כדי שתפריט ההקשר יוכל למיין סינכרונית.
+    // רק החלון החדש: הקישורים שנצברו נטענו באירועים קודמים.
+    _preloadLinkEras(event.links.cast<Link>());
   }
 
   /// טוען מראש את דורות ספרי היעד של הקישורים הרגילים (לא מפרשים)
