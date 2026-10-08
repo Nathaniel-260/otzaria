@@ -102,6 +102,27 @@ void main() {
       expect(result.errors, hasLength(1));
       expect(result.errors.single, contains('לא-קיים.txt'));
     });
+
+    test('העתקה שנכשלה אינה משאירה קובץ בתיקיית הייבוא', () async {
+      final missing = p.join(sourceDir.path, 'ספר.pdf');
+
+      final result = await service.copyFiles([missing]);
+
+      expect(result.errors, hasLength(1));
+      expect(Directory(importPath).listSync(), isEmpty);
+    });
+
+    test('העתקה שנכשלה אינה פוגעת בגרסה הקודמת של הספר', () async {
+      final existing = File(p.join(importPath, 'ספר.pdf'));
+      await existing.create(recursive: true);
+      await existing.writeAsString('גרסה קודמת');
+      final missing = p.join(sourceDir.path, 'ספר.pdf');
+
+      final result = await service.copyFiles([missing]);
+
+      expect(result.errors, hasLength(1));
+      expect(existing.readAsStringSync(), 'גרסה קודמת');
+    });
   });
 
   group('listImportedFiles', () {
