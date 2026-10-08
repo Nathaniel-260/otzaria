@@ -514,24 +514,6 @@ class SeforimRepository {
     );
   }
 
-  Future<List<Book>> searchBooksByAuthor(String authorName) async {
-    final books = await _database.bookDao.getBooksByAuthor(authorName);
-    return Future.wait(
-      books.map((bookData) async {
-        final authors = await _getBookAuthors(bookData.id);
-        final topics = await _getBookTopics(bookData.id);
-        final pubPlaces = await _getBookPubPlaces(bookData.id);
-        final pubDates = await _getBookPubDates(bookData.id);
-        return bookData.copyWith(
-          authors: authors,
-          topics: topics,
-          pubPlaces: pubPlaces,
-          pubDates: pubDates,
-        );
-      }),
-    );
-  }
-
   // Get all authors for a book
   Future<List<Author>> _getBookAuthors(int bookId) async {
     if (!(await _capabilities).hasAuthors) return const [];
@@ -1192,10 +1174,6 @@ class SeforimRepository {
 
   // --- Lines ---
 
-  Future<Line?> getLine(int id) async {
-    return await _database.lineDao.getLineById(id);
-  }
-
   Future<Line?> getLineByIndex(int bookId, int lineIndex) async {
     return await _database.lineDao.selectByBookIdAndIndex(bookId, lineIndex);
   }
@@ -1565,10 +1543,6 @@ class SeforimRepository {
     await _database.docxTextCacheDao.upsert(entry);
   }
 
-  Future<void> deleteDocxTextCacheEntry(String filePath) async {
-    await _database.docxTextCacheDao.deleteByFilePath(filePath);
-  }
-
   Future<void> touchDocxTextCacheEntry(String filePath, int accessedAt) async {
     await _database.docxTextCacheDao.updateAccessedAt(filePath, accessedAt);
   }
@@ -1644,11 +1618,6 @@ class SeforimRepository {
     );
 
     return _database.tocDao.insertTocEntry(entryWithTextId);
-  }
-
-  Future<void> updateTocEntryLineId(int tocEntryId, int lineId) async {
-    _invalidateTocCache();
-    await _database.tocDao.updateLineId(tocEntryId, lineId);
   }
 
   /// Bulk update TOC entries hasChildren flag
@@ -2403,97 +2372,6 @@ extension BookAcronymRepository on SeforimRepository {
       term,
       limit: limit,
     );
-  }
-
-  /// Searches for books by title or acronym for reference finding.
-  /// Returns a list of maps containing book info and TOC entries.
-  ///
-  /// [query] - The search query (book name or acronym)
-  /// [limit] - Maximum number of results to return
-  Future<List<Map<String, dynamic>>> searchBooksForReference(
-    String query, {
-    int limit = 100,
-  }) async {
-    if (query.isEmpty) return [];
-    final capabilities = await _capabilities;
-    if (!capabilities.hasBooks) return [];
-    final categoryColumn = capabilities.hasBookCategories
-        ? 'b.categoryId'
-        : '0 AS categoryId';
-
-    final db = await _database.database;
-    final results = <Map<String, dynamic>>[];
-    final seenBookIds = <int>{};
-
-    // Normalize query for matching
-    final normalizedQuery = query.trim().toLowerCase();
-    final queryPattern = '%$normalizedQuery%';
-
-    // 1. Search by book title (LIKE search)
-    final titleResults = db.select(
-      capabilities.adaptBookQuery('''
-        SELECT b.id, b.title, $categoryColumn
-        FROM book b
-        WHERE LOWER(b.title) LIKE ?
-        ORDER BY 
-          CASE WHEN LOWER(b.title) = ? THEN 0
-               WHEN LOWER(b.title) LIKE ? THEN 1
-               ELSE 2 END,
-          b.orderIndex
-        LIMIT ?
-      '''),
-      [queryPattern, normalizedQuery, '$normalizedQuery%', limit],
-    ).toMapList();
-
-    for (final row in titleResults) {
-      final bookId = row['id'] as int;
-      if (seenBookIds.add(bookId)) {
-        results.add({
-          'bookId': bookId,
-          'title': row['title'] as String,
-          'categoryId': row['categoryId'] as int,
-          'filePath': row['filePath'] as String? ?? '',
-          'fileType': row['fileType'] as String? ?? 'txt',
-          'matchType': 'title',
-        });
-      }
-    }
-
-    // 2. Search by acronym
-    final acronymResults = !capabilities.hasAcronyms
-        ? const <Map<String, dynamic>>[]
-        : db.select(
-            capabilities.adaptBookQuery('''
-        SELECT DISTINCT b.id, b.title, $categoryColumn, ba.term
-        FROM book_acronym ba
-        JOIN book b ON ba.bookId = b.id
-        WHERE LOWER(ba.term) LIKE ?
-        ORDER BY 
-          CASE WHEN LOWER(ba.term) = ? THEN 0
-               WHEN LOWER(ba.term) LIKE ? THEN 1
-               ELSE 2 END,
-          b.orderIndex
-        LIMIT ?
-      '''),
-            [queryPattern, normalizedQuery, '$normalizedQuery%', limit],
-          ).toMapList();
-
-    for (final row in acronymResults) {
-      final bookId = row['id'] as int;
-      if (seenBookIds.add(bookId)) {
-        results.add({
-          'bookId': bookId,
-          'title': row['title'] as String,
-          'categoryId': row['categoryId'] as int,
-          'filePath': row['filePath'] as String? ?? '',
-          'fileType': row['fileType'] as String? ?? 'txt',
-          'matchType': 'acronym',
-          'matchedTerm': row['term'] as String,
-        });
-      }
-    }
-
-    return results.take(limit).toList();
   }
 
   /// Gets TOC entries for a book that match a reference query.

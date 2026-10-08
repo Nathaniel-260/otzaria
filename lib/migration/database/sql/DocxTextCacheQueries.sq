@@ -29,10 +29,6 @@ UPDATE docx_text_cache
 SET accessedAt = ?
 WHERE filePath = ?;
 
-deleteByFilePath:
-DELETE FROM docx_text_cache
-WHERE filePath = ?;
-
 deleteAccessedBefore:
 DELETE FROM docx_text_cache
 WHERE accessedAt < ?;
