@@ -930,7 +930,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   ) {
     final newConfig = state.configuration.copyWith(
       currentFacets: event.facets,
-      searchScopeFacets: event.facets,
+      searchScopeFacets: event.keepScope ? null : event.facets,
     );
     emit(state.copyWith(configuration: newConfig));
   }

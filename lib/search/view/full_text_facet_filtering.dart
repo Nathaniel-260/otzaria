@@ -116,7 +116,15 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
     } else {
       categories.add(facet);
     }
-    _dispatchCategoriesWithDimensions(searchBloc, categories, dimensionFacets);
+    if (categories.isEmpty) {
+      categories.addAll(FacetHelper.categoryFacetsOf(state.searchScopeFacets));
+    }
+    _dispatchCategoriesWithDimensions(
+      searchBloc,
+      categories,
+      dimensionFacets,
+      keepScope: true,
+    );
   }
 
   void _setFacet(BuildContext context, String facet) {
@@ -153,20 +161,24 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       searchBloc,
       categories,
       dimensionFacets,
+      keepScope: true,
     );
   }
 
-  /// שולח בחירת קטגוריות חדשה יחד עם ה-facets הממדיים הפעילים, ומריץ את
-  /// החיפוש מחדש דרך המנוע (הממדים חייבים להגיע למנוע — סינון מקומי לפי
-  /// קטגוריות היה מתעלם מהם).
+  /// שולח קטגוריות יחד עם הממדים הפעילים ומריץ מחדש דרך המנוע: סינון מקומי
+  /// לפי קטגוריות היה מתעלם מהממדים.
   void _dispatchCategoriesWithDimensions(
     SearchBloc searchBloc,
     List<String> categories,
-    List<String> dimensionFacets,
-  ) {
+    List<String> dimensionFacets, {
+    bool keepScope = false,
+  }) {
     final effectiveCategories = categories.isEmpty ? const ['/'] : categories;
     searchBloc.add(
-      SetFacetsWithoutSearch([...effectiveCategories, ...dimensionFacets]),
+      SetFacetsWithoutSearch([
+        ...effectiveCategories,
+        ...dimensionFacets,
+      ], keepScope: keepScope),
     );
     searchBloc.add(const RerunSearch());
   }
