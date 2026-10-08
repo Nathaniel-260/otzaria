@@ -139,12 +139,6 @@ class SettingsSearchEntry {
     }
     return buffer.toString().replaceAll(RegExp(r'\s+'), ' ').trim();
   }
-
-  /// טקסט החיפוש המנורמל לאותה הגדרה (משמש להשוואה).
-  String get normalizedSearchText =>
-      '${normalize(titleIn(SettingsLanguage.source))} '
-      '${normalize(subtitleIn(SettingsLanguage.source))} '
-      '${keywords.map(normalize).join(' ')}';
 }
 
 /// טקסטי פריט חיפוש בשפה אחת, אחרי [SettingsSearchEntry.normalize].

@@ -1992,13 +1992,6 @@ class PluginExtendedValidator {
     );
   }
 
-  /// הסלקטור של הכלל שבתוכו נמצא ההיסט — לחריגים תלויי-סלקטור בסריקת ה-CSS.
-  /// (סריקה טקסטואלית: נסוגים אל ה-'{' הפותח, והסלקטור הוא מה שלפניו עד סוף
-  ///  הכלל/הבלוק הקודם.)
-  @visibleForTesting
-  static String selectorAtOffset(String css, int index) =>
-      _selectorAtOffset(css, index);
-
   static String _selectorAtOffset(String css, int index) {
     final open = css.lastIndexOf('{', index);
     if (open <= 0) return '';

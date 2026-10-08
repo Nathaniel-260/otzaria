@@ -24,7 +24,7 @@ class SettingsSearchNavigationRequest {
 /// - כל SettingsAnchor מרשם את ה-GlobalKey שלו במפה לפי cardId.
 /// - תוצאות חיפוש שולחות navigateToEntry → מתעדכן _pendingRequest.
 /// - מסך ההגדרות מאזין ומעביר ל-tab המתאים, ואז קורא scrollAndHighlight.
-/// - SettingsAnchor מאזין ל-_highlightedCardId ומפעיל אנימציית הבזק כשמותאם.
+/// - SettingsAnchor מאזין ל-notifier של הכרטיס ומפעיל אנימציית הבזק.
 class SettingsSearchRegistry extends ChangeNotifier {
   SettingsSearchRegistry._();
   static final SettingsSearchRegistry instance = SettingsSearchRegistry._();
@@ -35,9 +35,6 @@ class SettingsSearchRegistry extends ChangeNotifier {
 
   SettingsSearchNavigationRequest? _pendingRequest;
   SettingsSearchNavigationRequest? get pendingRequest => _pendingRequest;
-
-  String? _highlightedCardId;
-  String? get highlightedCardId => _highlightedCardId;
 
   /// רישום אנכור על ידי SettingsAnchor (קריאה מ-initState).
   void registerAnchor(String cardId, GlobalKey key) {
@@ -114,13 +111,11 @@ class SettingsSearchRegistry extends ChangeNotifier {
       return;
     }
 
-    _highlightedCardId = cardId;
     final notifier = _flashNotifiers[cardId];
     if (notifier != null) {
       notifier.value = true;
       await Future.delayed(const Duration(milliseconds: 1400));
       notifier.value = false;
     }
-    _highlightedCardId = null;
   }
 }
