@@ -33,6 +33,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   final HiddenLibraryStore hiddenStore;
 
   int _searchGeneration = 0;
+  SearchBooks? _lastSearch;
 
   /// העץ שהממשק מציג — בלי מה שהמשתמש הסתיר (issue #1448).
   ///
@@ -141,6 +142,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     Emitter<LibraryState> emit,
   ) async {
     if (state.library == null) return;
+    final hadResults = _showsSearch;
     final library = await _visibleLibrary();
     // כל קטגוריה מיוצגת באובייקט אחר בעץ החדש. מי שמחזיק הפניה לישן ימשיך
     // להציג את הספירה הישנה — לכן גם הקטגוריה הנוכחית וגם זו שבתצוגה
@@ -158,6 +160,15 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         clearPreviewBook: preview == null && state.previewCategory != null,
       ),
     );
+    _repeatSearch(hadResults);
+  }
+
+  bool get _showsSearch => state.searchResults != null || state.isSearching;
+
+  // עץ חדש מאפס את התוצאות; איתור שהוצג לפניו רץ שוב עליו.
+  void _repeatSearch(bool hadResults) {
+    final last = _lastSearch;
+    if (hadResults && last != null) add(last);
   }
 
   /// מאתר בעץ [library] את הקטגוריה שנתיבה [path]. `null` כשהיא הוסתרה.
@@ -242,6 +253,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     RefreshLibrary event,
     Emitter<LibraryState> emit,
   ) async {
+    final hadResults = _showsSearch;
     emit(state.copyWith(isLoading: true));
     try {
       // רק רענון כללי עלול לנבוע מתיקייה אישית שנמחקה — האחרים מדלגים על prune.
@@ -356,6 +368,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         ),
       );
     }
+    _repeatSearch(hadResults);
   }
 
   Future<void> _pruneRemovedCustomFoldersIfNeeded() async {
@@ -668,6 +681,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     SearchBooks event,
     Emitter<LibraryState> emit,
   ) async {
+    _lastSearch = event;
     if (state.searchQuery == null || state.searchQuery!.length < 3) {
       emit(
         state.copyWith(
