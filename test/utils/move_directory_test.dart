@@ -280,6 +280,36 @@ void main() {
       expect(await File(p.join(source, 'seforim.db')).exists(), isTrue);
     });
 
+    test('כשל באמצע מנקה רק את מה שהועתק, וניסיון חוזר מצליח', () async {
+      final source = src('from');
+      final dest = src('to');
+      await Directory(p.join(source, 'archive')).create(recursive: true);
+      await Directory(p.join(dest, 'archive')).create(recursive: true);
+      for (var i = 0; i < 30; i++) {
+        final name = 'book_${i.toString().padLeft(2, '0')}.pdf';
+        await File(p.join(source, name)).writeAsString('$i');
+      }
+      await File(p.join(source, 'archive', 'new.txt')).writeAsString('חדש');
+      await File(p.join(dest, 'archive', 'keep.txt')).writeAsString('קיים');
+      final collision = File(p.join(dest, 'book_29.pdf'));
+      await collision.writeAsString('קיים');
+
+      await expectLater(
+        () => moveDirectory(source, dest),
+        throwsA(isA<Exception>()),
+      );
+
+      final left = Directory(dest)
+          .listSync(recursive: true)
+          .map((e) => p.relative(e.path, from: dest))
+          .toSet();
+      expect(left, {'book_29.pdf', 'archive', p.join('archive', 'keep.txt')});
+      expect(await collision.readAsString(), 'קיים');
+
+      await collision.delete();
+      expect(await moveDirectory(source, dest), isNull);
+    });
+
     test('מעביר תיקייה ריקה', () async {
       final source = src('from');
       final dest = src('to');
