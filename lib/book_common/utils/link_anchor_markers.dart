@@ -197,6 +197,8 @@ String wrapVisibleRange({
   ]);
 }
 
+const _lt = 0x3C, _amp = 0x26;
+
 /// אינדקס גולמי של תחילת התו הגלוי מספר [visibleOffset] (אחרי תגים קודמים);
 /// אורך המחרוזת כשהאופסט מעבר לסוף.
 int _rawStartOfVisible(String html, int visibleOffset) {
@@ -204,13 +206,13 @@ int _rawStartOfVisible(String html, int visibleOffset) {
   var i = 0;
   final len = html.length;
   while (i < len) {
-    if (html[i] == '<') {
+    if (html.codeUnitAt(i) == _lt) {
       final close = html.indexOf('>', i);
       if (close < 0) return len;
       i = close + 1;
     } else {
       if (visible == visibleOffset) return i;
-      if (html[i] == '&') {
+      if (html.codeUnitAt(i) == _amp) {
         final end = (i + 10 < len) ? i + 10 : len;
         final j = html.indexOf(';', i + 1);
         i = (j > 0 && j < end) ? j + 1 : i + 1;
@@ -230,13 +232,13 @@ int _visibleOffsetAtRaw(String html, int rawOffset) {
   var visible = 0;
   var i = 0;
   while (i < limit) {
-    if (html[i] == '<') {
+    if (html.codeUnitAt(i) == _lt) {
       final close = html.indexOf('>', i);
       // תג שנחתך באמצע ע"י האופסט: מה שאחריו כבר לא נספר.
       if (close < 0 || close >= limit) break;
       i = close + 1;
     } else {
-      if (html[i] == '&') {
+      if (html.codeUnitAt(i) == _amp) {
         final end = (i + 10 < html.length) ? i + 10 : html.length;
         final j = html.indexOf(';', i + 1);
         i = (j > 0 && j < end) ? j + 1 : i + 1;
@@ -257,12 +259,12 @@ int _rawEndOfVisible(String html, int visibleOffset) {
   var i = 0;
   final len = html.length;
   while (i < len) {
-    if (html[i] == '<') {
+    if (html.codeUnitAt(i) == _lt) {
       final close = html.indexOf('>', i);
       if (close < 0) return len;
       i = close + 1;
     } else {
-      if (html[i] == '&') {
+      if (html.codeUnitAt(i) == _amp) {
         final end = (i + 10 < len) ? i + 10 : len;
         final j = html.indexOf(';', i + 1);
         i = (j > 0 && j < end) ? j + 1 : i + 1;
@@ -300,11 +302,11 @@ String _injectAtVisibleOffsets(
   }
 
   while (i < len) {
-    final c = rawLine[i];
-    if (c == '<') {
+    final c = rawLine.codeUnitAt(i);
+    if (c == _lt) {
       // הסמן שייך לתו הגלוי *הבא*: לפני תג פתיחה הוא נכנס עכשיו, אבל תג
       // סגירה נכתב קודם — אחרת הסמן נבלע בתוך האלמנט הנסגר ויורש את עיצובו.
-      final isClosingTag = i + 1 < len && rawLine[i + 1] == '/';
+      final isClosingTag = i + 1 < len && rawLine.codeUnitAt(i + 1) == 0x2F;
       if (!isClosingTag) {
         flushMarkersAt(visible);
       }
@@ -319,12 +321,12 @@ String _injectAtVisibleOffsets(
     } else {
       // תו גלוי (או entity שנספר כתו אחד) — סמנים שמקומם כאן נכנסים לפניו.
       flushMarkersAt(visible);
-      if (c == '&') {
+      if (c == _amp) {
         final end = (i + 10 < len) ? i + 10 : len;
         var j = i + 1;
         var terminated = false;
         while (j < end) {
-          if (rawLine[j] == ';') {
+          if (rawLine.codeUnitAt(j) == 0x3B) {
             terminated = true;
             break;
           }
@@ -334,7 +336,7 @@ String _injectAtVisibleOffsets(
         out.write(rawLine.substring(i, entityEnd));
         i = entityEnd;
       } else {
-        out.write(c);
+        out.writeCharCode(c);
         i++;
       }
       visible++;
