@@ -6092,7 +6092,7 @@ class PluginBridgeAdapter {
         }
 
         // שליחת התראה מיידית
-        final notificationId = id ?? DateTime.now().millisecondsSinceEpoch;
+        final notificationId = id ?? _newNotificationId();
 
         await _notificationService.flutterLocalNotificationsPlugin.show(
           id: notificationId,
@@ -6144,7 +6144,7 @@ class PluginBridgeAdapter {
           );
         }
 
-        final notificationId = id ?? DateTime.now().millisecondsSinceEpoch;
+        final notificationId = id ?? _newNotificationId();
 
         await _notificationService.scheduleNotification(
           id: notificationId,
@@ -6261,6 +6261,9 @@ class PluginBridgeAdapter {
       windows: windowsDetails,
     );
   }
+
+  // flutter_local_notifications דוחה מזהה שאינו נכנס ב-32 ביט.
+  static int _newNotificationId() => math.Random().nextInt(0x7FFFFFFF);
 
   /// Track notification ID for this plugin (internal namespace)
   Future<void> _trackNotificationId(int id) async {
