@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:bloc_test/bloc_test.dart';
+import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,6 +17,7 @@ import 'package:otzaria/personal_notes/models/personal_note.dart';
 import 'package:otzaria/personal_notes/repository/personal_notes_repository.dart';
 import 'package:otzaria/personal_notes/storage/personal_notes_database.dart';
 import 'package:otzaria/personal_notes/view/personal_notes_screen.dart';
+import 'package:otzaria/personal_notes/widgets/personal_note_content_view.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import '../test_helpers/memory_cache_provider.dart';
@@ -473,6 +475,148 @@ void main() {
 
     expect(personalNotesBloc.activeStreamSubscriptions, 0);
     repository.requests['ספר תקוע']!.complete(const []);
+  });
+
+  Future<void> pumpScreenWithManyNotes(
+    WidgetTester tester, {
+    int books = 1,
+    required int count,
+  }) async {
+    String bookIdAt(int b) => books == 1 ? 'ספר עמוס' : 'ספר עמוס $b';
+    final notesByBookId = {
+      for (var b = 0; b < books; b++)
+        bookIdAt(b): [
+          for (var i = 0; i < count; i++)
+            PersonalNote(
+              id: 'note-$b-$i',
+              bookId: bookIdAt(b),
+              lineNumber: i,
+              displayTitle: 'כותרת $i',
+              lastKnownLineNumber: null,
+              status: PersonalNoteStatus.located,
+              content: '[{"insert":"תוכן הערה מספר $i\\n"}]',
+              contentPlain: 'תוכן הערה מספר $i',
+              contentFormat: PersonalNoteContentFormat.quillDelta,
+              createdAt: DateTime(2025, 1, 1),
+              updatedAt: DateTime(2025, 1, 2),
+            ),
+        ],
+    };
+    final repository = FakePersonalNotesRepository(
+      books: [
+        for (var b = 0; b < books; b++)
+          BookNotesInfo(
+            bookId: bookIdAt(b),
+            noteCount: count,
+            lastUpdated: DateTime(2025, 1, 2),
+          ),
+      ],
+      notesByBookId: notesByBookId,
+    );
+    final personalNotesBloc = PersonalNotesBloc(repository: repository);
+    final settingsBloc = SettingsBloc(repository: SettingsRepository());
+    final libraryBloc = MockLibraryBloc();
+    whenListen(
+      libraryBloc,
+      const Stream<LibraryState>.empty(),
+      initialState: LibraryState(
+        library: Library(categories: []),
+        isLoading: false,
+        currentCategory: null,
+      ),
+    );
+    addTearDown(personalNotesBloc.close);
+    addTearDown(settingsBloc.close);
+
+    await tester.pumpWidget(
+      MultiBlocProvider(
+        providers: [
+          BlocProvider<SettingsBloc>.value(value: settingsBloc),
+          BlocProvider<LibraryBloc>.value(value: libraryBloc),
+          BlocProvider<PersonalNotesBloc>.value(value: personalNotesBloc),
+        ],
+        child: MaterialApp(
+          navigatorKey: navigatorKey,
+          home: Scaffold(
+            body: PersonalNotesManagerScreen(repository: repository),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('ספר עם מאות הערות בונה רק את הכרטיסים שבתצוגה', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await pumpScreenWithManyNotes(tester, count: 300);
+
+    final built = find
+        .byType(
+          PersonalNoteContentView,
+          skipOffstage: false,
+        )
+        .evaluate()
+        .length;
+    expect(built, greaterThan(0));
+    expect(built, lessThan(60));
+  });
+
+  testWidgets('מאות ספרים עם הערה אחת בונים רק את הקבוצות שבתצוגה', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await pumpScreenWithManyNotes(tester, books: 300, count: 1);
+
+    int builtCount(Finder finder) => finder.evaluate().length;
+    final headers = builtCount(
+      find.byIcon(
+        FluentIcons.text_align_right_24_regular,
+        skipOffstage: false,
+      ),
+    );
+    final tocBuilders = builtCount(
+      find.byWidgetPredicate(
+        (w) => w is FutureBuilder,
+        skipOffstage: false,
+      ),
+    );
+    final cards = builtCount(
+      find.byType(PersonalNoteContentView, skipOffstage: false),
+    );
+    expect(headers, inInclusiveRange(1, 20));
+    expect(tocBuilders, inInclusiveRange(1, 20));
+    expect(cards, inInclusiveRange(1, 20));
+  });
+
+  testWidgets('כרטיסי ההערות נשארים שלושה בשורה ובסדר השורות', (tester) async {
+    tester.view.physicalSize = const Size(1200, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await pumpScreenWithManyNotes(tester, count: 40);
+
+    final first = tester.getTopLeft(find.text('כותרת 0'));
+    final second = tester.getTopLeft(find.text('כותרת 1'));
+    final third = tester.getTopLeft(find.text('כותרת 2'));
+    final fourth = tester.getTopLeft(find.text('כותרת 3'));
+    expect(second.dy, first.dy);
+    expect(third.dy, first.dy);
+    expect({first.dx, second.dx, third.dx}, hasLength(3));
+    expect(fourth.dy, greaterThan(first.dy));
+    expect(fourth.dx, first.dx);
+
+    await tester.scrollUntilVisible(
+      find.text('כותרת 39'),
+      300,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('כותרת 39'), findsOneWidget);
   });
 
   group('noteWithinDateRange - סינון לפי טווח תאריכים', () {
