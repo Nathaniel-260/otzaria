@@ -25,8 +25,6 @@ class ReadingLineRange {
     required this.start,
     required this.end,
   });
-
-  bool containsOffset(int offset) => offset >= start && offset < end;
 }
 
 class ReadingSegment {

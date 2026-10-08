@@ -70,12 +70,7 @@ class TextBookTab extends OpenedTab {
       JumpAwareItemScrollController();
   final ItemPositionsListener positionsListener =
       ItemPositionsListener.create();
-  // בקרים נוספים עבור תצוגה מפוצלת או רשימות מקבילות
-  final ItemScrollController auxScrollController = ItemScrollController();
-  final ItemPositionsListener auxPositionsListener =
-      ItemPositionsListener.create();
   final ScrollOffsetController mainOffsetController = ScrollOffsetController();
-  final ScrollOffsetController auxOffsetController = ScrollOffsetController();
 
   /// הכותרת הנוכחית של המיקום בספר (למשל "בראשית פרק ד")
   final currentTitle = ValueNotifier<String>("");

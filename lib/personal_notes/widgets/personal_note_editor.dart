@@ -612,11 +612,3 @@ class _PersonalNoteToolbar extends StatelessWidget {
     );
   }
 }
-
-PersonalNoteEditorResult buildPlainTextResult(String text) {
-  return PersonalNoteEditorResult(
-    content: text.trimRight(),
-    contentPlain: text.trimRight(),
-    contentFormat: PersonalNoteContentFormat.plain,
-  );
-}

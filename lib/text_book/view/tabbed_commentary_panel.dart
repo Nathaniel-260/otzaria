@@ -98,11 +98,6 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
   late TabController _tabController;
 
   // פונקציה ציבורית לעבור לכרטיסיית הקישורים
-  void switchToLinksTab() {
-    if (_tabController.index != kLinksTabIndex) {
-      _tabController.animateTo(kLinksTabIndex);
-    }
-  }
 
   @override
   void initState() {

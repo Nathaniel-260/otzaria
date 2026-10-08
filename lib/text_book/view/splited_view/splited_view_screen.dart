@@ -243,9 +243,6 @@ class _SplitedViewScreenState extends State<SplitedViewScreen> {
   }
 
   // פונקציה ציבורית לפתיחה/סגירה מבחוץ
-  void togglePane() {
-    _togglePane();
-  }
 
   void _openPaneWithSmartTab() {
     final state = context.read<TextBookBloc>().state;
