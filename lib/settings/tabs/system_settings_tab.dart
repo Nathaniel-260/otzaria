@@ -1146,24 +1146,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _handleToggleProtectedMode(
     BuildContext context,
-    SettingsRepository repository,
     bool newValue,
   ) async {
-    final verified = await showDialog<bool>(
-      context: context,
-      builder: settingsDialogBuilder(
-        context,
-        (ctx) => SaferModePasswordDialog(
-          title: ctx.settingsText('אמת סיסמה'),
-          hint: newValue
-              ? ctx.settingsText('הזן את הסיסמה כדי להפעיל את המצב המוגן')
-              : ctx.settingsText('הזן את הסיסמה כדי להשבית את המצב המוגן'),
-          onVerify: (password) async =>
-              repository.verifyProtectedModePassword(password),
-        ),
-      ),
+    final verified = await showSaferModePasswordDialog(
+      context,
+      title: 'אמת סיסמה',
+      hint: newValue
+          ? 'הזן את הסיסמה כדי להפעיל את המצב המוגן'
+          : 'הזן את הסיסמה כדי להשבית את המצב המוגן',
     );
-    if (verified != true) return;
+    if (!verified) return;
     if (context.mounted) {
       context.read<SettingsBloc>().add(UpdateProtectedModeEnabled(newValue));
       UiSnack.show(
@@ -1176,24 +1168,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _handleSetPassword(
     BuildContext context,
-    SettingsRepository repository,
     bool hasExistingPassword,
     bool isSaferModeEnabled,
   ) async {
-    if (hasExistingPassword) {
-      final verified = await showDialog<bool>(
-        context: context,
-        builder: settingsDialogBuilder(
+    if (hasExistingPassword &&
+        !await showSaferModePasswordDialog(
           context,
-          (ctx) => SaferModePasswordDialog(
-            title: ctx.settingsText('אמת סיסמה נוכחית'),
-            hint: ctx.settingsText('הזן את הסיסמה הנוכחית כדי לשנות אותה'),
-            onVerify: (password) async =>
-                repository.verifyProtectedModePassword(password),
-          ),
-        ),
-      );
-      if (verified != true) return;
+          title: 'אמת סיסמה נוכחית',
+          hint: 'הזן את הסיסמה הנוכחית כדי לשנות אותה',
+        )) {
+      return;
     }
     if (!context.mounted) return;
     final settingsBloc = context.read<SettingsBloc>();
@@ -1243,7 +1227,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final retentionProfile = RetentionProfile.fromName(
       Settings.getValue<String>(BackupMaintenance.keyRetentionProfile),
     );
-    final repository = RepositoryProvider.of<SettingsRepository>(context);
     final hasPassword = state.protectedModePasswordSet;
 
     return SettingsCard(
@@ -1572,8 +1555,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   : 'נעילת ההגדרות וסייר הקבצים מושבתת',
             ),
             value: state.protectedModeEnabled,
-            onChanged: (value) =>
-                _handleToggleProtectedMode(context, repository, value),
+            onChanged: (value) => _handleToggleProtectedMode(context, value),
           )
         else
           SettingsActionTile.text(
@@ -1588,7 +1570,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: context.settingsText('בחר סיסמה'),
                 onPressed: () => _handleSetPassword(
                   context,
-                  repository,
                   hasPassword,
                   state.protectedModeEnabled,
                 ),
@@ -1608,7 +1589,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: context.settingsText('אפשרויות'),
                 onPressed: () => _handleSetPassword(
                   context,
-                  repository,
                   hasPassword,
                   state.protectedModeEnabled,
                 ),
