@@ -1334,7 +1334,12 @@ void main() {
         ..summary = 'כותרת מעודכנת'
         ..colorId = '7';
 
-      final merged = google.mergeGoogleEvents([local], [gEvent]);
+      final merged = google.mergeGoogleEventPages(
+        [local],
+        [
+          [gEvent],
+        ],
+      );
 
       expect(merged, hasLength(1));
       expect(merged.first.title, 'כותרת מעודכנת');
