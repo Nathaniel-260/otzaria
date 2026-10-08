@@ -375,4 +375,40 @@ void main() {
       );
     });
   });
+  group('calculateDailyTimes — חישוב חלקי (only)', () {
+    // ערב שבת, יום בספירת העומר ויום רגיל — מכסים isRelevant ואת זמן העומר.
+    final dates = [
+      DateTime(2026, 5, 1),
+      DateTime(2026, 4, 20),
+      summerDate,
+      DateTime(2026, 12, 21),
+    ];
+
+    test('מחשב רק את הזמנים שהתבקשו', () {
+      for (final date in dates) {
+        final times = calculateDailyTimes(
+          date,
+          city,
+          only: const {'sunrise', 'sunset'},
+        );
+        expect(times.keys.toSet(), {'sunrise', 'sunset'}, reason: '$date');
+      }
+    });
+
+    test('הערכים זהים לחישוב המלא', () {
+      for (final date in dates) {
+        final full = calculateDailyTimes(date, city);
+        for (final only in const [
+          {'sunrise', 'sunset'},
+          {'omerCounting', 'candleLighting', 'sunset'},
+        ]) {
+          final partial = calculateDailyTimes(date, city, only: only);
+          expect(partial, {
+            for (final id in only)
+              if (full[id] != null) id: full[id],
+          }, reason: '$date $only');
+        }
+      }
+    });
+  });
 }
