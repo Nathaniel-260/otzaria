@@ -753,7 +753,9 @@ class _LinksListViewState extends State<LinksListView> {
               fontVariations: AppFonts.boldFontVariations(
                 settingsState.commentatorsFontFamily,
               ),
-              fontFamily: settingsState.commentatorsFontFamily,
+              fontFamily: AppFonts.renderFontFamily(
+                settingsState.commentatorsFontFamily,
+              ),
             ),
           );
         },
@@ -779,7 +781,9 @@ class _LinksListViewState extends State<LinksListView> {
               style: TextStyle(
                 fontSize: settingsState.commentatorsFontSize - 4,
                 fontWeight: FontWeight.normal,
-                fontFamily: settingsState.commentatorsFontFamily,
+                fontFamily: AppFonts.renderFontFamily(
+                  settingsState.commentatorsFontFamily,
+                ),
                 color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
               ),
             );
@@ -802,7 +806,9 @@ class _LinksListViewState extends State<LinksListView> {
                 style: TextStyle(
                   fontSize: settingsState.commentatorsFontSize - 4,
                   fontWeight: FontWeight.normal,
-                  fontFamily: settingsState.commentatorsFontFamily,
+                  fontFamily: AppFonts.renderFontFamily(
+                    settingsState.commentatorsFontFamily,
+                  ),
                   color: Theme.of(context).colorScheme.onSurface.withAlpha(128),
                 ),
               );

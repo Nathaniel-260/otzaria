@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -195,7 +196,9 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                   style: TextStyle(
                     fontSize: compact ? 11 : fontSize - 2,
                     fontWeight: FontWeight.bold,
-                    fontFamily: settingsState.commentatorsFontFamily,
+                    fontFamily: AppFonts.renderFontFamily(
+                      settingsState.commentatorsFontFamily,
+                    ),
                     color: colorScheme.primary,
                   ),
                 );
@@ -302,7 +305,9 @@ class _LinkHoverPreviewContentState extends State<LinkHoverPreviewContent> {
                         .merge(
                           TextStyle(
                             fontSize: fontSize,
-                            fontFamily: settingsState.commentatorsFontFamily,
+                            fontFamily: AppFonts.renderFontFamily(
+                              settingsState.commentatorsFontFamily,
+                            ),
                             height: lineHeight,
                             fontWeight: settingsState.commentatorsFontBold
                                 ? FontWeight.bold
@@ -392,7 +397,7 @@ class _ExpandContentButton extends StatelessWidget {
               '…',
               style: TextStyle(
                 fontSize: fontSize,
-                fontFamily: fontFamily,
+                fontFamily: AppFonts.renderFontFamily(fontFamily),
                 height: lineHeight,
                 fontWeight: FontWeight.bold,
                 color: colorScheme.primary,

@@ -5,6 +5,7 @@ import 'package:flutter/painting.dart';
 import 'package:flutter/widgets.dart' show Text;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_fonts.dart';
+import 'package:otzaria/utils/file/sfnt_metadata_reader.dart';
 
 Uint8List _bundledFont(String name) =>
     Uint8List.fromList(File('fonts/$name').readAsBytesSync());
@@ -717,6 +718,134 @@ void main() {
       expect(scan.aliases, isEmpty);
     });
 
+    for (final useGlyphArray in [false, true]) {
+      test('רווח שממופה לגליף חסר אינו מתקבל (array=$useGlyphArray)', () {
+        final original = _buildSfnt(hebrewRange: true);
+        final bytes = Uint8List(original.length + (useGlyphArray ? 2 : 0))
+          ..setRange(0, original.length, original);
+        final data = ByteData.sublistView(bytes);
+        if (useGlyphArray) {
+          data.setUint32(24, 46);
+          data.setUint16(42, 34);
+          data.setUint16(68, 4);
+          data.setUint16(72, 0);
+        } else {
+          data.setUint16(64, 0xffe0);
+        }
+        final scan = AppFonts.debugBuildScan([MapEntry('missing.ttf', bytes)]);
+        expect(scan.fonts, isEmpty);
+        expect(scan.aliases, isEmpty);
+        expect(AppFonts.debugSfntSupportsHebrew(bytes), isTrue);
+      });
+    }
+
+    test('גליף רווח מתוך glyphIdArray מתקבל רק אחרי החלת idDelta', () {
+      final original = _buildSfnt(hebrewRange: true);
+      final bytes = Uint8List(original.length + 2)
+        ..setRange(0, original.length, original);
+      final data = ByteData.sublistView(bytes)
+        ..setUint32(24, 46)
+        ..setUint16(42, 34)
+        ..setUint16(68, 4)
+        ..setUint16(72, 1)
+        ..setUint16(64, 0xffff);
+      expect(
+        AppFonts.debugBuildScan([MapEntry('missing.ttf', bytes)]).fonts,
+        isEmpty,
+      );
+      data.setUint16(64, 0);
+      expect(
+        AppFonts.debugBuildScan([
+          MapEntry('present.ttf', bytes),
+        ]).fonts.single.value,
+        'present',
+      );
+    });
+
+    test('format 12 מבחין בין תחילת טווח לגליף רווח שימושי', () {
+      final bytes = Uint8List(28 + 12 + 40);
+      final data = ByteData.sublistView(bytes)
+        ..setUint32(0, 0x00010000)
+        ..setUint16(4, 1)
+        ..setUint32(20, 28)
+        ..setUint32(24, 52)
+        ..setUint16(30, 1)
+        ..setUint16(32, 3)
+        ..setUint16(34, 10)
+        ..setUint32(36, 12)
+        ..setUint16(40, 12)
+        ..setUint32(44, 40)
+        ..setUint32(52, 2)
+        ..setUint32(56, 0x20)
+        ..setUint32(60, 0x21)
+        ..setUint32(64, 0)
+        ..setUint32(68, 0x590)
+        ..setUint32(72, 0x5ff)
+        ..setUint32(76, 1);
+      bytes.setRange(12, 16, 'cmap'.codeUnits);
+      expect(
+        AppFonts.debugBuildScan([MapEntry('missing.ttf', bytes)]).fonts,
+        isEmpty,
+      );
+      data.setUint32(56, 0x1f);
+      expect(
+        AppFonts.debugBuildScan([
+          MapEntry('present.ttf', bytes),
+        ]).fonts.single.value,
+        'present',
+      );
+    });
+
+    test('רווח ב-face אחר של TTC אינו מאשר את ה-face הראשון', () {
+      final missing = _buildSfnt(hebrewRange: true, withSpace: false);
+      final present = _buildSfnt(hebrewRange: true);
+      for (final fonts in [
+        [missing, present],
+        [present, missing],
+      ]) {
+        final collection = _buildTtc(fonts);
+        expect(AppFonts.debugSfntSupportsHebrew(collection), isTrue);
+        final scan = AppFonts.debugBuildScan([
+          MapEntry('collection.ttc', collection),
+        ]);
+        expect(scan.fonts.isNotEmpty, identical(fonts.first, present));
+        final directory = Directory.systemTemp.createTempSync('otzaria-cmap-');
+        try {
+          final file = File('${directory.path}/collection.ttc')
+            ..writeAsBytesSync(collection);
+          final metadata = SfntMetadataReader.readSync(file.path)!;
+          expect(
+            AppFonts.debugBuildScan([
+              MapEntry(file.path, metadata),
+            ]).fonts.isNotEmpty,
+            identical(fonts.first, present),
+          );
+        } finally {
+          directory.deleteSync(recursive: true);
+        }
+      }
+      final malformed = _buildTtc([missing, present]);
+      ByteData.sublistView(malformed).setUint32(12, malformed.length + 1);
+      expect(
+        AppFonts.debugBuildScan([MapEntry('invalid.ttc', malformed)]).fonts,
+        isEmpty,
+      );
+    });
+
+    test('glyphIdArray חייב להיות בתוך אורך ה-subtable המוצהר', () {
+      final original = _buildSfnt(hebrewRange: true);
+      final bytes = Uint8List(original.length + 2)
+        ..setRange(0, original.length, original);
+      ByteData.sublistView(bytes)
+        ..setUint32(24, 46)
+        ..setUint16(68, 4)
+        ..setUint16(72, 1);
+      expect(
+        AppFonts.debugBuildScan([MapEntry('invalid.ttf', bytes)]).fonts,
+        isEmpty,
+      );
+    });
+
     test('הרשימה ממוינת לפי שם', () {
       final scan = AppFonts.debugBuildScan([
         MapEntry(
@@ -777,6 +906,26 @@ void main() {
       final first = items.first.child as Text;
       expect(first.data, contains('לא זמין במחשב זה'));
     });
+  });
+
+  test('גופנים מובנים וגופני packages שומרים את שם הרינדור שלהם', () {
+    for (final family in [
+      ...AppFonts.fontPaths.keys,
+      AppFonts.ashuritFont,
+      AppFonts.ashuritNikudFont,
+      'AshkenaziStam',
+      'SefardiStam',
+    ]) {
+      expect(AppFonts.renderFontFamily(family), family);
+    }
+    expect(AppFonts.renderFontFamily(null), isNull);
+    final rendered = AppFonts.renderFontFamily('SavedPFT_Vilna');
+    expect(rendered, isNot('SavedPFT_Vilna'));
+    expect(
+      identical(rendered, AppFonts.renderFontFamily('SavedPFT_Vilna')),
+      isTrue,
+    );
+    expect(AppFonts.renderFontFamily(rendered), rendered);
   });
 
   group('AppFonts.boldFontVariations', () {

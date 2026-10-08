@@ -2489,7 +2489,9 @@ class _CommentaryGroupHeader extends StatelessWidget {
                       fontVariations: AppFonts.boldFontVariations(
                         settingsState.commentatorsFontFamily,
                       ),
-                      fontFamily: settingsState.commentatorsFontFamily,
+                      fontFamily: AppFonts.renderFontFamily(
+                        settingsState.commentatorsFontFamily,
+                      ),
                     ),
                   );
                 },
@@ -2644,7 +2646,9 @@ class _CommentaryLinkItemState extends State<_CommentaryLinkItem> {
                       style: TextStyle(
                         fontSize: widget.fontSize * 0.75,
                         fontWeight: FontWeight.normal,
-                        fontFamily: settingsState.commentatorsFontFamily,
+                        fontFamily: AppFonts.renderFontFamily(
+                          settingsState.commentatorsFontFamily,
+                        ),
                         color: Theme.of(
                           context,
                         ).colorScheme.onSurface.withValues(alpha: 0.5),
@@ -2931,7 +2935,9 @@ class _NotesCommentaryWidgetState extends State<_NotesCommentaryWidget> {
                             fontVariations: AppFonts.boldFontVariations(
                               settingsState.commentatorsFontFamily,
                             ),
-                            fontFamily: settingsState.commentatorsFontFamily,
+                            fontFamily: AppFonts.renderFontFamily(
+                              settingsState.commentatorsFontFamily,
+                            ),
                           ),
                         ),
                       ),

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:otzaria/theme/app_tokens.dart';
@@ -917,14 +918,18 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
                     html: rawHtml,
                     defaultStyle: TextStyle(
                       fontSize: settingsState.fontSize,
-                      fontFamily: settingsState.fontFamily,
+                      fontFamily: AppFonts.renderFontFamily(
+                        settingsState.fontFamily,
+                      ),
                       color: colorScheme.onSurface,
                       height: 1.5,
                     ),
                     highlightStyle: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: settingsState.fontSize + 2,
-                      fontFamily: settingsState.fontFamily,
+                      fontFamily: AppFonts.renderFontFamily(
+                        settingsState.fontFamily,
+                      ),
                       color: colorScheme.error,
                     ),
                   );

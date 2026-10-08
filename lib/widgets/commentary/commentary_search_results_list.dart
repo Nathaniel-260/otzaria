@@ -81,12 +81,16 @@ class _CommentarySearchResultsListState
       query: widget.query,
       defaultStyle: TextStyle(
         fontSize: 14,
-        fontFamily: settingsState.commentatorsFontFamily,
+        fontFamily: AppFonts.renderFontFamily(
+          settingsState.commentatorsFontFamily,
+        ),
         color: colorScheme.onSurface,
         height: 1.5,
       ),
       highlightStyle: TextStyle(
-        fontFamily: settingsState.commentatorsFontFamily,
+        fontFamily: AppFonts.renderFontFamily(
+          settingsState.commentatorsFontFamily,
+        ),
         fontWeight: FontWeight.bold,
         fontVariations: AppFonts.boldFontVariations(
           settingsState.commentatorsFontFamily,

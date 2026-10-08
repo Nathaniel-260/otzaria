@@ -152,6 +152,97 @@ void main() {
     );
   });
 
+  test('מטמון קר אינו מאפשר בחירה ישירה של משפחת מערכת לפני האימות', () async {
+    final unsafe = _face(directory, 'PrIi-unsafe.ttf', 'PrIi', false);
+    _removeSpace(unsafe.value);
+    File(unsafe.key).writeAsBytesSync(unsafe.value);
+    final scan = AppFonts.debugBuildScan([unsafe]);
+    expect(scan.fonts, isEmpty);
+    AppFonts.debugScanFamily = (_) async => scan;
+    AppFonts.debugWarmUpFuture = Future.value();
+    await (FontLoader(
+      'PrIi',
+    )..addFont(Future.value(ByteData.sublistView(unsafe.value)))).load();
+    final before = _width('PrIi', FontWeight.normal);
+    expect(
+      _width('PrIi', FontWeight.normal, rawFamily: true),
+      isNot(closeTo(before, 0.01)),
+    );
+
+    await AppFonts.ensureFontLoaded('PrIi');
+    expect(_width('PrIi', FontWeight.normal), closeTo(before, 0.01));
+    expect(AppFonts.renderFontFamily('PrIi'), isNot('PrIi'));
+  });
+
+  test('ערך שמור ישן של שם קובץ נטען תחת שם הרינדור המבודד', () async {
+    final regular = _face(directory, 'legacy-PrJj.ttf', 'PrJj', false);
+    await AppFonts.debugStoreScan(AppFonts.debugBuildScan([regular]));
+    await AppFonts.ensureFontLoaded('legacy-PrJj');
+    await _loadReference('PrJjExpected', regular.value);
+    expect(
+      _width('legacy-PrJj', FontWeight.normal),
+      closeTo(_width('PrJjExpected', FontWeight.normal), 0.01),
+    );
+    expect(AppFonts.legacySystemFontDisplayName('legacy-PrJj'), 'PrJj');
+  });
+
+  test('face בולד שנעשה חסר רווח אחרי הסריקה אינו נטען', () async {
+    final regular = _face(directory, 'PrKk-regular.ttf', 'PrKk', false);
+    final bold = _face(directory, 'PrKk-bold.ttf', 'PrKk', true);
+    await AppFonts.debugStoreScan(AppFonts.debugBuildScan([regular, bold]));
+    _removeSpace(bold.value);
+    File(bold.key).writeAsBytesSync(bold.value);
+    await AppFonts.ensureFontLoaded('PrKk');
+    expect(AppFonts.hasSeparateBoldFace('PrKk'), isFalse);
+    await _loadReference('PrKkExpected', regular.value);
+    expect(
+      _width('PrKk', FontWeight.bold),
+      closeTo(_width('PrKkExpected', FontWeight.bold), 0.01),
+    );
+  });
+
+  test('עזרי טעמים ומשקל מזהים משפחה גם משם רינדור מבודד', () async {
+    final regular = _face(
+      directory,
+      'PrLl-regular.ttf',
+      'PrLl',
+      false,
+      source: 'fonts/Rubik-VariableFont_wght.ttf',
+      weight: 400,
+    );
+    AppFonts.debugScanFamily = (_) async => AppFonts.debugBuildScan([regular]);
+    await AppFonts.ensureFontLoaded('PrLl');
+    final rendered = AppFonts.renderFontFamily('PrLl');
+    expect(AppFonts.familySupportsTaamim(rendered), isFalse);
+    expect(
+      AppFonts.boldFontVariations(rendered),
+      AppFonts.boldFontVariations('PrLl'),
+    );
+    expect(
+      AppFonts.taamimSafeStyle(
+        TextStyle(fontFamily: rendered),
+        'בְּרֵאשִׁ֖ית',
+      ).fontFamily,
+      AppFonts.defaultFont,
+    );
+    AppFonts.debugMarkSeparateBoldSystemFont('PrMm');
+    expect(
+      AppFonts.hasSeparateBoldFace(AppFonts.renderFontFamily('PrMm')),
+      isTrue,
+    );
+    expect(
+      AppFonts.headingFontWeightOverride(
+        'h1',
+        AppFonts.renderFontFamily('PrMm'),
+      ),
+      '400',
+    );
+    expect(
+      AppFonts.headingFontSizeOverride('h1', AppFonts.renderFontFamily('PrMm')),
+      AppFonts.headingFontSizeOverride('h1', 'PrMm'),
+    );
+  });
+
   test('Medium אינו נחשב ל-regular בטוח לטעינה מוקדמת', () async {
     final medium = _face(
       directory,
@@ -223,18 +314,56 @@ MapEntry<String, Uint8List> _face(
 }
 
 Future<void> _loadReference(String family, Uint8List bytes) => (FontLoader(
-  family,
+  AppFonts.renderFontFamily(family)!,
 )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
 
-double _width(String family, FontWeight weight) {
+double _width(String family, FontWeight weight, {bool rawFamily = false}) {
   final painter = TextPainter(
     text: TextSpan(
       text: 'minimum maximum abc אבג',
-      style: TextStyle(fontFamily: family, fontSize: 48, fontWeight: weight),
+      style: TextStyle(
+        fontFamily: rawFamily ? family : AppFonts.renderFontFamily(family),
+        fontSize: 48,
+        fontWeight: weight,
+      ),
     ),
     textDirection: TextDirection.ltr,
   )..layout();
   final width = painter.width;
   painter.dispose();
   return width;
+}
+
+void _removeSpace(Uint8List bytes) {
+  final data = ByteData.sublistView(bytes);
+  var changed = false;
+  for (var table = 0; table < data.getUint16(4); table++) {
+    final record = 12 + table * 16;
+    if (String.fromCharCodes(bytes.sublist(record, record + 4)) != 'cmap') {
+      continue;
+    }
+    final cmap = data.getUint32(record + 8);
+    for (var encoding = 0; encoding < data.getUint16(cmap + 2); encoding++) {
+      final subtable = cmap + data.getUint32(cmap + 8 + encoding * 8);
+      if (data.getUint16(subtable) != 4) continue;
+      final count = data.getUint16(subtable + 6) ~/ 2;
+      final starts = subtable + 16 + count * 2;
+      final deltas = starts + count * 2;
+      final ranges = deltas + count * 2;
+      for (var segment = 0; segment < count; segment++) {
+        final start = data.getUint16(starts + segment * 2);
+        final end = data.getUint16(subtable + 14 + segment * 2);
+        if (start > 0x20 || end < 0x20) continue;
+        final rangePosition = ranges + segment * 2;
+        final offset = data.getUint16(rangePosition);
+        if (offset == 0) {
+          data.setUint16(deltas + segment * 2, 0xffe0);
+        } else {
+          data.setUint16(rangePosition + offset + (0x20 - start) * 2, 0);
+        }
+        changed = true;
+      }
+    }
+  }
+  expect(changed, isTrue);
 }

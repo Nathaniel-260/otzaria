@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -715,7 +716,7 @@ class _SemanticSearchResultsScreenState
       if (_snippetCache.length > 300) _snippetCache.clear();
       final defaultStyle = TextStyle(
         fontSize: settings.fontSize,
-        fontFamily: settings.fontFamily,
+        fontFamily: AppFonts.renderFontFamily(settings.fontFamily),
         color: colorScheme.onSurface,
         height: 1.5,
       );
@@ -725,7 +726,7 @@ class _SemanticSearchResultsScreenState
         highlightStyle: TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: settings.fontSize + 2,
-          fontFamily: settings.fontFamily,
+          fontFamily: AppFonts.renderFontFamily(settings.fontFamily),
           color: colorScheme.error,
         ),
         markStyle: defaultStyle.copyWith(

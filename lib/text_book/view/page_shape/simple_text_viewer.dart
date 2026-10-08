@@ -3204,7 +3204,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final colorScheme = Theme.of(context).colorScheme;
     final baseStyle = TextStyle(
       fontSize: widget.fontSize,
-      fontFamily: widget.fontFamily ?? settingsState.fontFamily,
+      fontFamily: AppFonts.renderFontFamily(
+        widget.fontFamily ?? settingsState.fontFamily,
+      ),
       height: settingsState.lineHeight,
       color: colorScheme.onSurface,
     );

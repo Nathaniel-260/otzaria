@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/models/link_types.dart';
@@ -163,7 +164,7 @@ class _LaazEntryLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final baseStyle = TextStyle(
-      fontFamily: fontFamily,
+      fontFamily: AppFonts.renderFontFamily(fontFamily),
       fontSize: fontSize,
       height: 1.4,
       color: colorScheme.onSurface,
