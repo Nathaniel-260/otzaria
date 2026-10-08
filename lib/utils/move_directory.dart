@@ -31,7 +31,21 @@ Future<String?> moveDirectory(
     throw Exception('תיקיית היעד לא יכולה להיות בתוך תיקיית המקור');
   }
 
-  await copyDirectoryEntries(source, destination, includeOnly: includeOnly);
+  final created = <FileSystemEntity>[];
+  try {
+    await copyDirectoryEntries(
+      source,
+      destination,
+      includeOnly: includeOnly,
+      created: created,
+    );
+  } catch (_) {
+    // מוחקים רק מה שההעתקה יצרה, ובסדר הפוך כדי שתיקייה תתרוקן לפני מחיקתה.
+    for (final entity in created.reversed) {
+      await entity.delete().catchError((_) => entity);
+    }
+    rethrow;
+  }
   return deleteMovedEntries(source, includeOnly: includeOnly);
 }
 
@@ -39,22 +53,30 @@ Future<String?> moveDirectory(
 /// destination if needed. When [includeOnly] is given, copies only entries
 /// whose name is in the set. Files and symbolic links that already exist at
 /// the destination cause a collision exception (directories are merged).
+/// Every entry this call creates is appended to [created].
 Future<void> copyDirectoryEntries(
   String source,
   String destination, {
   Set<String>? includeOnly,
   void Function()? checkCancelled,
+  List<FileSystemEntity>? created,
 }) async {
   checkCancelled?.call();
   final destDir = Directory(destination);
   if (!await destDir.exists()) {
     await destDir.create(recursive: true);
+    created?.add(destDir);
   }
 
   await for (final entity in Directory(source).list(followLinks: false)) {
     final name = p.basename(entity.path);
     if (includeOnly != null && !includeOnly.contains(name)) continue;
-    await _copyEntity(entity, p.join(destination, name), checkCancelled);
+    await _copyEntity(
+      entity,
+      p.join(destination, name),
+      checkCancelled,
+      created,
+    );
   }
 }
 
@@ -62,6 +84,7 @@ Future<void> _copyEntity(
   FileSystemEntity entity,
   String destPath,
   void Function()? checkCancelled,
+  List<FileSystemEntity>? created,
 ) async {
   checkCancelled?.call();
   // Link נבדק לפני File/Directory — קישור לקובץ הוא גם FileSystemEntity של File.
@@ -69,22 +92,26 @@ Future<void> _copyEntity(
     if (await _entityExists(destPath)) {
       throw Exception('היעד כבר מכיל פריט בשם "${p.basename(destPath)}"');
     }
-    await Link(destPath).create(await entity.target(), recursive: true);
+    created?.add(
+      await Link(destPath).create(await entity.target(), recursive: true),
+    );
   } else if (entity is File) {
     if (await _entityExists(destPath)) {
       throw Exception('היעד כבר מכיל קובץ בשם "${p.basename(destPath)}"');
     }
     await File(destPath).parent.create(recursive: true);
+    created?.add(File(destPath));
     await entity.copy(destPath);
   } else if (entity is Directory) {
     // יצירת תיקיית היעד גם כשהיא ריקה, ואז העתקה רקורסיבית של תכנה.
     final sub = Directory(destPath);
-    if (!await sub.exists()) await sub.create(recursive: true);
+    if (!await sub.exists()) created?.add(await sub.create(recursive: true));
     await for (final child in entity.list(followLinks: false)) {
       await _copyEntity(
         child,
         p.join(destPath, p.basename(child.path)),
         checkCancelled,
+        created,
       );
     }
   }
