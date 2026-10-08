@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
@@ -19,7 +18,6 @@ import 'package:otzaria/navigation/bloc/navigation_bloc.dart';
 import 'package:otzaria/shortcuts/shortcut_helper.dart';
 import 'package:otzaria/shortcuts/shortcut_validator.dart';
 import 'package:otzaria/navigation/bloc/navigation_state.dart';
-import 'package:otzaria/navigation/view/reading_tab_strip.dart';
 import 'package:otzaria/navigation/view/tab_context_menu.dart';
 import 'package:otzaria/navigation/view/tab_search_menu.dart';
 import 'package:otzaria/navigation/view/tab_visuals.dart';
@@ -31,8 +29,6 @@ import 'package:otzaria/tabs/bloc/tabs_event.dart';
 import 'package:otzaria/tabs/models/pdf_tab.dart';
 import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/core/windowing/cross_window_tab_drag.dart';
-import 'package:otzaria/core/windowing/drag_preview_colors.dart';
-import 'package:otzaria/core/windowing/multi_window_service.dart';
 import 'package:otzaria/tabs/models/tab.dart';
 import 'package:otzaria/tabs/models/tool_tab.dart';
 import 'package:otzaria/tools/tool_catalog_entry.dart';
@@ -138,14 +134,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
   // הטאב שהעכבר מעליו. שדה ולא משתנה מקומי ב-_buildTab: rebuild של ההורה היה
   // מאפס אותו, וה-X שמוצג רק בריחוף היה נמחק מתחת לסמן לפני שהלחיצה נורית.
   OpenedTab? _hoveredTab;
-
-  /// המקש שמפעיל בחירה מרובה: Ctrl בכל הפלטפורמות, Command במק.
-  bool get _isMultiSelectModifierPressed {
-    final keyboard = HardwareKeyboard.instance;
-    return defaultTargetPlatform == TargetPlatform.macOS
-        ? keyboard.isMetaPressed
-        : keyboard.isControlPressed;
-  }
 
   // רוחב אזור הטאבים שנמדד בפריים הקודם (ע"י LayoutBuilder נפרד). הרשימה
   // נבנית עם הערך הזה ולא תחת ה-LayoutBuilder — אחרת Tooltip/OverlayPortal
@@ -599,64 +587,20 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
     // תחת הסמן; אחרת מתחלקים בשווה במקום הפנוי.
     final tabWidths = _pinnedTabWidths ?? _lastComputedTabWidths!;
 
-    // בדסקטופ גרירת-עכבר על טאב מסדרת אותו מיד (כמו כרום); בנייד נדרשת לחיצה
-    // ארוכה כדי שהחלקה/גלילה במגע לא תזיז טאב בטעות.
-    final platform = Theme.of(context).platform;
-    final isDesktop =
-        platform == TargetPlatform.windows ||
-        platform == TargetPlatform.linux ||
-        platform == TargetPlatform.macOS;
-
     // אותה גרירה מסדרת כרטיסיות ומוציאה אותן לחלונית קריאה.
-    final tabStrip = ReadingTabStrip(
-      stripColor: AppSurfaces.readerBackground(context),
-      tabs: state.tabs,
+    final tabStrip = buildTabsReadingTabStrip(
+      context,
+      state: state,
+      crossWindowDrag: _crossWindowDrag,
       widths: [
         for (var i = 0; i < state.tabs.length; i++)
           i == state.currentTabIndex
               ? tabWidths.selected
               : tabWidths.unselected,
       ],
-      requireLongPressToDrag: !isDesktop,
-      onReorder: (tab, newIndex) =>
-          context.read<TabsBloc>().add(MoveTab(tab, newIndex)),
-      // חלונית של טאב מפוצל שנגררת לרצועה חוזרת לכרטיסייה עצמאית.
-      acceptsExternal: (tab) => context.read<TabsBloc>().state.tabs.any(
-        (t) => t is CombinedTab && t.sibling(tab) != null,
-      ),
-      onExternalDrop: (tab, insertIndex) => context.read<TabsBloc>().add(
-        DetachPane(tab, insertIndex: insertIndex),
-      ),
       // גרירה אינה בוחרת כרטיסיה: התצוגה נשארת על הספר שהמשתמש קורא, ומשתנה
       // רק אם הוא משתהה מעל כרטיסיה אחרת.
-      onDragStarted: (draggedTab, cancelDrag) {
-        _pendingTabSelection = null;
-        _crossWindowDrag.begin(
-          draggedTab,
-          DragPreviewColors.of(context),
-          tabsBloc: context.read<TabsBloc>(),
-          cancelDrag: cancelDrag,
-        );
-      },
-      onTabSnapshot: (_, snapshot, generation) =>
-          _crossWindowDrag.applySnapshot(snapshot, generation),
-      onDragFinishedAnywhere: _crossWindowDrag.end,
-      onDragLeftStrip: _crossWindowDrag.notePointerLeftStrip,
-      onDroppedOutside: MultiWindowService.canDragTabsOut
-          ? (tab) => _crossWindowDrag.handleDroppedOutside(
-              tab,
-              context.read<TabsBloc>(),
-            )
-          : null,
-      onSpringOpen: (tab) {
-        // ה-state שנתפס ב-build עלול להיות מיושן באמצע גרירה, ורק קריאה
-        // ישירה מה-bloc משקפת מה מוצג עכשיו.
-        final bloc = context.read<TabsBloc>();
-        final index = bloc.state.tabs.indexOf(tab);
-        if (index != -1 && index != bloc.state.currentTabIndex) {
-          bloc.add(SetCurrentTab(index));
-        }
-      },
+      onDragStarted: () => _pendingTabSelection = null,
       // סימון שטח הטאב ל-hit-test, כדי שה-double-tap-to-maximize שבמסגרת
       // ידלג עליו (ראה _EmptyAreaDoubleTapRecognizer).
       tabBuilder: (tab, index, tabWidth) => MetaData(
@@ -1336,19 +1280,7 @@ class _CustomTitleBarState extends State<CustomTitleBar> {
             _hitTestCloseButton(context, event.position)) {
           return;
         }
-        // Ctrl/Cmd/Shift+לחיצה בונים בחירה מרובה לסגירה קבוצתית (כמו בדפדפן)
-        // בלי להחליף את הטאב הפעיל.
-        if (_isMultiSelectModifierPressed) {
-          context.read<TabsBloc>().add(ToggleTabSelection(tab));
-          return;
-        }
-        if (HardwareKeyboard.instance.isShiftPressed) {
-          context.read<TabsBloc>().add(SelectTabRange(tab));
-          return;
-        }
-        if (state.selectedTabs.isNotEmpty) {
-          context.read<TabsBloc>().add(const ClearTabSelection());
-        }
+        if (applyTabSelectionClick(context, tab, state)) return;
         if (index != state.currentTabIndex) {
           _pendingTabSelection = tab;
         }
