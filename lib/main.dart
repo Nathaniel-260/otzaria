@@ -1206,7 +1206,9 @@ Future<void> _runDeferredAttachedLibraries() async {
       stackTrace,
     );
   }
-  await _syncExternalLinkIndex();
+  // ללא await: בנייה ארוכה (או מושהית) אינה חוסמת את עדכוני המסדים וההאזנה.
+  // המשך אוטומטי של בנייה שנקטעה — רק כאן, בהפעלה, ולא באירועי שינוי.
+  unawaited(_syncExternalLinkIndex(autoResume: true));
   unawaited(_runDeferredAttachedLibraryUpdates());
   AttachedLibrariesRepository.instance.changes.listen(
     (_) => unawaited(_syncExternalLinkIndex()),
@@ -1237,9 +1239,9 @@ Future<void> _runDeferredAttachedLibraryUpdates() async {
 }
 
 /// אינדקס הקישורים ההפוכים של מסדים מצורפים (cache.db) — נבנה רק למסד שהשתנה.
-Future<void> _syncExternalLinkIndex() async {
+Future<void> _syncExternalLinkIndex({bool autoResume = false}) async {
   try {
-    await ExternalLinkRepository.instance.sync();
+    await ExternalLinkRepository.instance.sync(autoResume: autoResume);
   } catch (error, stackTrace) {
     _logNonFatalInitializationError('External link index', error, stackTrace);
   }
