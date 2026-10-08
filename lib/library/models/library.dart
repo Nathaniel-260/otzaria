@@ -243,61 +243,6 @@ class Library extends Category {
       ? null
       : book.externalLibraryId;
 
-  /// מחפש ספר לפי כותרת עם חיפוש גמיש יותר.
-  ///
-  /// אם לא נמצא התאמה מדויקת, מנסה למצוא ספר עם כותרת דומה:
-  /// - מסיר רווחים מיותרים
-  /// - מתעלם מהבדלי גרשיים וסימני פיסוק
-  /// - מחפש התאמה חלקית
-  ///
-  /// [title] - כותרת הספר לחיפוש
-  /// [type] - סוג הספר (למשל PdfBook, TextBook)
-  /// מחזיר את הספר הראשון שנמצא או null
-  Book? findBookByTitleFlexible(String title, Type? type) {
-    List<Book> allBooks = getAllBooks();
-
-    // ניסיון ראשון: חיפוש מדויק
-    try {
-      if (type == null) {
-        return allBooks.firstWhere((book) => book.title == title);
-      }
-      return allBooks.firstWhere(
-        (book) => book.title == title && book.runtimeType == type,
-      );
-    } catch (e) {
-      // לא נמצא - ממשיכים לחיפוש גמיש
-    }
-
-    // נרמול הכותרת לחיפוש
-    String normalizedTitle = _normalizeTitle(title);
-
-    // חיפוש עם נרמול
-    List<Book> candidates = allBooks.where((book) {
-      if (type != null && book.runtimeType != type) return false;
-      return _normalizeTitle(book.title) == normalizedTitle;
-    }).toList();
-
-    if (candidates.isNotEmpty) {
-      return candidates.first;
-    }
-
-    // חיפוש חלקי - הכלה כמילה שלמה בלבד (מונע "רות" בתוך "טהרות")
-    candidates = allBooks.where((book) {
-      if (type != null && book.runtimeType != type) return false;
-      String bookNormalized = _normalizeTitle(book.title);
-      return _containsAsWholeWord(bookNormalized, normalizedTitle) ||
-          _containsAsWholeWord(normalizedTitle, bookNormalized);
-    }).toList();
-
-    return candidates.isNotEmpty ? candidates.first : null;
-  }
-
-  /// בודק אם [needle] מוכל ב-[haystack] כרצף מילים שלם (גבול מילה ברווחים).
-  bool _containsAsWholeWord(String haystack, String needle) {
-    if (needle.isEmpty) return false;
-    return ' $haystack '.contains(' $needle ');
-  }
-
   String _normalizeTitle(String title) => normalizeBookTitle(title);
 }
 
