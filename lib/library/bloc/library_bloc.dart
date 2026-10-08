@@ -439,34 +439,40 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     return current;
   }
 
+  /// בדיקה וחילוץ קובץ ZIP אם קיים; false כשהחילוץ נכשל (השגיאה כבר במצב).
+  Future<bool> _extractZipIfNeeded(
+    String path,
+    Emitter<LibraryState> emit,
+  ) async {
+    final extractionResult =
+        await ZipExtractorService.checkAndExtractZipIfNeeded(path);
+    if (!extractionResult.success) {
+      emit(
+        state.copyWith(
+          error: extractionResult.errorMessage ?? 'שגיאה בחילוץ קובץ דחוס',
+          isLoading: false,
+        ),
+      );
+      return false;
+    }
+    // אם חולץ קובץ, נמתין רגע
+    if (extractionResult.successfullyExtracted) {
+      developer.log(
+        'ZIP file extracted: ${extractionResult.extractedFileName}',
+        name: 'LibraryBloc',
+      );
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+    return true;
+  }
+
   Future<void> _onUpdateLibraryPath(
     UpdateLibraryPath event,
     Emitter<LibraryState> emit,
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
-      // בדיקה וחילוץ קובץ ZIP אם קיים
-      final extractionResult =
-          await ZipExtractorService.checkAndExtractZipIfNeeded(event.path);
-
-      if (!extractionResult.success) {
-        emit(
-          state.copyWith(
-            error: extractionResult.errorMessage ?? 'שגיאה בחילוץ קובץ דחוס',
-            isLoading: false,
-          ),
-        );
-        return;
-      }
-
-      // אם חולץ קובץ, נמתין רגע
-      if (extractionResult.successfullyExtracted) {
-        developer.log(
-          'ZIP file extracted: ${extractionResult.extractedFileName}',
-          name: 'LibraryBloc',
-        );
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
+      if (!await _extractZipIfNeeded(event.path, emit)) return;
 
       await Settings.setValue<String>(
         SettingsRepository.keyLibraryPath,
@@ -531,28 +537,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
   ) async {
     emit(state.copyWith(isLoading: true));
     try {
-      // בדיקה וחילוץ קובץ ZIP אם קיים
-      final extractionResult =
-          await ZipExtractorService.checkAndExtractZipIfNeeded(event.path);
-
-      if (!extractionResult.success) {
-        emit(
-          state.copyWith(
-            error: extractionResult.errorMessage ?? 'שגיאה בחילוץ קובץ דחוס',
-            isLoading: false,
-          ),
-        );
-        return;
-      }
-
-      // אם חולץ קובץ, נמתין רגע
-      if (extractionResult.successfullyExtracted) {
-        developer.log(
-          'ZIP file extracted: ${extractionResult.extractedFileName}',
-          name: 'LibraryBloc',
-        );
-        await Future.delayed(const Duration(milliseconds: 500));
-      }
+      if (!await _extractZipIfNeeded(event.path, emit)) return;
 
       await Settings.setValue<String>(
         SettingsRepository.keyHebrewBooksPath,
