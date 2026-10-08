@@ -1117,6 +1117,7 @@ class _PersonalNotesManagerScreenState
               );
             }
             return FutureBuilder<List<TocEntry>?>(
+              key: ValueKey((group.bookId, start)),
               future: _tocFor(group.bookId),
               builder: (context, tocSnapshot) => Padding(
                 padding: EdgeInsets.only(top: start == 0 ? 0 : spacing),
@@ -1239,13 +1240,8 @@ class _PersonalNotesManagerScreenState
             ),
           ],
           const SizedBox(height: 8),
-          // תצוגה מקדימה מעוצבת: מרנדרים את ה-Quill Delta במקום טקסט פשוט,
-          // כך שהעיצוב (מודגש/נטוי/קו תחתי/קו חוצה וכו') יופיע גם בכרטיס.
-          // maxPreviewChars מקצר הערות ארוכות כדי שלא נרנדר אלפי מילים
-          // בכל כרטיס (QuillEditor הלא-נגלל מחשב layout לכל הטקסט).
-          // הכרטיס בגובה קבוע (mainAxisExtent: 170), לכן עוטפים ב-Expanded +
-          // ClipRect + OverflowBox כדי לחתוך את העודף הוויזואלי. maxHeight
-          // מוגבל כהגנה כפולה מעל הקיצור התוכני.
+          // QuillEditor לא נגלל מחשב פריסה לכל הטקסט, לכן מקצרים את התוכן
+          // ומגבילים את גובה התצוגה המקדימה בתוך הכרטיס.
           Expanded(
             child: ClipRect(
               child: OverflowBox(
