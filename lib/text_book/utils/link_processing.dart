@@ -173,17 +173,20 @@ List<Link> computeVisibleLinks({
     }
   }
 
-  final titles = <Link, String>{};
+  // הכותרת מחושבת פעם אחת לקישור ונצמדת אליו — בלי חיפוש במפה בכל השוואה.
   final pathCache = <String, String>{};
-  for (final link in visibleLinks) {
-    titles[link] = pathCache.putIfAbsent(
-      link.path2,
-      () => utils.getTitleFromPath(link.path2),
-    );
-  }
-  visibleLinks.sort((a, b) => titles[a]!.compareTo(titles[b]!));
+  final byTitle = [
+    for (final link in visibleLinks)
+      (
+        pathCache.putIfAbsent(
+          link.path2,
+          () => utils.getTitleFromPath(link.path2),
+        ),
+        link,
+      ),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
 
-  return visibleLinks;
+  return [for (final (_, link) in byTitle) link];
 }
 
 Future<
