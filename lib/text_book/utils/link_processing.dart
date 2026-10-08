@@ -102,16 +102,21 @@ class _LinksByLineMap extends MapBase<int, List<Link>> {
     if (link.index1 < line) _collect(node.right, line, result);
   }
 
+  // כל גלילה שואלת שוב על אותן שורות; המפה קבועה, ולכן התשובה נשמרת.
+  final Map<int, List<Link>?> _memo = {};
+
   @override
-  List<Link>? operator [](Object? key) {
-    if (key is! int) return null;
-    final direct = _starts[key];
-    if (_ranges == null) return direct?.map((item) => item.link).toList();
-    final found = <_OrderedLink>[...?direct];
-    _collect(_ranges, key, found);
+  List<Link>? operator [](Object? key) =>
+      key is int ? _memo.putIfAbsent(key, () => _lookup(key)) : null;
+
+  List<Link>? _lookup(int key) {
+    final found = <_OrderedLink>[...?_starts[key]];
+    if (_ranges != null) {
+      _collect(_ranges, key, found);
+      found.sort((a, b) => a.order.compareTo(b.order));
+    }
     if (found.isEmpty) return null;
-    found.sort((a, b) => a.order.compareTo(b.order));
-    return found.map((item) => item.link).toList();
+    return List.unmodifiable(found.map((item) => item.link));
   }
 
   @override
