@@ -511,6 +511,77 @@ void main() {
       expect(identical(tabScreenWidget(tester, 'ב'), before), isFalse);
     });
 
+    testWidgets('replacing a tab does not rebuild the other tabs', (
+      tester,
+    ) async {
+      final tabs = [_tab('א'), _tab('ב'), _tab('ג')];
+      final replacement = _tab('ד');
+      addTearDown(() {
+        for (final t in [tabs[0], tabs[1], replacement]) {
+          t.dispose();
+        }
+      });
+      final bloc = await pumpReadingScreen(tester, tabs);
+      await visitAllTabs(tester, bloc, 0);
+
+      final before = {
+        for (final t in ['א', 'ב']) t: tabScreenWidget(tester, t),
+      };
+      bloc.add(ReplaceTab(oldTab: tabs[2], newTab: replacement));
+      await tester.pumpAndSettle();
+      // ההחלפה משחררת את הטאב הישן בהשהיה.
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(_titles(bloc), ['א', 'ב', 'ד']);
+      for (final t in ['א', 'ב']) {
+        expect(
+          identical(tabScreenWidget(tester, t), before[t]),
+          isTrue,
+          reason: 'only the replaced tab changed; "$t" must not be rebuilt',
+        );
+      }
+    });
+
+    testWidgets('splitting and unsplitting do not rebuild unrelated tabs', (
+      tester,
+    ) async {
+      final tabs = [_tab('א'), _tab('ב'), _tab('ג')];
+      addTearDown(() {
+        for (final t in tabs) {
+          t.dispose();
+        }
+      });
+      final bloc = await pumpReadingScreen(tester, tabs);
+      await visitAllTabs(tester, bloc, 1);
+
+      final before = tabScreenWidget(tester, 'א');
+      Future<void> expectUnrelatedTabKept(TabsEvent event) async {
+        bloc.add(event);
+        await tester.pumpAndSettle();
+        expect(
+          identical(tabScreenWidget(tester, 'א'), before),
+          isTrue,
+          reason: '${event.runtimeType} must not rebuild an unrelated tab',
+        );
+      }
+
+      await expectUnrelatedTabKept(
+        CreateCombinedTab(rightTab: tabs[1], leftTab: tabs[2]),
+      );
+      await expectUnrelatedTabKept(const SwapSideBySideTabs());
+      await expectUnrelatedTabKept(const ExpandCombinedTab(1));
+      await expectUnrelatedTabKept(
+        CreateCombinedTab(rightTab: tabs[1], leftTab: tabs[2]),
+      );
+      await expectUnrelatedTabKept(DetachPane(tabs[2], insertIndex: 2));
+      final extra = _tab('ה');
+      await expectUnrelatedTabKept(OpenTabInSidePane(extra));
+      // הבלוק משחרר את החלונית שנסגרה בהשהיה.
+      await expectUnrelatedTabKept(ClosePane(extra));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(_titles(bloc), ['א', 'ב', 'ג']);
+    });
+
     testWidgets('committing a split ratio does not rebuild any tab content', (
       tester,
     ) async {
