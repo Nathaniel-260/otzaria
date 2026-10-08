@@ -34,12 +34,7 @@ void main() {
 
     test('כמה כותרות באותה שורה בוחרות את הכותרת העמוקה', () async {
       final root = TocEntry(text: 'ספר', index: 0);
-      final chapter = TocEntry(
-        text: 'פרק',
-        index: 0,
-        level: 2,
-        parent: root,
-      );
+      final chapter = TocEntry(text: 'פרק', index: 0, level: 2, parent: root);
       chapter.children.add(
         TocEntry(text: 'סעיף', index: 0, level: 3, parent: chapter),
       );
@@ -89,10 +84,7 @@ void main() {
 
     test('reference שפותח בשם הספר בלי פסיק — השארית בלבד', () {
       expect(
-        CopyUtils.referencePath(
-          bookName: 'בראשית',
-          reference: 'בראשית פרק ד',
-        ),
+        CopyUtils.referencePath(bookName: 'בראשית', reference: 'בראשית פרק ד'),
         'פרק ד',
       );
     });
@@ -246,6 +238,23 @@ void main() {
           bookContent: ['<h2>פרק א</h2><h3>הלכה א</h3>', 'טקסט'],
         ),
         'פרק א, הלכה א',
+      );
+    });
+
+    test('תוכן טעון חלקית לא מחסיר כותרות שלא נטענו', () async {
+      const full = [
+        '<h1>ספר</h1>',
+        '<h2>הלכות שבת</h2>',
+        'טקסט',
+        '<h3>פרק כ</h3>',
+        'טקסט נבחר',
+      ];
+      final book = _TocBook(TocParser.parseEntriesFromContent(full.join('\n')));
+      // השורות שמחוץ לחלון הטעון הן placeholders ריקים.
+      const partial = ['', '', '', '<h3>פרק כ</h3>', 'טקסט נבחר'];
+      expect(
+        await CopyUtils.extractCurrentPath(book, 4, bookContent: partial),
+        'הלכות שבת, פרק כ',
       );
     });
   });
