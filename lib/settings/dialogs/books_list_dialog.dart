@@ -63,7 +63,7 @@ class _BooksListDialogState extends State<_BooksListDialog> {
   }
 
   void _onSearchChanged() {
-    final query = _searchController.text.trim();
+    final query = _searchController.text.trim().toLowerCase();
     setState(() {
       _visibleRows = query.isEmpty
           ? _rows
@@ -241,7 +241,7 @@ class _BookRow {
   final String category;
   final String fileType;
 
-  const _BookRow({
+  _BookRow({
     required this.title,
     required this.author,
     required this.category,
@@ -259,13 +259,16 @@ class _BookRow {
     );
   }
 
-  bool matches(String query) {
-    final q = query.toLowerCase();
-    return title.toLowerCase().contains(q) ||
-        author.toLowerCase().contains(q) ||
-        category.toLowerCase().contains(q) ||
-        fileType.toLowerCase().contains(q);
-  }
+  // השדות באותיות קטנות מחושבים פעם אחת ולא בכל הקשה.
+  late final _lowerFields = [
+    title,
+    author,
+    category,
+    fileType,
+  ].map((field) => field.toLowerCase()).toList();
+
+  bool matches(String lowerQuery) =>
+      _lowerFields.any((field) => field.contains(lowerQuery));
 }
 
 String _buildCsv(List<_BookRow> rows) {
