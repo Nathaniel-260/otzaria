@@ -17,7 +17,6 @@ import 'package:otzaria/widgets/smart_text/smart_text_widget.dart';
 import 'package:otzaria/widgets/smart_text/text_renderer_service.dart';
 
 // חוזה התצוגה של אותיות העוגן מקצה לקצה: הזרקה ← processText ← מסלול רינדור ← שכבת ההרמה.
-// כל בדיקה נושאת את הקומיט שתיקן את השבר שהיא נועלת.
 
 const _font = 'FrankRuhlCLM';
 const _settings = RenderSettings(fontSize: 20, fontFamily: _font);
@@ -68,6 +67,7 @@ Future<void> _pumpSmart(
   ThemeData? theme,
   RenderSettings settings = _settings,
   double width = 600,
+  RenderMode renderMode = RenderMode.column,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -83,6 +83,7 @@ Future<void> _pumpSmart(
                 text: html,
                 settings: settings,
                 onAnchorTap: (_) {},
+                renderMode: renderMode,
               ),
             ),
           ),
@@ -369,6 +370,52 @@ void main() {
         }
       },
     );
+
+    test('שתי כותרות באותה שורה אינן מקבלות סגנון של כותרת יחידה', () {
+      for (final html in [
+        '<h1>ראשונה</h1><p>גוף</p><h1>שנייה</h1>',
+        '<h2>ראשונה</h2><h2>שנייה</h2>',
+        '<h1>ראשונה<h2>שנייה</h2></h1>',
+      ]) {
+        expect(
+          SimpleInlineHtml.headingStyle(html, _base),
+          isNull,
+          reason: html,
+        );
+        expect(SimpleInlineHtml.tryParseHeading(html, _base), isNull);
+      }
+    });
+
+    testWidgets('סימון גוף בין כותרות שומר על גודל הגוף בשני מסלולי הרינדור', (
+      tester,
+    ) async {
+      for (final mode in [RenderMode.column, RenderMode.listView]) {
+        for (final body in [
+          'גוף<sup>א</sup>טקסט',
+          for (var variant = 0; variant < kLinkAnchorVariants.length; variant++)
+            _inject(
+              'גוף הטקסט',
+              [_point('מפרש', 3)],
+              styles: {'מפרש': variant},
+            ),
+        ]) {
+          final html = '<h1>כותרת ראשונה</h1><p>$body</p><h1>כותרת שנייה</h1>';
+          await _pumpSmart(tester, html, renderMode: mode);
+          final placement = _placements(tester).single;
+          expect(
+            placement.paintRect.height,
+            closeTo(placement.anchorRect.height, 0.5),
+            reason: html,
+          );
+          expect(
+            placement.paintRect.width,
+            closeTo(placement.anchorRect.width, 1.0),
+            reason: html,
+          );
+          expect(_widgetStyle(tester, 'גוף').fontSize, _settings.fontSize);
+        }
+      }
+    });
 
     test(
       '1fbf446 + 6a5fcd7: אות הציון בחלונית זהה לאות שבגוף הטקסט, ו-♦ מוצג כ-◆ (issue #2075)',

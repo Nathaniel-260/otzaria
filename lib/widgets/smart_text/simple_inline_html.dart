@@ -264,6 +264,8 @@ class SimpleInlineHtml {
     dotAll: true,
   );
 
+  static final RegExp _headingTagRegex = RegExp(r'</?h[1-6]\b');
+
   /// גודל ברירת המחדל של fwfh לכל רמת כותרת, ביחס לגופן הסובב.
   static const Map<String, double> _defaultHeadingScale = {
     'h1': 2,
@@ -290,6 +292,16 @@ class SimpleInlineHtml {
     if (!html.contains('<h')) return null;
     final match = _wholeLineHeadingRegex.firstMatch(html);
     if (match == null) return null;
+    final content = match[2]!;
+    for (
+      var tagStart = content.indexOf('<');
+      tagStart != -1;
+      tagStart = content.indexOf('<', tagStart + 1)
+    ) {
+      if (_headingTagRegex.matchAsPrefix(content, tagStart) != null) {
+        return null;
+      }
+    }
     final tag = 'h${match[1]}';
     final fontFamily = baseStyle.fontFamily;
     final sizeOverride = AppFonts.headingFontSizeOverride(tag, fontFamily);
