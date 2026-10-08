@@ -299,6 +299,8 @@ class _NativeIndex extends Fake implements TantivyDataProvider {
   @override
   bool get requiresManualReindex => false;
   @override
+  String? activeIndexPath;
+  @override
   bool get isTempFallback => false;
   @override
   bool ensureCatalogueOrderStamp() => true;

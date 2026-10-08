@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:otzaria/indexing/utils/indexing_crash_canary.dart';
 import 'dart:io';
 import 'dart:isolate';
 import 'dart:ui' as ui show IsolateNameServer;
@@ -72,6 +73,21 @@ void main() {
     ui.IsolateNameServer.removePortNameMapping('$_namespace.owner');
     WindowBus.namespace = 'otzaria.window';
     if (tmp.existsSync()) tmp.deleteSync(recursive: true);
+  });
+
+  test('סגירת חלון בלי כיבוי התהליך משמרת canary', () async {
+    WindowBus.instance.register();
+    IndexingCrashCanary.start('${tmp.path}/index');
+    final canary = IndexingCrashCanary.current!;
+    canary.begin('id:crashing');
+    addTearDown(canary.finish);
+    await AppWindowListener().handleWindowClose();
+    expect(runner.closeSelfCalls, 1);
+    expect(
+      IndexingCrashCanary.current,
+      same(canary),
+      reason: 'האינדוקס ממשיך במנוע החי לאחר הסתרת החלון',
+    );
   });
 
   test('הכנת העדכון מסתיימת לפני flush וסגירה, גם באירוע כפול', () async {
@@ -302,6 +318,10 @@ void main() {
       () => AppWindowListener.debugKeepsProcessAfterLastWindowOverride = null,
     );
     runner.windowCount = 1;
+    IndexingCrashCanary.start('${tmp.path}/index');
+    final canary = IndexingCrashCanary.current!;
+    canary.begin('id:active');
+    addTearDown(canary.finish);
 
     var flushed = false;
     Future<void> flush() async => flushed = true;
@@ -316,6 +336,7 @@ void main() {
 
     expect(flushed, isTrue);
     expect(runner.closeSelfCalls, 1, reason: 'הוסתר במקום כיבוי');
+    expect(IndexingCrashCanary.current, same(canary));
     expect(
       await sessions.load(slot),
       isNotNull,

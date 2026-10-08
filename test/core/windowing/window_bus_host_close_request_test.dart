@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:otzaria/indexing/utils/indexing_crash_canary.dart';
 import 'dart:async';
 import 'dart:isolate';
 import 'dart:ui' as ui show IsolateNameServer;
@@ -141,6 +143,34 @@ void main() {
     await peer.received.future.timeout(const Duration(seconds: 2));
     expect(peer.lastType, MultiWindowService.requestRestart);
     expect(peer.lastBody!['pluginSafeMode'], isFalse);
+  });
+
+  testWidgets('כיבוי תהליך מחלון אחר מסיים מעקב אינדוקס בראשי מוסתר', (
+    tester,
+  ) async {
+    final temp = Directory.systemTemp.createTempSync('canary_owner_');
+    addTearDown(() => temp.deleteSync(recursive: true));
+    IndexingCrashCanary.start('${temp.path}/index');
+    final canary = IndexingCrashCanary.current!;
+    addTearDown(canary.finish);
+    canary.begin('id:active');
+    final window = _RecordingWindow(visible: false);
+    await tester.pumpWidget(
+      AppWindowScope(
+        controller: window,
+        geometry: window,
+        child: const WindowBusHost(child: SizedBox()),
+      ),
+    );
+    expect(
+      await WindowBus.instance.onRequest!({
+        'type': IndexingCrashCanary.finishRequest,
+      }),
+      isTrue,
+    );
+    expect(IndexingCrashCanary.current, isNull);
+    expect(File('${temp.path}/index.in_flight.json').readAsStringSync(), '{}');
+    expect(window.closeCalls, 0);
   });
 
   testWidgets('בקשת סגירה נכנסת עוברת במסלול הסגירה הרגיל', (tester) async {
