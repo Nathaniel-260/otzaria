@@ -654,7 +654,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void _previousWeek() {
-    final newDate = state.selectedGregorianDate.subtract(Duration(days: 7));
+    final newDate = _plusDays(state.selectedGregorianDate, -7);
     final newJewishDate = JewishDate.fromDateTime(newDate);
     final newTimes = _calculateDailyTimes(newDate, state.selectedCity);
     emit(
@@ -667,7 +667,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void _nextWeek() {
-    final newDate = state.selectedGregorianDate.add(Duration(days: 7));
+    final newDate = _plusDays(state.selectedGregorianDate, 7);
     final newJewishDate = JewishDate.fromDateTime(newDate);
     final newTimes = _calculateDailyTimes(newDate, state.selectedCity);
     emit(
@@ -680,7 +680,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void _previousDay() {
-    final newDate = state.selectedGregorianDate.subtract(Duration(days: 1));
+    final newDate = _plusDays(state.selectedGregorianDate, -1);
     final newJewishDate = JewishDate.fromDateTime(newDate);
     final newTimes = _calculateDailyTimes(newDate, state.selectedCity);
     emit(
@@ -693,7 +693,7 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   void _nextDay() {
-    final newDate = state.selectedGregorianDate.add(Duration(days: 1));
+    final newDate = _plusDays(state.selectedGregorianDate, 1);
     final newJewishDate = JewishDate.fromDateTime(newDate);
     final newTimes = _calculateDailyTimes(newDate, state.selectedCity);
     emit(
@@ -786,9 +786,9 @@ class CalendarCubit extends Cubit<CalendarState> {
     );
   }
 
-  /// פונקציה פנימית לניווט לפי משך זמן
-  void _navigateByDuration(Duration duration) {
-    final newDate = state.selectedGregorianDate.add(duration);
+  /// פונקציה פנימית לניווט לפי מספר ימים
+  void _navigateByDays(int days) {
+    final newDate = _plusDays(state.selectedGregorianDate, days);
     final newJewishDate = JewishDate.fromDateTime(newDate);
     final newTimes = _calculateDailyTimes(newDate, state.selectedCity);
 
@@ -804,17 +804,16 @@ class CalendarCubit extends Cubit<CalendarState> {
   }
 
   /// ניווט ליום הבא (לשימוש עם מקשי חיצים)
-  void navigateToNextDay() => _navigateByDuration(const Duration(days: 1));
+  void navigateToNextDay() => _navigateByDays(1);
 
   /// ניווט ליום הקודם (לשימוש עם מקשי חיצים)
-  void navigateToPreviousDay() => _navigateByDuration(const Duration(days: -1));
+  void navigateToPreviousDay() => _navigateByDays(-1);
 
   /// ניווט לשבוע הבא (לשימוש עם מקשי חיצים)
-  void navigateToNextWeek() => _navigateByDuration(const Duration(days: 7));
+  void navigateToNextWeek() => _navigateByDays(7);
 
   /// ניווט לשבוע הקודם (לשימוש עם מקשי חיצים)
-  void navigateToPreviousWeek() =>
-      _navigateByDuration(const Duration(days: -7));
+  void navigateToPreviousWeek() => _navigateByDays(-7);
 
   void setEventSearchQuery(String query) {
     emit(state.copyWith(eventSearchQuery: query));
@@ -1534,7 +1533,7 @@ DateTime resolveCalendarDayForTransition({
     return civilToday;
   }
 
-  return civilToday.add(const Duration(days: 1));
+  return _plusDays(civilToday, 1);
 }
 
 /// ממירה מחרוזת שמורה להגדרת מעבר היום, עם ברירת מחדל לשקיעה.
@@ -1610,14 +1609,14 @@ DateTime nextCalendarTodayRefreshTime({
   final candidates = <DateTime>[];
 
   for (int dayOffset = 0; dayOffset <= 1; dayOffset++) {
-    final date = civilToday.add(Duration(days: dayOffset));
+    final date = _plusDays(civilToday, dayOffset);
     final alos90 = _calculateAlos90(date, city);
     if (alos90 != null) {
       candidates.add(tz.TZDateTime.from(alos90, tzLocation));
     }
 
     if (transition == CalendarDayTransition.midnight) {
-      final nextDate = date.add(const Duration(days: 1));
+      final nextDate = _plusDays(date, 1);
       candidates.add(
         tz.TZDateTime(
           tzLocation,
@@ -1674,6 +1673,10 @@ DateTime? _calculateAlos90(DateTime date, String city) {
   final sunrise = context?.zmanimCalendar.getSunrise();
   return sunrise?.subtract(const Duration(minutes: 90));
 }
+
+// יום לוח ולא 24 שעות: ביום מעבר שעון היום ארוך או קצר משעה.
+DateTime _plusDays(DateTime date, int days) =>
+    DateTime(date.year, date.month, date.day + days);
 
 bool _isSameDateOnly(DateTime first, DateTime second) {
   return first.year == second.year &&
