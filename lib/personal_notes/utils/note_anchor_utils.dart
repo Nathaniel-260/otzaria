@@ -433,12 +433,9 @@ void _appendWrapped(
   // שלב 1: איתור אינדקסי ה-'<' של תגיות לא-מאוזנות בטווח.
   final boundaries = <int>{};
   final openStack = <int>[];
-  int i = start;
-  while (i < end) {
-    if (text[i] != '<') {
-      i++;
-      continue;
-    }
+  // קפיצה ישירה בין תגיות — סריקה תו-תו יצרה מחרוזת לכל תו.
+  var i = text.indexOf('<', start);
+  while (i >= 0 && i < end) {
     final gt = text.indexOf('>', i);
     final tagEnd = (gt < 0 || gt >= end) ? end - 1 : gt;
     final isClose = i + 1 < end && text[i + 1] == '/';
@@ -452,7 +449,7 @@ void _appendWrapped(
     } else if (!isSelfClose) {
       openStack.add(i);
     }
-    i = tagEnd + 1;
+    i = text.indexOf('<', tagEnd + 1);
   }
   boundaries.addAll(openStack);
 
@@ -481,8 +478,10 @@ void _appendWrapped(
         buffer.write(openTag);
         wrapOpen = true;
       }
-      buffer.write(text[i]);
-      i++;
+      final lt = text.indexOf('<', i);
+      final runEnd = lt < 0 || lt > end ? end : lt;
+      buffer.write(text.substring(i, runEnd));
+      i = runEnd;
     }
   }
   if (wrapOpen) buffer.write(closeTag);
