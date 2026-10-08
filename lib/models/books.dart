@@ -866,99 +866,16 @@ Book buildBookForFileType({
 
   // בלי קובץ אין מה להמיר — הספר נטען משורות ה-DB ולכן נשאר TextBook,
   // אך `fileType` נשמר כדי שזהות הספר לא תשתנה.
-  if (filePath == null) {
-    return TextBook(
-      id: id,
-      title: title,
-      category: category,
-      author: author,
-      heCategories: heCategories,
-      heEra: heEra,
-      heShortDesc: heShortDesc,
-      heDesc: heDesc,
-      pubDate: pubDate,
-      pubPlace: pubPlace,
-      order: order,
-      topics: topics,
-      fileType: resolvedType,
-      categoryPath: categoryPath,
-      categoryId: categoryId,
-      extraTitles: extraTitles,
-      source: source,
-      externalLibraryId: externalLibraryId,
-    );
-  }
+  final fileBook = switch (format) {
+    _ when filePath == null => null,
+    DocumentFormat.pdf => PdfBook.new,
+    DocumentFormat.docx => DocxBook.new,
+    DocumentFormat.epub => EpubBook.new,
+    final f? when f.isDocumentBook => DocumentBook.new,
+    _ => null,
+  };
 
-  if (format == DocumentFormat.pdf) {
-    return PdfBook(
-      id: id,
-      title: title,
-      category: category,
-      path: path,
-      filePath: filePath,
-      author: author,
-      heCategories: heCategories,
-      heEra: heEra,
-      heShortDesc: heShortDesc,
-      heDesc: heDesc,
-      pubDate: pubDate,
-      pubPlace: pubPlace,
-      order: order,
-      topics: topics,
-      categoryPath: categoryPath,
-      categoryId: categoryId,
-      source: source,
-      externalLibraryId: externalLibraryId,
-    );
-  }
-
-  if (format == DocumentFormat.docx) {
-    return DocxBook(
-      id: id,
-      title: title,
-      category: category,
-      path: path,
-      filePath: filePath,
-      author: author,
-      heCategories: heCategories,
-      heEra: heEra,
-      heShortDesc: heShortDesc,
-      heDesc: heDesc,
-      pubDate: pubDate,
-      pubPlace: pubPlace,
-      order: order,
-      topics: topics,
-      categoryPath: categoryPath,
-      categoryId: categoryId,
-      source: source,
-      externalLibraryId: externalLibraryId,
-    );
-  }
-
-  if (format == DocumentFormat.epub) {
-    return EpubBook(
-      id: id,
-      title: title,
-      category: category,
-      path: path,
-      filePath: filePath,
-      author: author,
-      heCategories: heCategories,
-      heEra: heEra,
-      heShortDesc: heShortDesc,
-      heDesc: heDesc,
-      pubDate: pubDate,
-      pubPlace: pubPlace,
-      order: order,
-      topics: topics,
-      categoryPath: categoryPath,
-      categoryId: categoryId,
-      source: source,
-      externalLibraryId: externalLibraryId,
-    );
-  }
-
-  if (format == null || !format.isDocumentBook) {
+  if (fileBook == null) {
     return TextBook(
       id: id,
       title: title,
@@ -982,7 +899,7 @@ Book buildBookForFileType({
     );
   }
 
-  return DocumentBook(
+  return fileBook(
     id: id,
     title: title,
     category: category,
