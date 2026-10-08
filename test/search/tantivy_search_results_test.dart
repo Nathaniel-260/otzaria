@@ -254,6 +254,42 @@ void main() {
       expect(resetOffset, 0);
     });
 
+    testWidgets('שינוי מיון (אותה שאילתה וקטגוריה) מאפס את הגלילה לראש', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildWidget());
+      await tester.pump();
+
+      await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
+      await tester.pump();
+      double offset() => tester
+          .widget<CustomScrollView>(find.byType(CustomScrollView))
+          .controller!
+          .offset;
+      expect(offset(), greaterThan(0));
+
+      // כמו UpdateSortOrder: הגדרה חדשה וטעינה, ואז הרשימה בסדר חדש.
+      searchBloc.emitState(
+        searchBloc.state.copyWith(
+          configuration: searchBloc.state.configuration.copyWith(
+            sortBy: ResultsOrder.relevance,
+          ),
+          isLoading: true,
+        ),
+      );
+      await tester.pump();
+      searchBloc.emitState(
+        searchBloc.state.copyWith(
+          results: searchBloc.state.results.reversed.toList(),
+          isLoading: false,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      expect(offset(), 0);
+    });
+
     testWidgets('טעינת המשך (אותה חתימה) שומרת על מיקום הגלילה', (
       tester,
     ) async {
