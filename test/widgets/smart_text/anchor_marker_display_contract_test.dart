@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:otzaria/book_common/utils/link_anchor_markers.dart';
 import 'package:otzaria/book_common/utils/link_anchor_variants.dart';
 import 'package:otzaria/models/links.dart';
@@ -339,6 +340,33 @@ void main() {
 
         await _pumpSmart(tester, raw);
         expect(_placements(tester), hasLength(1));
+      },
+    );
+
+    testWidgets(
+      'בכותרת הציור בגודל ובמשקל של הגליף שבשורה, ולא של טקסט הגוף (issue #2075)',
+      (tester) async {
+        for (final tag in ['h1', 'h2', 'h3', 'h4']) {
+          // ציון מפרש עובר ב-HtmlWidget, sup מורם במסלול המהיר.
+          for (final (raw, viaHtml) in [
+            (_inject('<$tag>פרק ראשון בענין</$tag>', [_point('מפרש', 5)]), 1),
+            ('<$tag>פרק ראשון<sup>ב</sup> בענין</$tag>', 0),
+          ]) {
+            await _pumpSmart(tester, raw);
+            expect(find.byType(HtmlWidget), findsNWidgets(viaHtml));
+            final placement = _placements(tester).single;
+            expect(
+              placement.paintRect.height,
+              closeTo(placement.anchorRect.height, 0.5),
+              reason: raw,
+            );
+            expect(
+              placement.paintRect.width,
+              closeTo(placement.anchorRect.width, 1.0),
+              reason: raw,
+            );
+          }
+        }
       },
     );
 
