@@ -1067,17 +1067,33 @@ class _PersonalNotesManagerScreenState
       );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16.0),
-      itemCount: groupedNotes.length,
-      itemBuilder: (context, groupIndex) {
-        final group = groupedNotes[groupIndex];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const minCardWidth = 280.0;
+        const maxCardsPerRow = 3;
+        const spacing = 12.0;
+        final availableWidth = constraints.maxWidth - 32;
+        int crossAxisCount =
+            ((availableWidth + spacing) / (minCardWidth + spacing)).floor();
+        crossAxisCount = crossAxisCount.clamp(1, maxCardsPerRow);
 
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (group.bookId != 'all')
-              Padding(
+        // שורה שטוחה לכל כותרת ולכל שורת כרטיסים, כדי שגם הקבוצות וגם הכרטיסים
+        // ייבנו בעצלות. start == null היא כותרת הספר.
+        final rows = <({_NotesGroup group, int? start})>[
+          for (final group in groupedNotes) ...[
+            if (group.bookId != 'all') (group: group, start: null),
+            for (var i = 0; i < group.notes.length; i += crossAxisCount)
+              (group: group, start: i),
+          ],
+        ];
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16.0),
+          itemCount: rows.length,
+          itemBuilder: (context, index) {
+            final (:group, :start) = rows[index];
+            if (start == null) {
+              return Padding(
                 padding: const EdgeInsets.only(top: 16, bottom: 16),
                 child: Row(
                   children: [
@@ -1098,46 +1114,35 @@ class _PersonalNotesManagerScreenState
                     ),
                   ],
                 ),
-              ),
-            FutureBuilder<List<TocEntry>?>(
+              );
+            }
+            return FutureBuilder<List<TocEntry>?>(
               future: _tocFor(group.bookId),
-              builder: (context, tocSnapshot) {
-                final toc = tocSnapshot.data;
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    const minCardWidth = 280.0;
-                    const maxCardsPerRow = 3;
-                    const spacing = 12.0;
-                    final availableWidth = constraints.maxWidth;
-                    int crossAxisCount =
-                        ((availableWidth + spacing) / (minCardWidth + spacing))
-                            .floor();
-                    crossAxisCount = crossAxisCount.clamp(1, maxCardsPerRow);
-
-                    return GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: crossAxisCount,
-                        crossAxisSpacing: spacing,
-                        mainAxisSpacing: spacing,
-                        mainAxisExtent: 170,
-                      ),
-                      itemCount: group.notes.length,
-                      itemBuilder: (context, noteIndex) {
-                        final item = group.notes[noteIndex];
-                        return _buildNoteCard(
-                          item.note,
-                          item.isMissing,
-                          tableOfContents: toc,
-                        );
-                      },
-                    );
-                  },
-                );
-              },
-            ),
-          ],
+              builder: (context, tocSnapshot) => Padding(
+                padding: EdgeInsets.only(top: start == 0 ? 0 : spacing),
+                child: SizedBox(
+                  height: 170,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var c = 0; c < crossAxisCount; c++) ...[
+                        if (c > 0) const SizedBox(width: spacing),
+                        Expanded(
+                          child: start + c < group.notes.length
+                              ? _buildNoteCard(
+                                  group.notes[start + c].note,
+                                  group.notes[start + c].isMissing,
+                                  tableOfContents: tocSnapshot.data,
+                                )
+                              : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
