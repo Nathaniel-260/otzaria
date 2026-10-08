@@ -51,10 +51,6 @@ class UpdatePlan {
 
   Iterable<UpdateStep> get work =>
       steps.where((step) => step.action != UpdateFileAction.alreadyUpToDate);
-
-  /// כמה בתים יש לפרוס בפועל. ערך שכבר מעודכן אינו נספר.
-  int get payloadBytes =>
-      work.fold(0, (sum, step) => sum + step.entry.entrySize);
 }
 
 /// עדכון שנבנה במלואו ב-staging ואומת מול המניפסט. ההתקנה החיה עדיין
@@ -82,8 +78,6 @@ class StagedUpdate {
   final Directory workRoot;
   final List<SwapFile> files;
   final List<SwapRemoval> removals;
-
-  File get swapPlanFile => File(p.join(workRoot.path, kSwapPlanFileName));
 
   /// כותב את תוכנית ההחלפה שהמעדכן העצמאי מקבל כארגומנט.
   Future<File> writeSwapPlan({

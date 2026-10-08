@@ -5,8 +5,6 @@ import 'package:fuzzywuzzy/fuzzywuzzy.dart';
 import 'package:otzaria/data/cache/acronyms_cache.dart';
 import 'package:otzaria/data/cache/generation_cache.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
-import 'package:otzaria/indexing/bloc/indexing_bloc.dart';
-import 'package:otzaria/indexing/bloc/indexing_event.dart';
 import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/books.dart';
 import 'package:otzaria/library/models/library.dart';
@@ -174,22 +172,6 @@ class DataRepository {
   ///   - [limit]: Maximum number of results to return (defaults to 10)
   ///
   /// Returns a [Future] that completes with a list of [Ref] objects sorted by relevance
-
-  /// Adds text content from the library to the Tantivy search index
-  ///
-  /// Parameters:
-  ///   - [library]: The library containing books to index
-  ///
-  /// This method now uses the IndexingBloc to handle the indexing process
-  Future<void> addAllTextsToTantivy(
-    Library library,
-  ) async {
-    // Create an instance of IndexingBloc
-    final indexingBloc = IndexingBloc.create();
-
-    // Start the indexing process
-    indexingBloc.add(StartIndexing(library));
-  }
 
   /// Searches for books based on query text and optional filters
   ///
