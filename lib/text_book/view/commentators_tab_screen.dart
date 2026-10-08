@@ -300,6 +300,15 @@ class _CommentatorsTabScreenState extends State<CommentatorsTabScreen>
       // ניווט רגיל מאפס את ריבוי-הבחירה (לחיצת chevron מעבירה clearMulti: false).
       if (clearMulti) _extraIndexes.clear();
     });
+    final state = widget.tab.bloc.state;
+    if (state is TextBookLoaded) {
+      widget.tab.navigatedIndex = _computeIndexes(
+        _getChapters(state.tableOfContents),
+        next.selectedChapter,
+        next.selectedVerseIdx,
+        state.content.length,
+      )?.first;
+    }
   }
 
   /// האינדקסים האפקטיביים להצגת מפרשים: איחוד הבחירה הראשית עם ריבוי-הבחירה
