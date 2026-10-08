@@ -2202,9 +2202,7 @@ class PluginBridgeAdapter {
         final limit = args['limit'] as int? ?? 50;
         if (query == null || query.isEmpty) return [];
         final results = await _dependencies.searchRepository.searchTexts(
-          query,
-          [],
-          limit,
+          SearchEngineRequest(query: query, facets: [], limit: limit),
         );
         return results
             .map(
@@ -2263,27 +2261,29 @@ class PluginBridgeAdapter {
       findBook: (identity) => _findPluginBook(library, identity),
     );
     final stream = _dependencies.searchRepository.searchTextsStreamWithCounts(
-      request.sanitizedQuery,
-      facets,
-      request.limit,
-      offset: request.offset,
+      SearchEngineRequest(
+        query: request.sanitizedQuery,
+        facets: facets,
+        limit: request.limit,
+        offset: request.offset,
+        order: request.order,
+        searchMode: request.searchMode,
+        distance: request.distance,
+        negativeQuery: request.sanitizedNegativeQuery,
+        negativeDistance: request.negativeDistance,
+        scope: request.proximityScope,
+        negativeScope: request.negativeProximityScope,
+        customSpacing: request.effectiveCustomSpacing,
+        negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
+        alternativeWords: request.effectiveAlternativeWords,
+        negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
+        searchOptions: request.effectiveSearchOptions,
+        negativeSearchOptions: request.effectiveNegativeSearchOptions,
+        grouping: request.grouping,
+        wordMatchMode: request.wordMatchMode,
+        wordMatchCount: request.wordMatchCount,
+      ),
       chunkSize: 50,
-      order: request.order,
-      searchMode: request.searchMode,
-      distance: request.distance,
-      negativeQuery: request.sanitizedNegativeQuery,
-      negativeDistance: request.negativeDistance,
-      scope: request.proximityScope,
-      negativeScope: request.negativeProximityScope,
-      customSpacing: request.effectiveCustomSpacing,
-      negativeCustomSpacing: request.effectiveNegativeCustomSpacing,
-      alternativeWords: request.effectiveAlternativeWords,
-      negativeAlternativeWords: request.effectiveNegativeAlternativeWords,
-      searchOptions: request.effectiveSearchOptions,
-      negativeSearchOptions: request.effectiveNegativeSearchOptions,
-      grouping: request.grouping,
-      wordMatchMode: request.wordMatchMode,
-      wordMatchCount: request.wordMatchCount,
     );
     final iterator = StreamIterator<SearchStreamUpdate>(stream);
     var cancelled = false;

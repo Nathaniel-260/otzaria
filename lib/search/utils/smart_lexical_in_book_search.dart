@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:otzaria/search/models/search_configuration.dart';
 import 'package:otzaria/search/search_repository.dart';
 import 'package:otzaria_search_engine/otzaria_search_engine.dart';
 
@@ -72,13 +73,16 @@ Future<List<SearchResult>> searchSmartLexicalInBook(
   final fuzzy = StreamIterator(
     _catalogueResults(
       (offset) => repository.searchTexts(
-        query,
-        [bookPath],
-        limit,
-        offset: offset,
-        fuzzy: true,
-        distance: distance,
-        order: ResultsOrder.catalogue,
+        SearchEngineRequest(
+          query: query,
+          facets: [bookPath],
+          limit: limit,
+          offset: offset,
+          searchMode: SearchMode.fuzzy,
+          distance: distance,
+          negativeDistance: distance,
+          order: ResultsOrder.catalogue,
+        ),
       ),
       limit,
     ),

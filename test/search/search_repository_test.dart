@@ -11,20 +11,22 @@ void main() {
       final repository = SearchRepository(engineProvider: () async => engine);
 
       final results = await repository.searchTexts(
-        'שלום עולם',
-        const ['/תורה'],
-        25,
-        offset: 10,
-        order: ResultsOrder.catalogue,
-        searchMode: SearchMode.advanced,
-        distance: 4,
-        customSpacing: const {'0-1': '3'},
-        alternativeWords: const {
-          1: ['בריאה'],
-        },
-        searchOptions: const {
-          'שלום_0': {'קידומות': true},
-        },
+        const SearchEngineRequest(
+          query: 'שלום עולם',
+          facets: ['/תורה'],
+          limit: 25,
+          offset: 10,
+          order: ResultsOrder.catalogue,
+          searchMode: SearchMode.advanced,
+          distance: 4,
+          customSpacing: {'0-1': '3'},
+          alternativeWords: {
+            1: ['בריאה'],
+          },
+          searchOptions: {
+            'שלום_0': {'קידומות': true},
+          },
+        ),
       );
 
       expect(results.single.text, 'advanced result');
@@ -54,22 +56,26 @@ void main() {
         final repository = SearchRepository(engineProvider: () async => engine);
 
         await repository.searchTexts(
-          'שלום עולם',
-          const ['/'],
-          10,
-          searchMode: SearchMode.advanced,
+          const SearchEngineRequest(
+            query: 'שלום עולם',
+            facets: ['/'],
+            limit: 10,
+            searchMode: SearchMode.advanced,
+          ),
         );
         expect(engine.lastRequest!.wordMatchMode, WordMatchMode.all);
         expect(engine.lastRequest!.wordMatchCount, isNull);
 
         await repository
             .searchTextsStreamWithCounts(
-              'שלום עולם',
-              const ['/'],
-              10,
-              searchMode: SearchMode.advanced,
-              wordMatchMode: WordMatchMode.atLeast,
-              wordMatchCount: 3,
+              const SearchEngineRequest(
+                query: 'שלום עולם',
+                facets: ['/'],
+                limit: 10,
+                searchMode: SearchMode.advanced,
+                wordMatchMode: WordMatchMode.atLeast,
+                wordMatchCount: 3,
+              ),
             )
             .toList();
         expect(engine.lastRequest!.wordMatchMode, WordMatchMode.atLeast);
@@ -77,34 +83,17 @@ void main() {
       },
     );
 
-    test('fuzzy=true גובר על searchMode ומנתב לחיפוש מקורב', () async {
-      final engine = _RecordingSearchEngineOperations();
-      final repository = SearchRepository(engineProvider: () async => engine);
-
-      await repository.searchTexts(
-        'שלום',
-        const ['/'],
-        10,
-        fuzzy: true,
-        searchMode: SearchMode.advanced,
-        distance: 7,
-      );
-
-      expect(engine.calls, [_EngineCall.searchFuzzy]);
-      expect(engine.lastRequest!.searchMode, SearchMode.fuzzy);
-      expect(engine.lastRequest!.distance, 7);
-    });
-
     test('searchTextsAndCount מחזיר תוצאות וספירה מאותו request', () async {
       final engine = _RecordingSearchEngineOperations();
       final repository = SearchRepository(engineProvider: () async => engine);
 
       final result = await repository.searchTextsAndCount(
-        'בראשית',
-        const ['/מקרא'],
-        5,
-        searchMode: SearchMode.exact,
-        offset: 2,
+        const SearchEngineRequest(
+          query: 'בראשית',
+          facets: ['/מקרא'],
+          limit: 5,
+          offset: 2,
+        ),
       );
 
       expect(engine.calls, [_EngineCall.searchAndCountExact]);

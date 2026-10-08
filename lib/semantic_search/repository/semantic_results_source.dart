@@ -168,13 +168,15 @@ class DebugLexicalPreviewSource implements SemanticResultsSource {
     final generation = ++_generation;
     final stopwatch = Stopwatch()..start();
     final page = await _searchRepository.searchTextsAndCount(
-      SearchQueryBuilder.sanitizeQuery(options.query),
-      options.facets,
-      limit,
-      offset: offset,
-      grouping: options.groupIdenticalText
-          ? ResultGrouping.identicalText
-          : null,
+      SearchEngineRequest(
+        query: SearchQueryBuilder.sanitizeQuery(options.query),
+        facets: options.facets,
+        limit: limit,
+        offset: offset,
+        grouping: options.groupIdenticalText
+            ? ResultGrouping.identicalText
+            : null,
+      ),
     );
     if (generation != _generation) return null;
     return SemanticResultsPage(
