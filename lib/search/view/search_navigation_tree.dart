@@ -537,7 +537,7 @@ class SearchNavigationTree extends StatelessWidget {
     // התוצאות ומשאירה סינון שלא מיוצג בעץ אחרי ניקוי שדה האיתור.
     final matches = <_FilteredBook>[];
     for (final book in _allBooks(library)) {
-      if (!normalizeBookTitle(book.title).toLowerCase().contains(query)) {
+      if (!_titleHaystack(book).contains(query)) {
         continue;
       }
       final facet = FacetHelper.buildBookFacet(
@@ -574,6 +574,12 @@ class SearchNavigationTree extends StatelessWidget {
   }
 
   // ── עזרי traversal ──────────────────────────────────────────────────────────
+
+  // כותרת מנורמלת לכל ספר מחושבת פעם אחת ולא בכל הקשה.
+  static final Expando<String> _haystacks = Expando();
+
+  static String _titleHaystack(Book book) =>
+      _haystacks[book] ??= normalizeBookTitle(book.title).toLowerCase();
 
   List<Book> _uniqueBooks(List<Book> books) {
     final unique = <String, Book>{};
