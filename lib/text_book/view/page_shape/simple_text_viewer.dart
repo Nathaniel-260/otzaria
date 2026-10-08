@@ -2269,6 +2269,7 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
     final draftService = PersonalNoteDraftService();
     final draft = await draftService.loadDraft(
       bookId: personalNotesBookKey(state.book),
+      categoryId: state.book.categoryId,
       lineNumber: index + 1,
     );
 

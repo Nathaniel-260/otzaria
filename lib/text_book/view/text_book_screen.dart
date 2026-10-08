@@ -3624,6 +3624,7 @@ Future<void> _addNoteFromKeyboard(
   final draftService = PersonalNoteDraftService();
   final draft = await draftService.loadDraft(
     bookId: personalNotesBookKey(state.book),
+    categoryId: state.book.categoryId,
     lineNumber: currentIndex + 1,
   );
 
