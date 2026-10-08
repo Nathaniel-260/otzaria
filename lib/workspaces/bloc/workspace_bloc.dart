@@ -188,16 +188,34 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
   ) async {
     // 1. Save current tabs to the currently active workspace
     final currentId = state.activeWorkspaceId;
-    List<Workspace> stash(List<Workspace> current) => current.map((w) {
-      if (w.id == currentId && !w.isPinned) {
-        return w.withTabs(
-          tabs: _cloneTabs(event.currentTabsToSave),
-          activeTabIndex: event.currentTabIndexToSave,
-          activePane: event.currentActivePaneToSave,
-        );
+    List<Workspace> stash(List<Workspace> current) {
+      // חלון בלי שולחן פעיל: הכרטיסיות נשמרות בשולחן חדש, אחרת ההחלפה מוחקת אותן.
+      if (currentId == null) {
+        if (event.currentTabsToSave.isEmpty ||
+            !current.any((w) => w.id == event.targetWorkspaceId)) {
+          return current;
+        }
+        return [
+          ...current,
+          Workspace(
+            name: uniqueWorkspaceName(current),
+            tabs: _cloneTabs(event.currentTabsToSave),
+            activeTabIndex: event.currentTabIndexToSave,
+            activePane: event.currentActivePaneToSave,
+          ),
+        ];
       }
-      return w;
-    }).toList();
+      return current.map((w) {
+        if (w.id == currentId && !w.isPinned) {
+          return w.withTabs(
+            tabs: _cloneTabs(event.currentTabsToSave),
+            activeTabIndex: event.currentTabIndexToSave,
+            activePane: event.currentActivePaneToSave,
+          );
+        }
+        return w;
+      }).toList();
+    }
 
     // החלפת הכרטיסיות משחררת את הקודמות; כשל שמירה חייב להקדים אותה.
     List<Workspace>? saved;
@@ -372,7 +390,6 @@ class WorkspaceBloc extends Bloc<WorkspaceEvent, WorkspaceState> {
   ) async {
     try {
       final currentId = state.activeWorkspaceId;
-      if (currentId == null) return;
 
       // מעדכן את שני שולחנות העבודה:
       // 1. מסיר את הטאב משולחן העבודה הנוכחי

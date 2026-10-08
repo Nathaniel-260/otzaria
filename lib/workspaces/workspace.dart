@@ -5,6 +5,20 @@ import 'package:otzaria/tabs/models/combined_tab.dart';
 import 'package:otzaria/tabs/models/pdf_commentators_tab.dart';
 import 'package:otzaria/utils/file/hive_utils.dart';
 
+/// שם "שולחן עבודה N" שאינו תפוס עדיין ב-[existingWorkspaces].
+String uniqueWorkspaceName(List<Workspace> existingWorkspaces) {
+  final existingNames = existingWorkspaces.map((w) => w.name).toSet();
+  int counter = existingWorkspaces.length + 1;
+
+  while (true) {
+    final candidateName = "שולחן עבודה $counter";
+    if (!existingNames.contains(candidateName)) {
+      return candidateName;
+    }
+    counter++;
+  }
+}
+
 /// Represents a workspace in the application.
 ///
 /// A `Workspace` object has a unique [id], a [name],
