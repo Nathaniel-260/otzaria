@@ -777,6 +777,9 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
         if (event.permission == 'app.shortcuts') {
           PluginShortcutRegistry.instance.removeAll(event.pluginId);
         }
+        if (event.permission == 'reader.highlight') {
+          PluginHighlightRegistry.instance.removePlugin(event.pluginId);
+        }
         if (event.permission == pluginRunOnStartupPermission ||
             event.permission == pluginStartupContributionsPermission) {
           PluginLazyActivationService.instance.removePlugin(event.pluginId);
