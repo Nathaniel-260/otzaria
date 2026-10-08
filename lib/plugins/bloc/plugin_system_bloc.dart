@@ -419,6 +419,11 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
           isUserInitiated: event.isUserInitiated,
         ),
       );
+    } on PluginNewerVersionInstalledException catch (e) {
+      UiSnack.show(
+        PluginMessages.newerVersionInstalled(e.pluginName, e.installedVersion),
+      );
+      add(LoadPlugins());
     } catch (e) {
       UiSnack.showError(PluginMessages.installPluginError(e));
       add(LoadPlugins()); // Reset state
