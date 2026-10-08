@@ -44,14 +44,6 @@ class WorkspaceState extends Equatable {
   List<OpenedTab> tabsOf(Workspace workspace, List<OpenedTab> liveTabs) =>
       workspace.id == activeWorkspaceId ? liveTabs : workspace.tabs;
 
-  /// Returns the index of the active workspace in the list, or null if not found.
-  /// Useful for UI components that need index-based operations.
-  int? get activeWorkspaceIndex {
-    if (activeWorkspaceId == null) return null;
-    final index = workspaces.indexWhere((w) => w.id == activeWorkspaceId);
-    return index >= 0 ? index : null;
-  }
-
   /// ⚠️ [clearError] ו-[clearActiveWorkspaceId] הם הדרך היחידה לאפס שדה:
   /// `null` בפרמטר פירושו "אל תיגע", ובלעדיהם כל `emit` מחק את השגיאה.
   WorkspaceState copyWith({

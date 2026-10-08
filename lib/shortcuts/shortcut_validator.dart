@@ -400,31 +400,6 @@ class ShortcutValidator {
     return conflicts;
   }
 
-  /// Get a human-readable description of conflicts
-  static String getConflictsDescription() {
-    final conflicts = checkConflicts();
-
-    if (conflicts.isEmpty) {
-      return 'אין קונפליקטים בקיצורי המקשים';
-    }
-
-    final buffer = StringBuffer('נמצאו קונפליקטים בקיצורי המקשים:\n\n');
-
-    for (final entry in conflicts.entries) {
-      final shortcut = entry.key;
-      final keys = entry.value;
-
-      buffer.writeln('$shortcut משמש עבור:');
-      for (final key in keys) {
-        final name = shortcutNames[key] ?? key;
-        buffer.writeln('  • $name');
-      }
-      buffer.writeln();
-    }
-
-    return buffer.toString();
-  }
-
   /// Check if a specific shortcut has conflicts
   static bool hasConflict(String settingKey) {
     final value = _normalizedShortcutValue(getShortcutValue(settingKey));

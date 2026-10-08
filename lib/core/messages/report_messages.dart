@@ -58,8 +58,6 @@ abstract class ReportMessages {
 
   // ── דיאלוג הדיווח (error_report_dialog) ────────────────────────────────
 
-  static const String phoneSentThanks =
-      'הדיווח נשלח בהצלחה לצוות אוצריא. תודה על הדיווח!';
   static const String selectTextToReport =
       'יש לסמן טקסט או לבחור קטע לפני דיווח על טעות.';
   static const String cannotOpenMailApp = 'לא ניתן לפתוח את תוכנת הדואר';

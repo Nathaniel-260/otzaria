@@ -718,13 +718,6 @@ class TextBookLoaded extends TextBookState {
   bool isHighlightYellowBackground(int index) =>
       highlightText.isNotEmpty && permanentHighlightLine == index;
 
-  /// מחרוזת החיפוש האפקטיבית לשורה [index]:
-  /// אם יש highlightText ממוקד לשורה זו — מחזיר אותו, אחרת את searchText הרגיל.
-  String getEffectiveSearchText(int index) =>
-      (highlightText.isNotEmpty && permanentHighlightLine == index)
-      ? highlightText
-      : searchText;
-
   @override
   List<Object?> get props => [
     book.title,

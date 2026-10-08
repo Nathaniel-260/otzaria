@@ -649,21 +649,6 @@ $detailsSection
         .join('&');
   }
 
-  /// Launch mailto URL
-  static Future<void> launchMail(String email, BuildContext context) async {
-    final emailUri = Uri(
-      scheme: 'mailto',
-      path: email,
-    );
-    try {
-      await launchUrl(emailUri, mode: LaunchMode.externalApplication);
-    } catch (e) {
-      if (context.mounted) {
-        UiSnack.show(ReportMessages.cannotOpenMailApp);
-      }
-    }
-  }
-
   /// Show simple snackbar message
   static void showSimpleSnack(BuildContext context, String message) {
     if (!context.mounted) return;
@@ -759,35 +744,6 @@ $detailsSection
       sourceFolder: bookDetails['תיקיית המקור'] ?? '',
       libraryVersion: normalizedLibraryVersion,
       createdAt: DateTime.now().toUtc(),
-    );
-  }
-
-  /// Show success dialog for phone report
-  static void showPhoneReportSuccessDialog(
-    BuildContext context,
-    VoidCallback onReportAgain,
-  ) {
-    if (!context.mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('דיווח נשלח בהצלחה'),
-        content: const Text(ReportMessages.phoneSentThanks),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(),
-            child: const Text('סגור'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.of(dialogContext).pop();
-              onReportAgain();
-            },
-            child: const Text('פתח דוח שגיאות אחר'),
-          ),
-        ],
-      ),
     );
   }
 

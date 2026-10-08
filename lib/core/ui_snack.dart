@@ -132,16 +132,6 @@ class UiSnack {
     showCloseButton: true,
   );
 
-  /// הורדה - אייקון הורדה, נשאר עד שמסתירים
-  static void showDownloading(String message) => _showOverlay(
-    message: message,
-    variant: _SnackVariant.standard,
-    duration: const Duration(days: 365), // לא נסגר אוטומטית
-    icon: FluentIcons.arrow_download_24_regular,
-    enableHaptic: false,
-    showCloseButton: true,
-  );
-
   /// מסתיר את ההודעה הנוכחית, או רק הודעה ששייכת ל-[owner].
   static void hide({Object? owner}) {
     if (owner == null || identical(owner, _currentOwner)) {

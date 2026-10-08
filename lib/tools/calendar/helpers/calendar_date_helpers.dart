@@ -167,24 +167,6 @@ String formatHebrewYear(int year) {
   return thousands == 5 ? 'ה׳$formattedRemainder' : formattedRemainder;
 }
 
-/// מחזיר כותרת חודש/שנה לפי מצב הלוח
-String getCurrentMonthYearText(CalendarState state) {
-  final DateTime gregorianDate;
-  final JewishDate jewishDate;
-  if (state.calendarView == CalendarView.month) {
-    gregorianDate = state.currentGregorianDate;
-    jewishDate = state.currentJewishDate;
-  } else {
-    gregorianDate = state.selectedGregorianDate;
-    jewishDate = state.selectedJewishDate;
-  }
-  final gregName = getGregorianMonthName(gregorianDate.month);
-  final gregNum = gregorianDate.month;
-  final hebName = getHebrewMonthNameFor(jewishDate);
-  final hebYear = formatHebrewYear(jewishDate.getJewishYear());
-  return '$hebName $hebYear • $gregName ($gregNum) ${gregorianDate.year}';
-}
-
 /// מחזיר תיאור מקוצר לתאריך אירוע (עברי + לועזי)
 String formatEventDate(DateTime date) {
   final jewishDate = JewishDate.fromDateTime(date);

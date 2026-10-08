@@ -76,18 +76,6 @@ class BackupService {
     return backupPath;
   }
 
-  /// Open the backup directory in the file explorer
-  static Future<void> openBackupDirectory() async {
-    final dir = await getBackupDirectory();
-    if (Platform.isWindows) {
-      await Process.run('explorer', [dir]);
-    } else if (Platform.isMacOS) {
-      await Process.run('open', [dir]);
-    } else if (Platform.isLinux) {
-      await Process.run('xdg-open', [dir]);
-    }
-  }
-
   /// Create a backup with specified options.
   /// Returns the backup path and a list of sections that were skipped (e.g. when Hive box is not open).
   ///
