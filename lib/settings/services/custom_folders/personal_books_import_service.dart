@@ -109,17 +109,21 @@ class PersonalBooksImportService {
         continue;
       }
       final fileName = p.basename(sourcePath);
+      final targetPath = p.join(folderPath, fileName);
+      // openWrite מרוקן את היעד מיד; כתיבה לקובץ זמני שומרת על הגרסה הקודמת בכשל.
+      final partial = File('$targetPath.part');
       try {
-        final targetPath = p.join(folderPath, fileName);
         // העתקת קובץ על עצמו (openRead+openWrite לאותו נתיב) מרוקנת אותו.
         if (p.equals(sourcePath, targetPath)) {
           copied++;
           continue;
         }
         // העתקה בזרימה — קבצי PDF עלולים להיות גדולים מהזיכרון הפנוי.
-        await File(sourcePath).openRead().pipe(File(targetPath).openWrite());
+        await File(sourcePath).openRead().pipe(partial.openWrite());
+        await partial.rename(targetPath);
         copied++;
       } catch (e) {
+        if (await partial.exists()) await partial.delete();
         errors.add(describeCopyError(fileName, e));
       }
     }
