@@ -114,13 +114,13 @@ jobs:
         run: flutter analyze
 
   test:
-    name: Test (shard ${{ matrix.shard }}/6)
+    name: Test (shard ${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3, 4, 5]
+        shard: [0, 1, 2, 3]
 
     # בדיקות ה-zstd של line_content נכשלות כאן במקום לדלג כשחסרים libzstd או המילון.
     env:
@@ -289,16 +289,17 @@ jobs:
           mapfile -t all_files < <(find test -name "*_test.dart" | sort)
           shard_files=()
           for i in "${!all_files[@]}"; do
-            if [ $((i % 6)) -eq ${{ matrix.shard }} ]; then
+            if [ $((i % 4)) -eq ${{ matrix.shard }} ]; then
               shard_files+=("${all_files[$i]}")
             fi
           done
 
           echo "════════════════════════════════════════"
-          echo "ריצה ראשונה של הטסטים (shard ${{ matrix.shard }}/6, ${#shard_files[@]} מתוך ${#all_files[@]} קבצים)"
+          echo "ריצה ראשונה של הטסטים (shard ${{ matrix.shard }}/4, ${#shard_files[@]} מתוך ${#all_files[@]} קבצים)"
           echo "════════════════════════════════════════"
 
-          flutter test --file-reporter json:test-results.json "${shard_files[@]}"
+          # ברירת המחדל (ליבות÷2) משאירה כמחצית מה-CPU של הראנר פנוי.
+          flutter test -j 4 --file-reporter json:test-results.json "${shard_files[@]}"
           first_exit=$?
 
           if [ $first_exit -eq 0 ]; then
@@ -432,6 +433,10 @@ jobs:
     env:
       # MSBuild FileTracker still limits llama.cpp scratch paths to MAX_PATH.
       CARGOKIT_TEMP_DIR: D:/ck
+      # כמו בבניית ההפצה: בלי אלה MSBuild מקמפל קובץ C++ אחד בכל פעם.
+      UseMultiToolTask: 'true'
+      EnforceProcessCountAcrossBuilds: 'true'
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
     # מדידה מקומית: בנייה קרה 6 דקות. ראנר CI איטי יותר ומוסיף checkout,
     # setup ו-pub get. 30 נותן מרווח בלי לתת ל-job תקוע לשרוף שעה שלמה.
     # לכווץ אחרי הריצה הראשונה לפי הזמן שנמדד בפועל.
@@ -475,7 +480,7 @@ jobs:
       # בלי בנייה קודמת האתחול נכשל **בשקט**, וכל בדיקה שתלויה במנוע
       # מדולגת בלי להיכשל — כלומר ה-job היה ירוק ולא בודק כלום.
       #
-      # ההיקף מכוון וצר: הסוללה המלאה רצה על Linux ב-6 shards. כאן רצות
+      # ההיקף מכוון וצר: הסוללה המלאה רצה על Linux ב-4 shards. כאן רצות
       # רק הקבוצות שאומתו כירוקות ב-Windows (1,073 בדיקות, ועוד 146 של
       # personal_notes), והקבוצות הידועות כתלויות-סביבה או flaky (migration,
       # installer, tools/calendar) נשארות ל-Linux בלבד. הרחבת ההיקף מחייבת אימות
@@ -504,7 +509,7 @@ jobs:
           }
 
       - name: Run Windows-relevant tests
-        run: flutter test test/core/ test/tabs/ test/navigation/ test/workspaces/ test/personal_notes/ test/utils/file/native_sha256_test.dart
+        run: flutter test -j 4 test/core/ test/tabs/ test/navigation/ test/workspaces/ test/personal_notes/ test/utils/file/native_sha256_test.dart
 
       # המנוע בבניית האפליקציה בלי SQLite משלו; כשל ברישום אינו נראה בשום טסט
       # יחידה. רץ על הבנייה הנייטיבית שלמעלה, ולכן מוסיף רק קומפילציה וריצה.
