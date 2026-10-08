@@ -158,9 +158,4 @@ class AppSurfaces {
   /// הדגשת קישור בתוך עמוד PDF בריחוף — 20% primary, קריא מעל עמוד סרוק.
   static Color pdfLinkHover(ColorScheme cs) =>
       cs.primary.withValues(alpha: 0.2);
-
-  /// overlayColor ל-TabBar שמצייר hover מותאם אישית (foregroundPainter)
-  /// ולכן רוצה לבטל את ה-hover/focus הגלובלי של [TabBarTheme].
-  static final WidgetStateProperty<Color?> tabBarNoOverlay =
-      WidgetStateProperty.all(Colors.transparent);
 }
