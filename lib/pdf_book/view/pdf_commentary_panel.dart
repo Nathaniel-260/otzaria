@@ -136,13 +136,16 @@ String pdfCommentaryItemKey(Link link) =>
 String pdfCommentaryListStorageKey(Iterable<String> activeCommentators) =>
     'commentary_${(activeCommentators.toList()..sort()).join(',')}';
 
+// המיון משווה כל קישור פעמים רבות; שם המפרש נגזר מהנתיב פעם אחת לקישור.
+final Expando<String> _sortTitles = Expando();
+String _sortTitle(Link link) =>
+    _sortTitles[link] ??= utils.getTitleFromPath(link.path2);
+
 /// סדר מפרשי הקטע: לפי מפרש, שורת מקור, ואז שורת היעד במפרש. בלי [Link.index2]
 /// קטעים על אותה שורה יוצאים בסדר שרירותי — המיון של Dart אינו יציב (#1330).
 @visibleForTesting
 int comparePdfCommentaryLinks(Link a, Link b) {
-  final titleCompare = utils
-      .getTitleFromPath(a.path2)
-      .compareTo(utils.getTitleFromPath(b.path2));
+  final titleCompare = _sortTitle(a).compareTo(_sortTitle(b));
   if (titleCompare != 0) return titleCompare;
   final sourceCompare = a.index1.compareTo(b.index1);
   if (sourceCompare != 0) return sourceCompare;
