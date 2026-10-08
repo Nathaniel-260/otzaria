@@ -1,8 +1,11 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/tools/calendar/bloc/calendar_cubit.dart';
 import 'package:otzaria/tools/calendar/services/google_calendar_service.dart';
 import 'package:otzaria/tools/calendar/services/notification_service.dart';
+import 'package:otzaria/tools/calendar/widgets/calendar_main_panel.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
@@ -26,6 +29,21 @@ class _FakeGoogle extends GoogleCalendarService {
   Future<GoogleCalendarApiClient?> getApiClient({
     bool interactive = false,
   }) async => null;
+}
+
+/// Records the dates the week view renders.
+class _RecordingCubit extends CalendarCubit {
+  _RecordingCubit()
+    : super(
+        notificationService: _FakeNotifications(),
+        googleCalendarService: _FakeGoogle(),
+      );
+  final shown = <DateTime>[];
+  @override
+  Map<String, String> shortTimesFor(DateTime date) {
+    shown.add(date);
+    return const {};
+  }
 }
 
 /// The first day in 2026–2027 whose local length is [hours] (23 or 25),
@@ -99,5 +117,44 @@ void main() {
       transition: CalendarDayTransition.sunset,
     );
     expect(today, _plusDays(longDay, 1));
+  });
+
+  group('Week view across a DST change', skip: noDst, () {
+    Future<List<DateTime>> shownWeek(WidgetTester tester, DateTime day) async {
+      final cubit = _RecordingCubit()
+        ..jumpToDate(day)
+        ..changeCalendarView(CalendarView.week);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: BlocProvider<CalendarCubit>.value(
+              value: cubit,
+              child: CalendarMainPanel(
+                state: cubit.state,
+                onCreateEvent: ({existingEvent, specificDate}) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await cubit.close();
+      return cubit.shown;
+    }
+
+    List<DateTime> weekOf(DateTime d) =>
+        List.generate(7, (i) => _plusDays(d, i - d.weekday % 7));
+
+    testWidgets('week with the 25-hour day shows seven distinct days', (
+      tester,
+    ) async {
+      expect(await shownWeek(tester, longDay!), weekOf(longDay));
+    });
+
+    testWidgets('day after the 23-hour day shows its own week', (
+      tester,
+    ) async {
+      final day = _plusDays(shortDay!, 1);
+      expect(await shownWeek(tester, day), weekOf(day));
+    });
   });
 }
