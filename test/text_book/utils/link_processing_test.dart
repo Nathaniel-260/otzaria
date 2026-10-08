@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/links.dart';
@@ -130,6 +132,34 @@ void main() {
       expect(map[1], hasLength(2));
       expect(map[5], hasLength(1));
       expect(map[2], isNull);
+    });
+
+    test('תוצאה זהה לחיפוש נאיבי גם בשאילתה חוזרת לאותה שורה', () {
+      final random = Random(7);
+      final links = [
+        for (var i = 0; i < 2000; i++)
+          makeLink(
+            index1: random.nextInt(300),
+            index1End: random.nextInt(4) == 0 ? 300 + random.nextInt(50) : null,
+            index2: i,
+          ),
+      ];
+      List<Link>? naive(int line) {
+        final found = [
+          for (final link in links)
+            if (link.index1 == line ||
+                (link.index1 < line && (link.index1End ?? 0) >= line))
+              link,
+        ];
+        return found.isEmpty ? null : found;
+      }
+
+      final map = buildLinksByLineMap(links);
+      for (var pass = 0; pass < 2; pass++) {
+        for (var line = -1; line <= 360; line++) {
+          expect(map[line], naive(line), reason: 'line $line pass $pass');
+        }
+      }
     });
   });
 
