@@ -157,9 +157,14 @@ class CommentatorsTab extends OpenedTab {
     super.dispose();
   }
 
+  /// השורה הראשונה של הבחירה בניווט הכרטיסיה. ה-bloc שלה אינו גולל,
+  /// ולכן `visibleIndices` נשאר על מיקום הפתיחה.
+  int? navigatedIndex;
+
   /// המיקום שהכרטיסיה מוצגת בו כרגע. נופל ל-[startIndex] כל עוד ה-bloc
   /// לא נטען — ולא ל-`sourceTab.index`, שהוא המיקום של הספר ולא שלה.
   int get currentIndex {
+    if (navigatedIndex != null) return navigatedIndex!;
     final s = bloc.state;
     if (s is TextBookLoaded && s.visibleIndices.isNotEmpty) {
       return s.visibleIndices.first;
