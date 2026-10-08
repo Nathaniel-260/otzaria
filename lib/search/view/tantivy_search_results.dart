@@ -123,10 +123,14 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
     _lastSearchSignature = _searchSignature(context.read<SearchBloc>().state);
   }
 
-  /// חתימת חיפוש: שאילתה + קטגוריות. זהה בין chunks של אותו חיפוש ובטעינת
-  /// המשך, ומשתנה רק בחיפוש חדש (שינוי שאילתה או קטגוריה).
-  String _searchSignature(SearchState state) =>
-      '${state.searchQuery} ${state.currentFacets.join('')}';
+  /// חתימת חיפוש: זהה בין chunks של אותו חיפוש ובטעינת המשך, ומשתנה בכל
+  /// הגדרה שמריצה חיפוש מחדש.
+  String _searchSignature(SearchState state) {
+    final config = state.configuration;
+    return '${state.searchQuery} ${state.currentFacets.join('')} '
+        '${config.sortBy} ${config.searchMode} ${config.distance} '
+        '${config.resultGrouping}';
+  }
 
   void _handleScroll() {
     if (!_scrollController.hasClients) {
@@ -585,7 +589,7 @@ class _TantivySearchResultsState extends State<TantivySearchResults> {
               _isAutoLoadInFlight = false;
             }
 
-            // חיפוש חדש (שינוי שאילתה או קטגוריה) — מאפס את הגלילה לראש הרשימה.
+            // חיפוש חדש (שינוי חתימה) — מאפס את הגלילה לראש הרשימה.
             // טעינת המשך (LoadMore) שומרת על אותה חתימה ולכן לא נוגעת בגלילה,
             // וכך גם chunks עוקבים של אותו חיפוש (החתימה זהה).
             final signature = _searchSignature(state);
