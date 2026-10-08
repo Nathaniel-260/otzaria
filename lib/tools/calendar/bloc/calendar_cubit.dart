@@ -828,13 +828,12 @@ class CalendarCubit extends Cubit<CalendarState> {
     emit(state.copyWith(showAllEvents: value));
   }
 
-  Map<String, String> shortTimesFor(DateTime date) {
-    final full = _calculateDailyTimes(date, state.selectedCity);
-    return {
-      if (full['sunrise'] != null) 'sunrise': full['sunrise']!,
-      if (full['sunset'] != null) 'sunset': full['sunset']!,
-    };
-  }
+  Map<String, String> shortTimesFor(DateTime date) =>
+      zmanim_helpers.calculateDailyTimes(
+        date,
+        state.selectedCity,
+        only: const {'sunrise', 'sunset'},
+      );
 
   // --- Google Calendar Integration ---
 
