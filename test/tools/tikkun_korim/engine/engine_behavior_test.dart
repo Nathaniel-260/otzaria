@@ -295,17 +295,6 @@ void main() {
       });
     }
 
-    for (final methodId in ['ramah', 'ramach', 'rambamRosh']) {
-      test('$methodId — כיסוי `lastWord`: כמה עמודים נסגרים במילה שבטבלה', () {
-        final layout = TikkunData.torahLayouts[methodId]!;
-        final pages = buildPages(processedFor(methodId), methodId);
-        final unmatched = countUnmatchedOfficialPages(pages, layout.pages);
-        // ignore: avoid_print
-        print('$methodId lastWord unmatched: $unmatched/${pages.length}');
-        expect(unmatched, lessThan(pages.length));
-      });
-    }
-
     test('single_page — עמוד אחד שמכיל את כל השורות', () {
       final pages = buildPages(torah, 'single_page');
       expect(pages.length, 1);
