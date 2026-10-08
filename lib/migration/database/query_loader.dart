@@ -28,10 +28,8 @@ class QueryLoader {
     final queryFiles = [
       'AcronymQueries.sq',
       'AuthorQueries.sq',
-      'BookHasLinksQueries.sq',
       'BookQueries.sq',
       'CategoryQueries.sq',
-      'ConnectionTypeQueries.sq',
       'Database.sq',
       'DocxTextCacheQueries.sq',
       'LineQueries.sq',
@@ -121,5 +119,4 @@ class QueryLoader {
 
     return queries;
   }
-
 }

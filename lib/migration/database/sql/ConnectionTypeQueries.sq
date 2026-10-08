@@ -1,4 +1,0 @@
--- Queries for connection types
-
-selectAll:
-SELECT * FROM connection_type ORDER BY name;

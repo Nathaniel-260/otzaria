@@ -14,15 +14,6 @@ class TopicDao {
 
   Future<sqlite3.Database> get database => _db.database;
 
-  Future<List<Topic>> getAllTopics() async {
-    final db = await database;
-    return db
-        .select(_queries['selectAll']!)
-        .toMapList()
-        .map((row) => Topic.fromJson(row))
-        .toList();
-  }
-
   Future<Topic?> getTopicByName(String name) async {
     final db = await database;
     final result = db.select(_queries['selectByName']!, [name]).toMapList();

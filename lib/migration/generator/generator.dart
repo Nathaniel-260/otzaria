@@ -50,9 +50,6 @@ class DatabaseGenerator {
   int _totalBooksToProcess = 0;
   int _processedBooksCount = 0;
 
-  /// Getter for total books to process (for subclasses)
-  int get totalBooksToProcess => _totalBooksToProcess;
-
   /// Book contents cache: maps library-relative key -> list of lines
   final Map<String, List<String>> _bookContentCache = {};
 
@@ -844,7 +841,6 @@ class DatabaseGenerator {
   Future<void> _enableForeignKeys() async {
     await repository.executeRawQuery('PRAGMA foreign_keys = ON');
   }
-
 }
 
 /// Structure to store TOC entry data during processing
