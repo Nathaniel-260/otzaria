@@ -491,13 +491,15 @@ class ShortcutsSettingsTab extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
-    final unconfiguredKeys = ShortcutValidator.shortcutKeys
-        .where((k) => (ShortcutValidator.getShortcutValue(k) ?? '').isEmpty)
-        .toList();
+    final currentValues = ShortcutDropDownTile.readCurrentValues();
+    final unconfiguredKeys = [
+      for (final MapEntry(:key, :value) in currentValues.entries)
+        if ((value ?? '').isEmpty) key,
+    ];
 
     // קיצורי "פתיחת כלים" הם ללא ברירת מחדל, ולכן הכרטיס מוצג רק אם המשתמש
     // הגדיר קיצור לפחות לכלי אחד.
-    final openToolTiles = _onlyConfigured([
+    final openToolTiles = _onlyConfigured(currentValues, [
       _ShortcutTile(
         settingKey: 'key-shortcut-open-tool-calendar',
         label: context.settingsText('פתיחת לוח שנה'),
@@ -548,7 +550,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
     final enabledPlugins = pluginState is PluginSystemLoaded
         ? pluginState.plugins.where((p) => p.enabled).toList()
         : const <InstalledPlugin>[];
-    final openPluginTiles = _onlyConfigured([
+    final openPluginTiles = _onlyConfigured(currentValues, [
       for (final plugin in enabledPlugins)
         _ShortcutTile(
           settingKey: ShortcutValidator.openPluginShortcutKey(plugin.pluginId),
@@ -563,7 +565,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
         ),
     ]);
 
-    final pluginShortcutTiles = _onlyConfigured([
+    final pluginShortcutTiles = _onlyConfigured(currentValues, [
       for (final entry in ShortcutValidator.pluginShortcuts.entries)
         _ShortcutTile(
           settingKey: entry.key,
@@ -575,7 +577,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
 
     // קיצורי "העתקת קישור" אופציונליים, ללא ברירת מחדל. כמו פתיחת כלים,
     // הכרטיס מוצג רק אם הוגדר קיצור לפעולה אחת לפחות.
-    final copyLinkTiles = _onlyConfigured([
+    final copyLinkTiles = _onlyConfigured(currentValues, [
       _ShortcutTile(
         settingKey: ShortcutValidator.copyBookLinkKey,
         label: context.settingsText('העתק קישור ישיר לספר'),
@@ -632,7 +634,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
         // ── ניווט כללי ────────────────────────────────────────────────
         SettingsCard(
           title: context.settingsText('ניווט כללי'),
-          children: _onlyConfigured([
+          children: _onlyConfigured(currentValues, [
             _ShortcutTile(
               settingKey: 'key-shortcut-open-library-browser',
               label: context.settingsText('ספרייה'),
@@ -708,7 +710,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
         // ── תצוגת ספר ─────────────────────────────────────────────────
         SettingsCard(
           title: context.settingsText('תצוגת ספר'),
-          children: _onlyConfigured([
+          children: _onlyConfigured(currentValues, [
             _ShortcutTile(
               settingKey: ShortcutValidator.currentWindowSearchKey,
               label: context.settingsText('חיפוש בספר הפתוח'),
@@ -861,7 +863,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
         // ── לוח שנה ושמור וזכור ───────────────────────────────────────
         SettingsCard(
           title: context.settingsText('לוח שנה ושמור וזכור'),
-          children: _onlyConfigured([
+          children: _onlyConfigured(currentValues, [
             _ShortcutTile(
               settingKey: 'key-shortcut-calendar-toggle-times',
               label: context.settingsText('לוח שנה: פתיחה/סגירה זמני היום'),
@@ -906,7 +908,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
         // ── תיקון קוראים ──────────────────────────────────────────────
         SettingsCard(
           title: context.settingsText('תיקון קוראים'),
-          children: _onlyConfigured([
+          children: _onlyConfigured(currentValues, [
             _ShortcutTile(
               settingKey: ShortcutValidator.tikkunPrevPageKey,
               label: context.settingsText('תיקון קוראים: העמוד הקודם'),
@@ -1056,14 +1058,18 @@ class ShortcutsSettingsTab extends StatelessWidget {
 
   /// משאיר רק טיילים של קיצורים שכבר הוגדר להם ערך לא-ריק.
   /// קיצורים ללא ערך מוצגים תחת "פעולות זמינות לקיצור".
-  List<Widget> _onlyConfigured(List<Widget> tiles) {
-    return tiles.where((tile) {
-      if (tile is _ShortcutTile) {
-        final value = ShortcutValidator.getShortcutValue(tile.settingKey) ?? '';
-        return value.isNotEmpty;
-      }
-      return true;
-    }).toList();
+  List<Widget> _onlyConfigured(
+    Map<String, String?> currentValues,
+    List<Widget> tiles,
+  ) {
+    return [
+      for (final tile in tiles)
+        if (tile is! _ShortcutTile)
+          tile
+        else if ((ShortcutValidator.getShortcutValue(tile.settingKey) ?? '')
+            .isNotEmpty)
+          tile._withCurrentValues(currentValues),
+    ];
   }
 
   Future<void> _addShortcut(
@@ -1139,6 +1145,7 @@ class _ShortcutTile extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
   final Map<String, String> allShortcuts;
+  final Map<String, String?>? currentValues;
 
   const _ShortcutTile({
     required this.settingKey,
@@ -1146,7 +1153,18 @@ class _ShortcutTile extends StatelessWidget {
     this.subtitle,
     required this.icon,
     required this.allShortcuts,
+    this.currentValues,
   });
+
+  _ShortcutTile _withCurrentValues(Map<String, String?> values) =>
+      _ShortcutTile(
+        settingKey: settingKey,
+        label: label,
+        subtitle: subtitle,
+        icon: icon,
+        allShortcuts: allShortcuts,
+        currentValues: values,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1158,6 +1176,7 @@ class _ShortcutTile extends StatelessWidget {
         subtitle: subtitle,
         selected: ShortcutValidator.defaultShortcuts[settingKey] ?? '',
         allShortcuts: allShortcuts,
+        currentValues: currentValues,
         leading: RtlIcon(icon),
       ),
     );
