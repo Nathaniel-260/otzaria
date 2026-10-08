@@ -1,7 +1,10 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/book_common/utils/link_anchor_markers.dart';
 import 'package:otzaria/book_common/utils/link_anchor_variants.dart';
+import 'package:otzaria/personal_notes/utils/note_anchor_utils.dart';
 
 Link _anchorLink({
   required String heRef,
@@ -660,6 +663,116 @@ void main() {
       );
       expect(html, contains('link-anchor-range'));
       expect(html, contains('(א)'));
+    });
+  });
+
+  group('המרת אופסטים זהה לפירוק נאיבי של השורה', () {
+    // תג (גם לא סגור) = 0 תווים; entity עד 8 תווים = 1; כל יחידת קוד אחרת = 1.
+    final token = RegExp(r'<[^>]*>?|&[^;]{0,8};|[\s\S]');
+    const pieces = [
+      'א',
+      'ב',
+      ' ',
+      'x',
+      '<b>',
+      '</b>',
+      '<i class="q">',
+      '</i>',
+      '&amp;',
+      '&',
+      ';',
+      '<',
+      '>',
+      '&#1488;',
+      '&toolongentity;',
+      '\u{1F600}',
+      '</',
+    ];
+    Link point(int start, {bool raw = false}) => Link(
+      heRef: 'מפרש א, ג',
+      index1: 1,
+      path2: 'מפרש',
+      index2: 1,
+      connectionType: 'commentary',
+      anchorStart: start,
+      anchorOffsetsAreRaw: raw,
+      anchorLabel: 'ג',
+    );
+    String inject(String line, Link link) => injectLinkAnchorMarkers(
+      rawLine: line,
+      anchorLinks: [link],
+      styleIndexByCommentator: const {'מפרש': 0},
+    );
+    final marker = inject('', point(0));
+
+    test('2,000 שורות אקראיות', () {
+      final random = Random(42);
+      for (var n = 0; n < 2000; n++) {
+        final html = [
+          for (var k = random.nextInt(25); k > 0; k--)
+            pieces[random.nextInt(pieces.length)],
+        ].join();
+        final tokens = token.allMatches(html).toList();
+        final visible = [
+          for (final t in tokens)
+            if (t[0]![0] != '<') t,
+        ];
+        final count = visible.length;
+        String naiveInsert(int at) {
+          final out = StringBuffer();
+          var seen = 0;
+          var done = false;
+          for (final t in tokens) {
+            if (!done && !t[0]!.startsWith('</') && seen >= at) {
+              out.write(marker);
+              done = true;
+            }
+            out.write(t[0]);
+            if (t[0]![0] != '<') seen++;
+          }
+          if (!done) out.write(marker);
+          return out.toString();
+        }
+
+        for (var a = 0; a <= count + 1; a++) {
+          expect(inject(html, point(a)), naiveInsert(a), reason: '$html @$a');
+          for (var b = a - 1; b <= count + 1; b++) {
+            final rawStart = a < count ? visible[a].start : html.length;
+            final rawEnd = b <= 0
+                ? 0
+                : (b <= count ? visible[b - 1].end : html.length);
+            final expected = b <= a || rawStart >= rawEnd
+                ? html
+                : wrapHtmlRanges(html, [
+                    HtmlWrapRange(
+                      start: rawStart,
+                      end: rawEnd,
+                      openTag: '[',
+                      closeTag: ']',
+                    ),
+                  ]);
+            expect(
+              wrapVisibleRange(
+                html: html,
+                start: a,
+                end: b,
+                openTag: '[',
+                closeTag: ']',
+              ),
+              expected,
+              reason: '$html [$a,$b)',
+            );
+          }
+        }
+        for (var r = 0; r <= html.length + 1; r++) {
+          final before = visible.where((t) => t.start < r).length;
+          expect(
+            inject(html, point(r, raw: true)),
+            naiveInsert(before),
+            reason: '$html raw@$r',
+          );
+        }
+      }
     });
   });
 }
