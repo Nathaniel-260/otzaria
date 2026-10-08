@@ -20,6 +20,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/view/tabbed_commentary_panel.dart';
+import 'package:otzaria_icons/otzaria_icons.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import '../../test_helpers/memory_cache_provider.dart';
 
@@ -161,6 +162,16 @@ void main() {
     expect(find.text('מפרשים'), findsOneWidget);
     expect(find.text('קישורים'), findsOneWidget);
     expect(find.text('הערות'), findsOneWidget);
+  });
+
+  testWidgets('לשונית סינון המפרשים מציגה את אייקון כרטיסיית המפרשים', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildPanel(showSplitView: false));
+    await tester.pump();
+
+    expect(find.text('סינון מפרשים'), findsOneWidget);
+    expect(find.byIcon(OtzariaIcons.apps_list_24_regular), findsOneWidget);
   });
 
   testWidgets('onTabChanged נקרא עם האינדקס הנכון כשהמשתמש מחליף טאב', (

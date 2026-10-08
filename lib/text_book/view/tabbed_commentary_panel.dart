@@ -161,7 +161,7 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
                 final isCompact = constraints.maxWidth < 270;
                 final firstTabIconData = widget.showSplitView
                     ? OtzariaIcons.book_24_regular
-                    : FluentIcons.settings_24_regular;
+                    : OtzariaIcons.apps_list_24_regular;
                 return PanelTabHeader(
                   controller: _tabController,
                   onClose: widget.onClosePane,
