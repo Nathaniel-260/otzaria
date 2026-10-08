@@ -219,6 +219,10 @@ class SmartTextWidget extends StatelessWidget {
       height: settings.lineHeight,
     );
 
+    // הציור המורם נמדד בסגנון השורה — בכותרת זה סגנון הכותרת, כמו הגליף שבה.
+    final lineStyle =
+        SimpleInlineHtml.headingStyle(processedHtml, textStyle) ?? textStyle;
+
     // מסלול מהיר: רוב השורות הן טקסט פשוט (או עם תגי עיצוב בסיסיים) —
     // רינדור ישיר ב-Text.rich חוסך את מלוא עלות הפרסור של HtmlWidget.
     // גם סימונים מורמים נתמכים כאן באופן בסיסי: SimpleInlineHtml מזהה את
@@ -228,7 +232,6 @@ class SmartTextWidget extends StatelessWidget {
         processedHtml,
         textStyle,
       );
-      final lineStyle = heading?.style ?? textStyle;
       final simpleSpan =
           heading?.span ?? SimpleInlineHtml.tryParse(processedHtml, textStyle);
       if (simpleSpan != null) {
@@ -242,7 +245,7 @@ class SmartTextWidget extends StatelessWidget {
           _withRaisedMarkers(
             context,
             raisedMarkers,
-            textStyle,
+            lineStyle,
             SizedBox(
               key: widgetKey,
               width: double.infinity,
@@ -275,7 +278,7 @@ class SmartTextWidget extends StatelessWidget {
       _withRaisedMarkers(
         context,
         raisedMarkers,
-        textStyle,
+        lineStyle,
         _SmartTextCallbacks(
           onAnchorHover: onAnchorHover,
           onAnchorHoverExit: onAnchorHoverExit,

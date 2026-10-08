@@ -277,6 +277,16 @@ class SimpleInlineHtml {
   /// כותרת שהיא כל השורה (`<hN>` בלי attributes): fwfh מציג אותה כבלוק יחיד
   /// שהשוליים שלו נחתכים בקצות הגוף, ולכן היא טקסט אחד בסגנון [SimpleHeading.style].
   static SimpleHeading? tryParseHeading(String html, TextStyle baseStyle) {
+    final style = headingStyle(html, baseStyle);
+    if (style == null) return null;
+    final match = _wholeLineHeadingRegex.firstMatch(html)!;
+    final span = tryParse(match[2]!, style);
+    if (span == null || span.toPlainText().isEmpty) return null;
+    return SimpleHeading(style, span);
+  }
+
+  /// הסגנון שבו fwfh מציג שורה שכולה כותרת, או null כשהשורה אינה כותרת.
+  static TextStyle? headingStyle(String html, TextStyle baseStyle) {
     if (!html.contains('<h')) return null;
     final match = _wholeLineHeadingRegex.firstMatch(html);
     if (match == null) return null;
@@ -294,16 +304,13 @@ class SimpleInlineHtml {
             (w) => w.value == int.tryParse(weightOverride),
             orElse: () => FontWeight.bold,
           );
-    final style = baseStyle.copyWith(
+    return baseStyle.copyWith(
       fontSize: (baseStyle.fontSize ?? 14.0) * scale,
       fontWeight: weight,
       fontVariations:
           baseStyle.fontVariations ??
           AppFonts.boldFontVariations(fontFamily, weight),
     );
-    final span = tryParse(match[2]!, style);
-    if (span == null || span.toPlainText().isEmpty) return null;
-    return SimpleHeading(style, span);
   }
 
   static String _trim(String text) => text
