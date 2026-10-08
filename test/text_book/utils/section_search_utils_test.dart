@@ -1,5 +1,9 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
+import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
 import 'literal_pattern_test_helper.dart';
 
@@ -806,5 +810,57 @@ void main() {
     test('שאילתה ריקה — שקר', () {
       expect(queryMatchesInlineNoteOnly(noteLine, ''), isFalse);
     });
+  });
+  test('cleanLineForSearch זהה לכיווץ הרווחים ב-regex (perf)', () {
+    // אורקל: המימוש הקודם.
+    String oracle(String rawLine) => utils
+        .removeVolwels(
+          utils.stripHtmlIfNeeded(notes.stripInlineNotesForSearch(rawLine)),
+        )
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final inputs = <String>[
+      // כל יחידת קוד, לבד ובין אותיות ורווחים.
+      for (var c = 0; c <= 0xFFFF; c++) ...[
+        'א${String.fromCharCode(c)}ב',
+        'א ${String.fromCharCode(c)}${String.fromCharCode(c)}ב',
+      ],
+    ];
+    const pieces = [
+      ' ',
+      '  ',
+      '\t',
+      '\n',
+      '\r\n',
+      '\u00A0',
+      '\u2003',
+      '\u3000',
+      '\uFEFF',
+      '\u0085',
+      '\u180E',
+      'א',
+      'שלום',
+      'וַיֹּאמֶר',
+      '־',
+      '|',
+      '<b>',
+      '</b>',
+      '<br>',
+      '&nbsp;',
+      'x',
+    ];
+    final random = Random(3);
+    for (var i = 0; i < 5000; i++) {
+      inputs.add(
+        [
+          for (var j = random.nextInt(12); j > 0; j--)
+            pieces[random.nextInt(pieces.length)],
+        ].join(),
+      );
+    }
+    for (final input in inputs) {
+      expect(cleanLineForSearch(input), oracle(input), reason: input);
+    }
   });
 }
