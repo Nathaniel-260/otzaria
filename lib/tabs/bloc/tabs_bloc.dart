@@ -55,6 +55,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   List<OpenedTab>? _pendingSaveTabs;
   int _pendingSaveIndex = 0;
   Future<void>? _saveDrain;
+  Future<void> _openingTab = Future<void>.value();
 
   /// מבקש שמירה של הטאבים, בלי להמתין לה.
   ///
@@ -178,7 +179,10 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<RemapBookPaths>(_onRemapBookPaths, transformer: sequential());
     on<ReplaceAllTabs>(_onReplaceAllTabs, transformer: sequential());
     on<AddTab>(_onAddTab, transformer: sequential());
-    on<OpenOrFocusTab>(_onOpenOrFocusTab, transformer: sequential());
+    on<OpenOrFocusTab>(
+      (event, emit) => _openingTab = _onOpenOrFocusTab(event, emit),
+      transformer: sequential(),
+    );
     on<ReplaceTab>(_onReplaceTab, transformer: sequential());
     on<RemoveTab>(_onRemoveTab, transformer: sequential());
     on<RemoveTabs>(_onRemoveTabs, transformer: sequential());
@@ -1027,6 +1031,9 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   Future<void> _onRemoveTab(RemoveTab event, Emitter<TabsState> emit) async {
+    // פתיחה שקדמה לסגירה עוד ממתינה לכותרת; בלי ההמתנה נוצר רגע בלי טאבים,
+    // ומסך העיון עובר לספרייה אף שספר נפתח.
+    await _openingTab.catchError((Object _) {});
     final removedTabIndex = state.tabs.indexOf(event.tab);
     if (removedTabIndex == -1) return;
 
