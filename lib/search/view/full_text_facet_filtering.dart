@@ -36,6 +36,7 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
   bool get wantKeepAlive => true;
   final TextEditingController _filterQuery = TextEditingController();
   final Map<String, bool> _expansionState = {};
+  String _treeFilterQuery = '';
 
   @override
   void dispose() {
@@ -263,7 +264,16 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
         }
 
         return BlocBuilder<SearchBloc, SearchState>(
+          // רק השדות שהעץ מציג; העץ קורא את isLoading רק יחד עם "אין תוצאות".
+          // טקסט האיתור נקרא מה-controller — filterQuery מתאפס בכל copyWith.
+          buildWhen: (p, c) =>
+              p.facetCounts != c.facetCounts ||
+              p.currentFacets != c.currentFacets ||
+              (p.isLoading && p.results.isEmpty) !=
+                  (c.isLoading && c.results.isEmpty) ||
+              _filterQuery.text != _treeFilterQuery,
           builder: (context, searchState) {
+            _treeFilterQuery = _filterQuery.text;
             final library = libraryState.library;
             if (library == null) {
               return const Center(child: Text('No library data available'));
