@@ -1125,6 +1125,8 @@ class BackupService {
   }) async {
     final database = PersonalNotesDatabase.instance;
     var anchorlessNotes = 0;
+    // כתיבה בטרנזקציה אחת: commit לכל הערה עולה כחצי מילישנייה ותוקע את ה-UI.
+    final toWrite = <PersonalNote>[];
 
     for (final entry in notesData) {
       try {
@@ -1144,8 +1146,8 @@ class BackupService {
                 if (!note.isWordAnchored) anchorlessNotes++;
               }
               if (counts != null) {
-                // `insertNote` הוא INSERT OR REPLACE — בייבוא ממזג הוא היה
-                // דורס הערה מקומית שנערכה מאוחר יותר מזו שבקובץ.
+                // הכתיבה היא INSERT OR REPLACE — בייבוא ממזג היא הייתה
+                // דורסת הערה מקומית שנערכה מאוחר יותר מזו שבקובץ.
                 final existing = await database.getNote(note.id);
                 if (existing == null) {
                   counts.notes++;
@@ -1155,7 +1157,7 @@ class BackupService {
                   continue;
                 }
               }
-              await database.insertNote(note);
+              toWrite.add(note);
             } catch (e) {
               _logger.warning('Failed to restore single note from backup: $e');
             }
@@ -1164,6 +1166,12 @@ class BackupService {
       } catch (e) {
         _logger.warning('Failed to restore note entry: $e');
       }
+    }
+
+    try {
+      await database.batchInsertNotes(toWrite, replace: true);
+    } catch (e) {
+      _logger.warning('Failed to write restored notes: $e');
     }
 
     return anchorlessNotes;

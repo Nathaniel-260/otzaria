@@ -212,8 +212,11 @@ class PersonalNotesDatabase {
   }
 
   /// Batch insert multiple notes (for bulk restore/import)
-  /// Skips notes that already exist (by ID)
-  Future<int> batchInsertNotes(List<PersonalNote> notes) async {
+  /// Skips notes that already exist (by ID), or overwrites them with [replace]
+  Future<int> batchInsertNotes(
+    List<PersonalNote> notes, {
+    bool replace = false,
+  }) async {
     if (notes.isEmpty) return 0;
     final db = await database;
     int count = 0;
@@ -224,7 +227,7 @@ class PersonalNotesDatabase {
         final cols = m.keys.join(', ');
         final placeholders = List.filled(m.length, '?').join(', ');
         db.execute(
-          'INSERT OR IGNORE INTO $_tableNotes ($cols) VALUES ($placeholders)',
+          'INSERT OR ${replace ? 'REPLACE' : 'IGNORE'} INTO $_tableNotes ($cols) VALUES ($placeholders)',
           m.values.toList(),
         );
         if (db.updatedRows > 0) {
