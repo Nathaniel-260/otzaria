@@ -1,15 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:fluentui_system_icons/fluentui_system_icons.dart';
 import 'package:otzaria_icons/otzaria_icons.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:otzaria/core/messages/report_messages.dart';
 import 'package:otzaria/settings/l10n/settings_l10n_exports.dart';
-import 'package:otzaria/settings/services/safer_mode_guard.dart';
-import 'package:otzaria/settings/services/offline_send_target.dart';
 import 'package:otzaria/settings/panels/report_panel_widgets.dart';
 import 'package:otzaria/core/ui_snack.dart';
 import 'package:otzaria/models/direct_error_report.dart';
@@ -22,7 +16,6 @@ import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/text_book/view/error_report_dialog.dart';
 import 'package:otzaria/utils/canonical_json.dart';
-import 'package:otzaria/utils/file/save_file_with_extension.dart';
 
 /// Direct error reports on books: identification email, offline queueing,
 /// the saved queue and the sent history.
@@ -296,29 +289,15 @@ class _ErrorReportsPanelState extends State<ErrorReportsPanel> {
     UiSnack.show(ReportMessages.senderEmailCleared);
   }
 
-  Future<void> _flushPendingReports() async {
-    setState(() {
-      _isFlushingPendingReports = true;
-    });
-
+  Future<void> _flushPendingReports() {
     final reportService = DirectErrorReportService();
-    final pendingBefore = await reportService.getPendingReportsCount();
-    final sentCount = await reportService.flushPendingReports();
-    final pendingAfter = await reportService.getPendingReportsCount();
-
-    if (!mounted) return;
-    widget.onPendingReportsChanged?.call();
-    setState(() {
-      _isFlushingPendingReports = false;
-    });
-
-    if (sentCount > 0) {
-      UiSnack.showSuccess(ReportMessages.pendingFlushed(sentCount));
-    } else if (pendingBefore == 0) {
-      UiSnack.show(ReportMessages.noPendingToSend);
-    } else {
-      UiSnack.show(ReportMessages.pendingFlushFailed(pendingAfter));
-    }
+    return flushReportQueue(
+      context,
+      pendingCount: reportService.getPendingReportsCount,
+      flush: reportService.flushPendingReports,
+      setBusy: (busy) => setState(() => _isFlushingPendingReports = busy),
+      onPendingReportsChanged: widget.onPendingReportsChanged,
+    );
   }
 
   Future<void> _sendPendingReport(DirectErrorReport report) async {
@@ -473,231 +452,66 @@ class _ErrorReportsPanelState extends State<ErrorReportsPanel> {
     UiSnack.show(ReportMessages.deletedFromHistory);
   }
 
-  Future<void> _clearSentReports() async {
-    final confirmed = await showWarningDialog(
-      context: context,
-      title: context.settingsText('לנקות את היסטוריית הדיווחים?'),
-      content: context.settingsText(
-        'כל הדיווחים שנשלחו יימחקו מההיסטוריה המקומית.',
-      ),
-      subtitle: context.settingsText(
-        'הפעולה לא מוחקת דיווחים שכבר נשלחו לצוות.',
-      ),
-      cancelText: context.settingsText('ביטול'),
-      confirmText: context.settingsText('נקה'),
-    );
-    if (confirmed != true) {
-      return;
-    }
+  Future<void> _clearSentReports() => clearSentReports(
+    context,
+    subtitle: context.settingsText('הפעולה לא מוחקת דיווחים שכבר נשלחו לצוות.'),
+    clear: () => DirectErrorReportService().clearSentReports(),
+    setBusy: (busy) => setState(() => _isClearingSentReports = busy),
+  );
 
-    setState(() {
-      _isClearingSentReports = true;
-    });
+  Future<void> _clearPendingReports() => clearPendingReports(
+    context,
+    clear: () => DirectErrorReportService().clearPendingReports(),
+    setBusy: (busy) => setState(() => _isClearingPendingReports = busy),
+    onPendingReportsChanged: widget.onPendingReportsChanged,
+  );
 
-    await DirectErrorReportService().clearSentReports();
-
-    if (!mounted) return;
-    setState(() {
-      _isClearingSentReports = false;
-    });
-    UiSnack.show(ReportMessages.historyCleared);
-  }
-
-  Future<void> _clearPendingReports() async {
-    final confirmed = await showWarningDialog(
-      context: context,
-      title: context.settingsText('למחוק דיווחים שמורים?'),
-      content: context.settingsText('כל הדיווחים השמורים בתור יימחקו מהמחשב.'),
-      subtitle: context.settingsText('לא ניתן לשחזר דיווחים שנמחקו.'),
-      cancelText: context.settingsText('ביטול'),
-      confirmText: context.settingsText('מחק'),
-    );
-    if (confirmed != true) {
-      return;
-    }
-
-    setState(() {
-      _isClearingPendingReports = true;
-    });
-
-    await DirectErrorReportService().clearPendingReports();
-
-    if (!mounted) return;
-    widget.onPendingReportsChanged?.call();
-    setState(() {
-      _isClearingPendingReports = false;
-    });
-    UiSnack.show(ReportMessages.pendingCleared);
-  }
-
-  Future<void> _exportPendingReportsScript() async {
-    final verified = await verifySaferModePassword(context);
-    if (!verified) {
-      return;
-    }
-
+  Future<void> _exportPendingReportsScript() {
     final reportService = DirectErrorReportService();
-    final reports = await reportService.getPendingReports();
-    if (reports.isEmpty) {
-      if (!mounted) return;
-      UiSnack.show(ReportMessages.noPendingToExport);
-      return;
-    }
-
-    if (!mounted) return;
-    final target = await resolveOfflineSendTarget(context);
-    if (target == null || !mounted) {
-      return;
-    }
-
-    final script = reportService.buildOfflineSendScript(
-      reports,
-      target: target,
+    return exportOfflineSendScript(
+      context,
+      loadPending: reportService.getPendingReports,
+      buildScript: (reports, target) =>
+          reportService.buildOfflineSendScript(reports, target: target),
+      setBusy: (busy) => setState(() => _isExportingPendingReports = busy),
     );
+  }
 
-    final saveDialogTitle = context.settingsText(
-      'בחר מיקום לשמירת סקריפט השליחה',
-    );
-    final downloadsDirectory = await getDownloadsDirectory();
-    final path = await saveFileWithExtension(
-      dialogTitle: saveDialogTitle,
-      fileName: script.fileName,
-      initialDirectory: downloadsDirectory?.path,
-      extension: target == OfflineSendScriptTarget.windows ? 'bat' : 'sh',
-      bytes: Uint8List.fromList(utf8.encode(script.content)),
-    );
-    if (path == null || !mounted) {
-      return;
-    }
-
-    setState(() {
-      _isExportingPendingReports = true;
-    });
-
-    try {
-      // קובץ .sh נשמר ללא הרשאת הרצה; מוסיפים אותה כדי שאפשר יהיה להפעילו ישירות.
-      if (target == OfflineSendScriptTarget.unix &&
-          (Platform.isLinux || Platform.isMacOS)) {
-        await Process.run('chmod', ['+x', path]);
-      }
-
-      if (!mounted) return;
-      UiSnack.showSuccess(
-        target == OfflineSendScriptTarget.unix
-            ? ReportMessages.scriptSavedUnix(script.fileName)
-            : ReportMessages.scriptSavedWindows,
-      );
-    } catch (e) {
-      if (!mounted) return;
-      UiSnack.showError(ReportMessages.scriptSaveError(e));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isExportingPendingReports = false;
-        });
-      }
-    }
+  String _reportSummary(BuildContext context, DirectErrorReport report) {
+    final noDetails = context.settingsText('ללא פירוט');
+    return '${report.currentRef} · '
+        '${report.errorDetails.isEmpty ? noDetails : report.errorDetails}';
   }
 
   Widget _buildPendingReportTile(
     BuildContext context,
     DirectErrorReport report, {
     required bool canSend,
-  }) {
-    final isSending = _sendingPendingReportId == report.id;
-    final noDetails = context.settingsText('ללא פירוט');
-    return Column(
-      children: [
-        ListTile(
-          leading: const Icon(OtzariaIcons.document_bullet_list_24_regular),
-          title: Text(
-            report.bookTitle,
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            '${report.currentRef} · '
-            '${report.errorDetails.isEmpty ? noDetails : report.errorDetails}',
-            style: kSettingsSubtitleStyle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        buildReportActions(
-          children: [
-            ActionButton.neutral(
-              text: context.settingsText('צפה'),
-              icon: FluentIcons.eye_24_regular,
-              onPressed: () => _showReportDetails(report, sent: false),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('ערוך'),
-              icon: FluentIcons.edit_24_regular,
-              onPressed: () => _editPendingReport(report),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('מחק'),
-              icon: FluentIcons.delete_24_regular,
-              onPressed: () => _deletePendingReport(report),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('סמן כנשלח'),
-              icon: FluentIcons.checkmark_24_regular,
-              onPressed: () => _markPendingReportAsSent(report),
-            ),
-            buildManagedActionButton(
-              enabled: canSend,
-              child: ActionButton.recommended(
-                text: context.settingsText('שלח'),
-                icon: FluentIcons.send_24_regular,
-                isLoading: isSending,
-                onPressed: () => _sendPendingReport(report),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  }) => buildPendingReportTile(
+    context,
+    icon: OtzariaIcons.document_bullet_list_24_regular,
+    title: report.bookTitle,
+    subtitle: _reportSummary(context, report),
+    canSend: canSend,
+    isSending: _sendingPendingReportId == report.id,
+    onView: () => _showReportDetails(report, sent: false),
+    onEdit: () => _editPendingReport(report),
+    onDelete: () => _deletePendingReport(report),
+    onMarkSent: () => _markPendingReportAsSent(report),
+    onSend: () => _sendPendingReport(report),
+  );
 
-  Widget _buildSentReportTile(BuildContext context, DirectErrorReport report) {
-    final noDetails = context.settingsText('ללא פירוט');
-    return Column(
-      children: [
-        ListTile(
-          leading: Icon(
-            report.rejectionReason == null
-                ? FluentIcons.checkmark_24_regular
-                : FluentIcons.error_circle_24_regular,
-          ),
-          title: Text(
-            report.bookTitle,
-            style: kSettingsTitleStyle,
-          ),
-          subtitle: Text(
-            '${report.currentRef} · '
-            '${report.errorDetails.isEmpty ? noDetails : report.errorDetails}',
-            style: kSettingsSubtitleStyle,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        buildReportActions(
-          children: [
-            ActionButton.neutral(
-              text: context.settingsText('צפה'),
-              icon: FluentIcons.eye_24_regular,
-              onPressed: () => _showReportDetails(report, sent: true),
-            ),
-            ActionButton.neutral(
-              text: context.settingsText('מחק'),
-              icon: FluentIcons.delete_24_regular,
-              onPressed: () => _deleteSentReport(report),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
+  Widget _buildSentReportTile(BuildContext context, DirectErrorReport report) =>
+      buildSentReportTile(
+        context,
+        icon: report.rejectionReason == null
+            ? FluentIcons.checkmark_24_regular
+            : FluentIcons.error_circle_24_regular,
+        title: report.bookTitle,
+        subtitle: _reportSummary(context, report),
+        onView: () => _showReportDetails(report, sent: true),
+        onDelete: () => _deleteSentReport(report),
+      );
 }
 
 class _PendingReportEditValues {
