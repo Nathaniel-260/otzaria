@@ -40,6 +40,7 @@ import 'package:otzaria/book_common/utils/commentator_group_builder.dart';
 import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/text_book/utils/reading_segment_navigation.dart';
 import 'package:otzaria/text_book/utils/reading_segments.dart';
+import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/utils/file/markdown_to_otzaria.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
@@ -1265,7 +1266,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
         Future.delayed(const Duration(milliseconds: 100), () {
           if (scrollController.isAttached) {
             scrollController.scrollTo(
-              index: currentState.selectedIndex!,
+              index: resolveItemIndexForSourceLine(
+                lineIndex: currentState.selectedIndex!,
+                readingSegments: currentState.readingSegments,
+              ),
               duration: const Duration(milliseconds: 300),
             );
           }
@@ -1971,7 +1975,10 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
       // גלילה לסעיף המבוקש כדי שההדגשה תהיה גלויה
       if (scrollIndex != null && scrollController.isAttached) {
         scrollController.scrollTo(
-          index: scrollIndex,
+          index: resolveItemIndexForSourceLine(
+            lineIndex: scrollIndex,
+            readingSegments: currentState.readingSegments,
+          ),
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
         );
