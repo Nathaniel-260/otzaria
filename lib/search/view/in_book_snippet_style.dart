@@ -1,3 +1,4 @@
+import 'package:otzaria/theme/app_fonts.dart';
 import 'package:flutter/material.dart';
 import 'package:otzaria/settings/settings_exports.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
@@ -7,7 +8,7 @@ class InBookSnippetStyle {
   InBookSnippetStyle(BuildContext context, SettingsState settings)
     : text = TextStyle(
         fontSize: 16,
-        fontFamily: settings.fontFamily,
+        fontFamily: AppFonts.renderFontFamily(settings.fontFamily),
         color: Theme.of(context).colorScheme.onSurface,
         height: 1.5,
       ),

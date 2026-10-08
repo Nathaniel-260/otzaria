@@ -210,7 +210,7 @@ class SmartTextWidget extends StatelessWidget {
     );
     final textStyle = TextStyle(
       fontSize: settings.fontSize,
-      fontFamily: fontFamily,
+      fontFamily: AppFonts.renderFontFamily(fontFamily),
       fontWeight: settings.fontWeight,
       fontVariations: AppFonts.boldFontVariations(
         fontFamily,

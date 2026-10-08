@@ -2279,7 +2279,9 @@ class _PdfCommentaryGroupHeader extends StatelessWidget {
                   fontVariations: AppFonts.boldFontVariations(
                     settingsState.commentatorsFontFamily,
                   ),
-                  fontFamily: settingsState.commentatorsFontFamily,
+                  fontFamily: AppFonts.renderFontFamily(
+                    settingsState.commentatorsFontFamily,
+                  ),
                 ),
               ),
             ),
@@ -2358,7 +2360,9 @@ class _PdfCommentaryLinkItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: settingsState.commentatorsFontSize - 4,
                     fontWeight: FontWeight.normal,
-                    fontFamily: settingsState.commentatorsFontFamily,
+                    fontFamily: AppFonts.renderFontFamily(
+                      settingsState.commentatorsFontFamily,
+                    ),
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 );

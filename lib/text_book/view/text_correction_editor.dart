@@ -276,9 +276,10 @@ class _TextCorrectionEditorState extends State<TextCorrectionEditor> {
   TextStyle _textStyle(BuildContext context) =>
       (Theme.of(context).textTheme.bodyLarge ?? const TextStyle()).copyWith(
         fontSize: widget.fontSize,
-        fontFamily:
-            Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
-            AppFonts.defaultFont,
+        fontFamily: AppFonts.renderFontFamily(
+          Settings.getValue<String>(SettingsRepository.keyFontFamily) ??
+              AppFonts.defaultFont,
+        ),
       );
 
   @override

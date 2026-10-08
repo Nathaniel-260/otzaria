@@ -1647,9 +1647,10 @@ class _RegularReportTabState extends State<RegularReportTab> {
                           widget.selectedText,
                           style: TextStyle(
                             fontSize: widget.fontSize,
-                            fontFamily:
-                                Settings.getValue('key-font-family') ??
-                                AppFonts.defaultFont,
+                            fontFamily: AppFonts.renderFontFamily(
+                              Settings.getValue('key-font-family') ??
+                                  AppFonts.defaultFont,
+                            ),
                           ),
                           textAlign: TextAlign.right,
                         ),

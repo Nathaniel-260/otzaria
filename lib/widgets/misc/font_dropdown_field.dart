@@ -228,7 +228,7 @@ class _FontPreviewTextState extends State<_FontPreviewText> {
       widget.name,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-      style: TextStyle(fontFamily: family),
+      style: TextStyle(fontFamily: AppFonts.renderFontFamily(family)),
     );
   }
 }

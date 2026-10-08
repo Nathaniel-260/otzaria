@@ -2716,7 +2716,9 @@ class _CombinedViewState extends State<CombinedView> {
                           if (isContinuousParagraph) {
                             final baseTextStyle = TextStyle(
                               fontSize: widget.textSize,
-                              fontFamily: settingsState.fontFamily,
+                              fontFamily: AppFonts.renderFontFamily(
+                                settingsState.fontFamily,
+                              ),
                               height: settingsState.lineHeight,
                               color: Theme.of(context).colorScheme.onSurface,
                             );
