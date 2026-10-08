@@ -263,6 +263,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    // אותו child מונע מפעימות ההורה לעקוף את buildWhen של עץ הסינון.
+    final facetPane = SearchFacetFiltering(tab: widget.tab);
     return BlocListener<NavigationBloc, NavigationState>(
       listener: (context, state) => _onNavigationChanged(state),
       child: BlocListener<SearchBloc, SearchState>(
@@ -310,7 +312,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
                   onEditSearch: _openEditDialog,
                   showPreviewPane: showPreviewPane,
                 ),
-                facetPane: SearchFacetFiltering(tab: widget.tab),
+                facetPane: facetPane,
               ),
             ),
           ),
