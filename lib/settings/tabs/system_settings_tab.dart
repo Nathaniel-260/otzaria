@@ -44,6 +44,7 @@ import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/utils/file/open_in_file_manager.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
@@ -828,14 +829,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               await _exportBackupFile(file);
               return;
             }
-            final dir = file.parent;
-            if (Platform.isWindows) {
-              await Process.run('explorer', [dir.path]);
-            } else if (Platform.isMacOS) {
-              await Process.run('open', [dir.path]);
-            } else if (Platform.isLinux) {
-              await Process.run('xdg-open', [dir.path]);
-            }
+            await openInFileManager(file.parent.path);
           },
           icon: FluentIcons.checkmark_circle_24_regular,
         );
@@ -1431,17 +1425,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       ? _defaultBackupPath
                       : null,
                 ),
-                onOpenFolder: () {
-                  final path = _resolvedBackupPath;
-                  if (path.isEmpty) return;
-                  if (Platform.isWindows) {
-                    unawaited(Process.run('explorer', [path]));
-                  } else if (Platform.isMacOS) {
-                    unawaited(Process.run('open', [path]));
-                  } else if (Platform.isLinux) {
-                    unawaited(Process.run('xdg-open', [path]));
-                  }
-                },
+                onOpenFolder: () =>
+                    unawaited(openInFileManager(_resolvedBackupPath)),
                 onClearPath: () {
                   Settings.setValue<String>(
                     SettingsRepository.keyBackupPath,

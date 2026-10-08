@@ -38,6 +38,7 @@ import 'package:otzaria/settings/services/orphan_library_service.dart';
 import 'package:otzaria/settings/services/safer_mode_guard.dart';
 import 'package:path/path.dart' as p;
 import 'package:otzaria/settings/widgets/settings_tab_scroll_view.dart';
+import 'package:otzaria/utils/file/open_in_file_manager.dart';
 
 /// טאב הגדרות ספרייה
 class LibrarySettingsTab extends StatefulWidget {
@@ -261,18 +262,6 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
     }
   }
 
-  /// פותח נתיב במנהל הקבצים של מערכת ההפעלה.
-  void _openInFileManager(String path) {
-    if (path.isEmpty) return;
-    if (Platform.isWindows) {
-      unawaited(Process.run('explorer', [path]));
-    } else if (Platform.isMacOS) {
-      unawaited(Process.run('open', [path]));
-    } else if (Platform.isLinux) {
-      unawaited(Process.run('xdg-open', [path]));
-    }
-  }
-
   /// מחיל בחירת תיקיית שורש של הספרייה: ה-DB מאותר תחת <שורש>/books, ואם אינו
   /// שם — ישירות תחת התיקייה שנבחרה (תמיכה במי שמצביע על תיקיית הספרים עצמה).
   Future<void> _applyLibraryRootChange(String root) async {
@@ -431,8 +420,8 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
       },
       requestChangeLocation: (_) => _openLibraryDialog(booksPath),
       changeLocationLabel: 'מתקדם',
-      onOpenFolder: () => _openInFileManager(rootPath),
-      onOpenPath: _openInFileManager,
+      onOpenFolder: () => openInFileManager(rootPath),
+      onOpenPath: openInFileManager,
       pathTargets: [
         PathTarget(
           label: context.settingsText('תיקייה ראשית'),
@@ -480,7 +469,7 @@ class _LibrarySettingsTabState extends State<LibrarySettingsTab> {
                   _afterMoveUpdateBloc(newPath, UpdateHebrewBooksPath.new)
             : null,
       ),
-      onOpenFolder: () => _openInFileManager(hasPath ? pathStr : ''),
+      onOpenFolder: () => openInFileManager(hasPath ? pathStr : ''),
       onClearPath: () => _removeHebrewBooksPath(context),
     );
   }
