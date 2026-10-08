@@ -746,20 +746,6 @@ class ShamorZachorDataProvider with ChangeNotifier {
     }
   }
 
-  bool isBookTracked(String categoryName, String bookName) {
-    // This refers to TrackingProvider usually?
-    // Or simply "does it exist"?
-    return getBookDetails(categoryName, bookName) != null;
-  }
-
-  bool hasCategory(String categoryName) =>
-      _allBookData.containsKey(categoryName);
-
-  /// Clear TOC cache to free memory
-  void clearTocCache() {
-    _tocCache.clear();
-  }
-
   /// Load tracked books list from Hive
   Future<void> _loadTrackedBooksList() async {
     try {
