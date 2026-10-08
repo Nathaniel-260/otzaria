@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:otzaria/attached_libraries/external_link_work_status.dart';
 import 'package:otzaria/attached_libraries/models/attached_library.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/settings/l10n/settings_text.dart';
 import 'package:otzaria/settings/widgets/settings_widgets_exports.dart';
 import 'package:otzaria/widgets/widgets_exports.dart';
@@ -97,6 +98,7 @@ class _ExternalLinkIndexTileState extends State<ExternalLinkIndexTile> {
 
   @override
   Widget build(BuildContext context) {
+    if (WindowRole.isSecondary) return const SizedBox.shrink();
     final progress = _repository.buildProgress.value;
     final isBuilding =
         progress.isNotEmpty || _repository.buildingSlugs.value.isNotEmpty;

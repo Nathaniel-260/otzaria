@@ -18,7 +18,7 @@ import 'package:otzaria/models/book_source.dart';
 import 'package:otzaria/models/link_types.dart';
 import 'package:otzaria/models/links.dart';
 
-/// התקדמות בניית האינדקס של מסד אחד: [done] שורות נכתבו מתוך [total] שורות
+/// התקדמות בניית האינדקס של מסד אחד: [done] שורות נסרקו מתוך [total] שורות
 /// `external_link` במסד המקור.
 class ExternalLinkBuildProgress {
   const ExternalLinkBuildProgress({required this.done, required this.total});
@@ -474,6 +474,7 @@ class ExternalLinkRepository {
     String? resumeSlug,
     bool autoResume = false,
   }) async {
+    if (WindowRole.isSecondary) return const {};
     final libraries = _registry.libraries;
     if (libraries.isEmpty) {
       tooLargeSlugs.value = const {};
@@ -600,6 +601,7 @@ class ExternalLinkRepository {
   /// כך שמחיקת ה-meta אינה מקדימה סנכרון שכותב. הממשק משתמש ב-[requestRebuild].
   @visibleForTesting
   Future<void> rebuild(String slug) => _enqueue(() async {
+    if (WindowRole.isSecondary) return;
     await _inIsolate(_forgetIndexMeta, (await _cacheDbPath(), slug));
     await _sync();
   });
@@ -646,7 +648,7 @@ class ExternalLinkRepository {
   static Duration batchPause = Duration.zero;
 
   /// התקדמות הבנייה לכל מסד שנבנה כעת (המפתחות זהים ל-[buildingSlugs]):
-  /// `done` שורות נכתבו לאינדקס מתוך `total` שורות `external_link` במקור.
+  /// `done` שורות נסרקו מתוך `total` שורות `external_link` במקור.
   final ValueNotifier<Map<String, ExternalLinkBuildProgress>> buildProgress =
       ValueNotifier(const {});
 
@@ -1113,11 +1115,8 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
             ).first['c']
             as int;
 
-    // המשך תקף רק לבנייה שנקטעה על אותו קובץ ואותם מסדי יעד; אחרת המסד נבנה
-    // מאפס, או מדולג כשהאינדקס שלו עדכני. המשך אוטומטי דורש בנוסף נקודת המשך,
-    // שהעצירה לא הייתה ידנית, ושהבנייה התקדמה מאז ההמשך האוטומטי הקודם - כך
-    // קריסה דטרמיניסטית אינה יוצרת לולאה. autoRows הוא מספר השורות שבאינדקס
-    // כשההמשך אוטומטי, ו-null כשאינו.
+    // המשך תקף רק לאותו מקור ויעדים; המשך אוטומטי דורש התקדמות מאז הניסיון
+    // הקודם ולא אחרי עצירה ידנית, כדי למנוע לולאת קריסות.
     ({bool resume, int? autoRows}) resumeDecision(
       _SyncJob job,
       (String, String)? previous,
@@ -1178,10 +1177,8 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
           _isCurrentOrMarked(previous, job.fingerprint, signature)) {
         continue;
       }
-      // בנייה מאפס מוחקת את שורות האינדקס הישנות באותה טרנזקציה של הסימון:
-      // מכאן `!building` תמיד מתאר אינדקס שכולו שייך לבנייה הנוכחית. שורות
-      // בלי שורת יעד ב-_targetTable אינן מוגשות, ולכן הכתיבה במנות תוך כדי
-      // הקריאה אינה חושפת אינדקס חלקי.
+      // הסימון ומחיקת האינדקס הישן אטומיים. שורות בלי יעד ב-_targetTable
+      // אינן מוגשות, ולכן כתיבה במנות אינה חושפת אינדקס חלקי.
       _transaction(db, () {
         writeMeta(
           job.slug,
@@ -1202,7 +1199,6 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
           ]);
         }
       });
-      var written = 0;
       var scanned = 0;
       var total = 0;
       (int, int)? resumeFrom;
@@ -1227,7 +1223,6 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
               [job.slug, from.$1, from.$2],
             );
           });
-          written = indexRowCount(job.slug);
         }
       }
       final clock = Stopwatch()..start();
@@ -1240,12 +1235,13 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
       }
 
       final batch = <ResolvedExternalLink>[];
+      var scannedInBatch = 0;
       void flush() {
-        _transaction(db, () {
-          _insertRows(db, job.slug, batch);
-        });
-        written += batch.length;
+        if (batch.isNotEmpty) {
+          _transaction(db, () => _insertRows(db, job.slug, batch));
+        }
         batch.clear();
+        scannedInBatch = 0;
         report();
         _controlPoint(control, batchPauseMs);
       }
@@ -1259,15 +1255,15 @@ _SyncResult _syncIndex(_SyncArgs args, SendPort progress) {
           source: job.source,
           sourceWireKey: wireKey,
           targets: jobTargets,
-          maxRows: maxRows - written,
+          maxRows: maxRows - counts.before,
           resumeFrom: resumeFrom,
-          onScanned: () => scanned++,
-          onRow: (row) {
-            batch.add(row);
-            if (batch.length >= currentBatchSize()) flush();
+          onScanned: () {
+            scanned++;
+            if (++scannedInBatch >= currentBatchSize()) flush();
           },
+          onRow: batch.add,
         );
-        flush();
+        if (scannedInBatch > 0) flush();
         report(force: true);
       } on _BuildCancelled {
         // השורות שנכתבו נשארות — המשך מהנקודה השמורה, רק לבקשת המשתמש.

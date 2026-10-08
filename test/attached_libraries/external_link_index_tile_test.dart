@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/attached_libraries/models/attached_library.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/attached_libraries/view/external_link_index_tile.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 
 class _FakeLinks extends ExternalLinkRepository {
   final calls = <String>[];
@@ -63,6 +64,20 @@ void main() {
       ]),
       isEmpty,
     );
+  });
+
+  testWidgets('חלון משני אינו מציג פקדי בניית אינדקס', (tester) async {
+    final previousRole = WindowRole.isSecondary;
+    addTearDown(() => WindowRole.isSecondary = previousRole);
+    WindowRole.isSecondary = true;
+    await pump(tester);
+    expect(find.text('אינדקס קישורים'), findsNothing);
+    expect(find.text('איפוס'), findsNothing);
+    links.incompleteSlugs.value = {'dbA'};
+    await tester.pump();
+    expect(find.text('המשך בנייה'), findsNothing);
+    expect(find.text('בנה מחדש'), findsNothing);
+    expect(links.calls, isEmpty);
   });
 
   testWidgets('מעודכן כשאין בנייה', (tester) async {

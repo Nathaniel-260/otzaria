@@ -9,6 +9,7 @@ import 'package:otzaria/attached_libraries/repository/attached_library_registry.
 import 'package:otzaria/attached_libraries/repository/external_link_core.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/core/app_paths.dart';
+import 'package:otzaria/core/windowing/window_role.dart';
 import 'package:otzaria/data/constants/database_constants.dart';
 import 'package:otzaria/data/data_providers/database_library_provider.dart';
 import 'package:otzaria/data/data_providers/file_system_data_provider.dart';
@@ -1165,6 +1166,120 @@ void main() {
       expect(indexRows(library.slug), 5);
       expect(metaSignature(library.slug), isNot(startsWith('!')));
       expect(links.buildEconomy.value, isFalse);
+    });
+
+    test('המשך שומר על תקרת שורות המקור גם כשיעד אינו נפתר', () async {
+      final cap = ExternalLinkRepository.maxIndexRows;
+      addTearDown(() => ExternalLinkRepository.maxIndexRows = cap);
+      ExternalLinkRepository.maxIndexRows = 5;
+      slowBuild();
+      final library = await attach(
+        attachedDb(
+          'resume-cap',
+          rows: [
+            _row(0, targetTitle: 'חסר', targetLineIndex: 1),
+            for (var i = 1; i < 6; i++) _row(i, targetLineIndex: 1),
+          ],
+        ),
+      );
+      await links.sync();
+      expect(links.tooLargeSlugs.value, contains(library.slug));
+      void cancelAfterResolvedRow() {
+        if (doneOf(library.slug) >= 2) links.cancelBuild();
+      }
+
+      links.buildProgress.addListener(cancelAfterResolvedRow);
+      try {
+        await links.rebuild(library.slug);
+      } finally {
+        links.buildProgress.removeListener(cancelAfterResolvedRow);
+      }
+      expect(indexRows(library.slug), inInclusiveRange(1, 4));
+      expect(links.incompleteSlugs.value, {library.slug});
+      links.requestResume(library.slug);
+      await links.sync();
+      expect(links.tooLargeSlugs.value, contains(library.slug));
+      expect(indexRows(library.slug), 0);
+    });
+
+    test('חלון משני אינו משנה אינדקס שבנייתו מושהית בחלון הראשי', () async {
+      slowBuild();
+      final library = await attach(attachedDb('windows', rows: fiveRows()));
+      void pause() {
+        if (links.buildingSlugs.value.isNotEmpty) links.pauseBuild();
+      }
+
+      links.buildingSlugs.addListener(pause);
+      final first = links.sync();
+      await waitFor(() => doneOf(library.slug) >= 1);
+      final savedRows = indexRows(library.slug);
+      final savedMeta = metaSignature(library.slug);
+      final secondary = ExternalLinkRepository(
+        registry: registry,
+        cacheDbPath: () async => cachePath(),
+      );
+      final previousRole = WindowRole.isSecondary;
+      try {
+        WindowRole.isSecondary = true;
+        await secondary.sync(autoResume: true);
+        await secondary.rebuild(library.slug);
+        secondary.requestResume(library.slug);
+        secondary.requestRebuild(library.slug);
+        await secondary.sync();
+        expect(indexRows(library.slug), savedRows);
+        expect(metaSignature(library.slug), savedMeta);
+      } finally {
+        WindowRole.isSecondary = previousRole;
+        links.buildingSlugs.removeListener(pause);
+        links.resumeBuild();
+        await first;
+      }
+      expect(indexRows(library.slug), 5);
+      expect(links.incompleteSlugs.value, isEmpty);
+    });
+
+    test('סריקת יעדים חסרים מכבדת השהיה, עצירה ומנות חסכוניות', () async {
+      slowBuild(batchSize: 4);
+      final library = await attach(
+        attachedDb(
+          'unresolved',
+          rows: [
+            for (var i = 0; i < 30; i++)
+              _row(i, targetTitle: 'חסר', targetLineIndex: 1),
+          ],
+        ),
+      );
+      final reported = <int>[];
+      void record() {
+        final progress = links.buildProgress.value[library.slug];
+        if (progress != null && progress.total > 0) reported.add(progress.done);
+      }
+
+      void pause() {
+        if (links.buildingSlugs.value.isNotEmpty) {
+          links.setBuildEconomy(true);
+          links.pauseBuild();
+        }
+      }
+
+      links.buildProgress.addListener(record);
+      links.buildingSlugs.addListener(pause);
+      final first = links.sync();
+      try {
+        await waitFor(() => reported.any((v) => v > 0));
+        expect(reported.last, lessThan(30));
+        await Future<void>.delayed(const Duration(milliseconds: 100));
+        expect(reported.last, 2);
+        expect(links.buildEconomy.value, isTrue);
+      } finally {
+        links.buildingSlugs.removeListener(pause);
+        links.cancelBuild();
+        await first;
+        links.buildProgress.removeListener(record);
+      }
+      expect(links.incompleteSlugs.value, {library.slug});
+      expect(indexRows(library.slug), 0);
+      expect(metaSignature(library.slug), endsWith('\u0001stop'));
     });
 
     test('כותרת יעד ארוכה מדי אינה נפתרת', () async {

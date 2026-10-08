@@ -347,10 +347,11 @@ List<ResolvedExternalLink> readResolvedExternalLinks({
         if (++count > maxRows) {
           throw const ExternalLinksTooLargeException();
         }
-        onScanned?.call();
         final resolved = _resolveRow(cursor.current, resolver);
-        if (resolved == null) continue;
-        onRow != null ? onRow(resolved) : result.add(resolved);
+        if (resolved != null) {
+          onRow != null ? onRow(resolved) : result.add(resolved);
+        }
+        onScanned?.call();
       }
     } finally {
       statement.close();
