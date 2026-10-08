@@ -403,7 +403,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner>
 
     return InAppWebView(
       webViewEnvironment: WebViewEnvironmentHolder.environment,
-      initialUrlRequest: URLRequest(url: _entrypointUri),
+      initialUrlRequest: widget.plugin.isLocalhostDev
+          ? null
+          : URLRequest(url: _entrypointUri),
       onLoadResourceWithCustomScheme: (controller, request) => servePluginAsset(
         url: request.url,
         pluginId: widget.plugin.pluginId,
@@ -441,7 +443,9 @@ class _BackgroundPluginRunnerState extends State<_BackgroundPluginRunner>
             registry: pluginRegistryRepository,
           ),
       onWebViewCreated: (controller) {
-        if (!attachPluginController(controller)) _onInstanceFailed();
+        if (!attachPluginController(controller, _entrypointUri)) {
+          _onInstanceFailed();
+        }
       },
       onProcessFailed: (controller, detail) {
         // תוסף רקע מוסתר — בלי הרישום אין לכשל הזה שום עדות נראית.

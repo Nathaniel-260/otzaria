@@ -65,6 +65,27 @@ bool isPluginDevServerUri(Uri uri, String? devRootPath) {
   return reqPort == devPort;
 }
 
+/// ב-Windows ‏cacheEnabled/clearAllCache לא ממומשים: עוקפים מטמון ו-service worker ישנים.
+Future<void> loadPluginDevServer(
+  InAppWebViewController controller,
+  WebUri url,
+) async {
+  if (Platform.isWindows) {
+    for (final (method, params) in const [
+      ('Network.setCacheDisabled', {'cacheDisabled': true}),
+      ('Network.setBypassServiceWorker', {'bypass': true}),
+    ]) {
+      try {
+        await controller.callDevToolsProtocolMethod(
+          methodName: method,
+          parameters: params,
+        );
+      } catch (_) {}
+    }
+  }
+  await controller.loadUrl(urlRequest: URLRequest(url: url));
+}
+
 WebResourceResponse _forbidden() =>
     WebResourceResponse(statusCode: 403, reasonPhrase: 'Forbidden');
 
@@ -330,9 +351,11 @@ mixin PluginWebViewHost<T extends StatefulWidget> on State<T> {
       : WebUri.uri(Uri.file(htmlPath));
 
   /// רושם את ה-controller אצל ה-Dispatcher וה-bridge (ו-[onAttached]);
+  /// שרת פיתוח נטען כאן ([entrypoint]) ולא ב-initialUrlRequest.
   /// בכשל מבטל את הרישום ומחזיר false.
   bool attachPluginController(
-    InAppWebViewController controller, [
+    InAppWebViewController controller,
+    WebUri entrypoint, [
     void Function()? onAttached,
   ]) {
     try {
@@ -343,6 +366,9 @@ mixin PluginWebViewHost<T extends StatefulWidget> on State<T> {
         instanceId: instanceId,
       );
       bridge.register(controller);
+      if (plugin.isLocalhostDev) {
+        unawaited(loadPluginDevServer(controller, entrypoint));
+      }
       onAttached?.call();
       return true;
     } catch (e) {

@@ -493,7 +493,9 @@ class _PluginTabPageState extends State<PluginTabPage> with PluginWebViewHost {
     final webView = InAppWebView(
       key: _webViewKey,
       webViewEnvironment: WebViewEnvironmentHolder.environment,
-      initialUrlRequest: URLRequest(url: _entrypointUri),
+      initialUrlRequest: widget.plugin.isLocalhostDev
+          ? null
+          : URLRequest(url: _entrypointUri),
       onLoadResourceWithCustomScheme: (controller, request) => servePluginAsset(
         url: request.url,
         pluginId: widget.plugin.pluginId,
@@ -529,7 +531,7 @@ class _PluginTabPageState extends State<PluginTabPage> with PluginWebViewHost {
           widget.plugin.pluginId,
           owner: widget.instanceId,
         );
-        final attached = attachPluginController(controller, () {
+        final attached = attachPluginController(controller, _entrypointUri, () {
           controller.addJavaScriptHandler(
             handlerName: 'otzaria_escape_pressed',
             callback: (_) {
