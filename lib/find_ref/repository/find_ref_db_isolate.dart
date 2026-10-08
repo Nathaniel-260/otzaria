@@ -9,6 +9,7 @@ import 'package:otzaria/find_ref/repository/alt_toc_flat_entry.dart';
 import 'package:otzaria/find_ref/repository/find_ref_ranking.dart';
 import 'package:otzaria/migration/database/daos/database.dart';
 import 'package:otzaria/migration/database/repository/seforim_repository.dart';
+import 'package:otzaria/migration/models/toc_entry.dart';
 import 'package:otzaria/migration/database/query_loader.dart';
 import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart'
@@ -477,11 +478,10 @@ class FindRefDbIsolate {
     );
   }
 
-  /// שורות ה-TOC של ספר מ-`seforim.db`. המיפוי ל-`TocEntry` נעשה בצד הקורא
-  /// דרך `TocEntry.fromMap`, כך שאין כפילות בלוגיקת ההמרה.
-  Future<List<Map<String, dynamic>>> getBookTocRows(int bookId) async {
-    final res = await _request('bookToc', {'bookId': bookId});
-    return _castRows(res);
+  /// ערכי ה-TOC של ספר מ-`seforim.db`. נשלחים כאובייקטים ולא כ-Map: העתקת
+  /// אלפי Map ל-isolate הראשי חוסמת אותו פי 10 יותר (בית יוסף, 20 אלף ערכים).
+  Future<List<TocEntry>> getBookTocEntries(int bookId) async {
+    return await _request('bookToc', {'bookId': bookId}) as List<TocEntry>;
   }
 
   // ── Reset / lifecycle ───────────────────────────────────────────────────────
@@ -1074,7 +1074,7 @@ void _workerMain(_Bootstrap bootstrap) {
         if (repo == null) {
           throw StateError('seforim.db unavailable for bookToc');
         }
-        return repo.database.tocDao.selectRowsByBookId(args['bookId'] as int);
+        return repo.database.tocDao.selectByBookId(args['bookId'] as int);
       case 'allAltTocFlat':
         final repo = await ensureRepo();
         if (repo == null) return const <Map<String, dynamic>>[];
