@@ -8,6 +8,7 @@ import 'package:otzaria/text_book/bloc/text_book_bloc.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_event.dart';
 import 'package:otzaria/text_book/utils/reader_build_policy.dart';
+import 'package:otzaria/text_book/utils/visible_index.dart';
 import 'package:otzaria/text_book/view/selected_line_links_view.dart';
 import 'package:otzaria/personal_notes/widgets/personal_notes_sidebar.dart';
 import 'package:otzaria/personal_notes/utils/personal_notes_book_key.dart';
@@ -305,7 +306,10 @@ class _TabbedCommentaryPanelState extends State<TabbedCommentaryPanel>
     final targetIndex = (lineNumber - 1).clamp(0, state.content.length - 1);
 
     await state.scrollController.scrollTo(
-      index: targetIndex,
+      index: resolveItemIndexForSourceLine(
+        lineIndex: targetIndex,
+        readingSegments: state.readingSegments,
+      ),
       alignment: 0.05,
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOut,
