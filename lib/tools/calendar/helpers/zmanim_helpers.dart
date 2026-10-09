@@ -1,4 +1,5 @@
 import 'package:kosher_dart/kosher_dart.dart';
+import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tools/calendar/models/calendar_location.dart';
 import 'package:otzaria/tools/calendar/models/zman_definition.dart';
 import 'package:timezone/timezone.dart' as tz;
@@ -321,7 +322,7 @@ DateTime? calculateSolarMidnight(
   }
 
   final tomorrowContext = buildZmanimCalendarContext(
-    date.add(const Duration(days: 1)),
+    addCalendarDays(date, 1),
     city,
   );
   final sunriseTomorrow = tomorrowContext?.zmanimCalendar.getSunrise();
