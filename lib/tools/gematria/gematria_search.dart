@@ -141,6 +141,8 @@ class GimatriaSearch {
   static final RegExp _leadingVersePrefixRe = RegExp(r'^\([^\)]+\)\s*');
   static final RegExp _curlyBracesRe = RegExp(r'\{[^\}]*\}');
   static final RegExp _whitespaceRe = RegExp(r'\s+');
+  // מקף ופסק מפרידים בין מילים, כמו בשאילתה ובהדגשה (removeVolwels).
+  static final RegExp _wordSeparatorRe = RegExp(r'[\s־׀|]+');
   static final RegExp _htmlTagRe = RegExp(r'<[^>]*>');
   static final RegExp _namedEntityRe = RegExp(r'&[a-zA-Z]+;');
   static final RegExp _decimalEntityRe = RegExp(r'&#\d+;');
@@ -400,10 +402,7 @@ class GimatriaSearch {
             // Clean HTML tags
             final lineWithoutHtml = _cleanHtml(cleanLine);
 
-            final words = lineWithoutHtml
-                .split(_whitespaceRe)
-                .where((w) => w.trim().isNotEmpty)
-                .toList();
+            final words = _splitWords(lineWithoutHtml);
             if (words.isEmpty) continue;
 
             // Search for whole verse only
@@ -625,10 +624,7 @@ class GimatriaSearch {
           // ניקוי תגיות HTML מהשורה
           final lineWithoutHtml = _cleanHtml(cleanLine);
 
-          final words = lineWithoutHtml
-              .split(_whitespaceRe)
-              .where((w) => w.trim().isNotEmpty)
-              .toList();
+          final words = _splitWords(lineWithoutHtml);
           if (words.isEmpty) continue;
 
           // אם מחפשים פסוק שלם, בדוק את כל השורה
@@ -774,6 +770,9 @@ class GimatriaSearch {
 
     return parts.join(', ');
   }
+
+  static List<String> _splitWords(String line) =>
+      line.split(_wordSeparatorRe).where((w) => w.isNotEmpty).toList();
 
   /// ניקוי תגיות HTML ו-HTML entities
   static String _cleanHtml(String s) {
