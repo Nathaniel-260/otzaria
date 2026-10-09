@@ -798,39 +798,6 @@ class AppFonts {
   /// בייטים של קובץ גופן מהדיסק, או null כשאינו קריא.
   static Uint8List? readFontBytes(String path) => _readFontBytesSync(path);
 
-  /// יצירת רשימת DropdownMenuItem לבחירת גופן
-  static List<DropdownMenuItem<String>> buildDropdownItems({
-    String? selectedValue,
-    TextStyle? itemTextStyle,
-  }) {
-    final fonts = [...availableFonts];
-    final hasSelectedValue =
-        selectedValue == null ||
-        selectedValue.isEmpty ||
-        fonts.any((font) => font.value == selectedValue);
-
-    if (!hasSelectedValue) {
-      final legacyName = legacySystemFontDisplayName(selectedValue);
-      fonts.insert(
-        0,
-        FontInfo(
-          value: selectedValue,
-          label: legacyName ?? '$selectedValue (לא זמין במחשב זה)',
-        ),
-      );
-    }
-
-    return fonts.map((font) {
-      final previewStyle = fontPaths.containsKey(font.value)
-          ? TextStyle(fontFamily: font.value)
-          : const TextStyle();
-      return DropdownMenuItem<String>(
-        value: font.value,
-        child: Text(font.label, style: previewStyle.merge(itemTextStyle)),
-      );
-    }).toList();
-  }
-
   /// גופני מערכת שכבר נטענו (או בתהליך טעינה) — מונע טעינה כפולה ברשימה גדולה.
   static final Map<String, Future<void>> _loadingSystemFonts = {};
 

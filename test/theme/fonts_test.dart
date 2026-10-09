@@ -1,11 +1,11 @@
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/painting.dart';
-import 'package:flutter/widgets.dart' show Text;
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:otzaria/theme/app_fonts.dart';
 import 'package:otzaria/utils/file/sfnt_metadata_reader.dart';
+import 'package:otzaria/widgets/misc/font_dropdown_field.dart';
 
 Uint8List _bundledFont(String name) =>
     Uint8List.fromList(File('fonts/$name').readAsBytesSync());
@@ -883,7 +883,9 @@ void main() {
       expect(AppFonts.legacySystemFontDisplayName('unknown'), isNull);
     });
 
-    test('buildDropdownItems מציג ערך ישן בשם המשפחה ולא כ"לא זמין"', () {
+    testWidgets('שדה הגופן מציג ערך ישן בשם המשפחה ולא כ"לא זמין"', (
+      tester,
+    ) async {
       AppFonts.debugStoreScan(
         AppFonts.debugBuildScan([
           MapEntry(
@@ -893,18 +895,16 @@ void main() {
         ]),
       );
 
-      final items = AppFonts.buildDropdownItems(selectedValue: 'gfrank');
-      final first = items.first.child as Text;
-      expect(items.first.value, 'gfrank');
-      expect(first.data, 'Frank Ruehl CLM');
+      await _pumpFontField(tester, 'gfrank');
+      expect(find.text('Frank Ruehl CLM'), findsWidgets);
+      expect(find.textContaining('לא זמין במחשב זה'), findsNothing);
     });
 
-    test('ערך לא מוכר עדיין מסומן "לא זמין במחשב זה"', () {
+    testWidgets('ערך לא מוכר עדיין מסומן "לא זמין במחשב זה"', (tester) async {
       AppFonts.debugStoreScan(AppFonts.debugBuildScan(const []));
 
-      final items = AppFonts.buildDropdownItems(selectedValue: 'NoSuchFont');
-      final first = items.first.child as Text;
-      expect(first.data, contains('לא זמין במחשב זה'));
+      await _pumpFontField(tester, 'NoSuchFont');
+      expect(find.textContaining('לא זמין במחשב זה'), findsWidgets);
     });
   });
 
@@ -1031,4 +1031,17 @@ void main() {
       },
     );
   });
+}
+
+/// פותח את תפריט שדה הגופן, שבו מוצגת השורה של הערך השמור.
+Future<void> _pumpFontField(WidgetTester tester, String value) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: FontDropdownField(value: value, onChanged: (_) {}),
+      ),
+    ),
+  );
+  await tester.tap(find.byType(FontDropdownField));
+  await tester.pumpAndSettle();
 }
