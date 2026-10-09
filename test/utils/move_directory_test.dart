@@ -308,6 +308,19 @@ void main() {
 
       await collision.delete();
       expect(await moveDirectory(source, dest), isNull);
+      expect(await Directory(source).exists(), isFalse);
+      expect(
+        await File(p.join(dest, 'archive', 'keep.txt')).readAsString(),
+        'קיים',
+      );
+      expect(
+        await File(p.join(dest, 'archive', 'new.txt')).readAsString(),
+        'חדש',
+      );
+      for (var i = 0; i < 30; i++) {
+        final name = 'book_${i.toString().padLeft(2, '0')}.pdf';
+        expect(await File(p.join(dest, name)).readAsString(), '$i');
+      }
     });
 
     test('מעביר תיקייה ריקה', () async {
@@ -343,6 +356,88 @@ void main() {
   });
 
   group('copyDirectoryEntries / deleteMovedEntries', () {
+    test('copy בלי created שומר תיקיות ריקות גם בעומק העץ', () async {
+      final source = src('from');
+      final dest = src('to');
+      await Directory(
+        p.join(source, 'empty', 'nested'),
+      ).create(recursive: true);
+
+      await copyDirectoryEntries(source, dest);
+
+      expect(await Directory(p.join(dest, 'empty', 'nested')).exists(), isTrue);
+      expect(
+        await Directory(p.join(source, 'empty', 'nested')).exists(),
+        isTrue,
+      );
+    });
+
+    test('copy בלי created שומר קישורים לקובץ, לתיקייה וליעד חסר', () async {
+      final source = src('from');
+      final dest = src('to');
+      await Directory(source).create();
+      final target = await File(src('target.txt')).writeAsString('יעד');
+      final folder = await Directory(src('target-folder')).create();
+      final targets = {
+        'file-link': target.path,
+        'folder-link': folder.path,
+        'missing-link': src('missing.txt'),
+      };
+      try {
+        for (final entry in targets.entries) {
+          await Link(p.join(source, entry.key)).create(entry.value);
+        }
+      } on FileSystemException {
+        markTestSkipped('אין אפשרות ליצור קישור סימבולי בסביבה זו');
+        return;
+      }
+
+      await copyDirectoryEntries(source, dest);
+
+      for (final entry in targets.entries) {
+        final copied = Link(p.join(dest, entry.key));
+        expect(await copied.exists(), isTrue, reason: entry.key);
+        expect(await copied.target(), entry.value);
+        expect(await Link(p.join(source, entry.key)).exists(), isTrue);
+      }
+      expect(await target.readAsString(), 'יעד');
+      expect(await folder.exists(), isTrue);
+    });
+
+    test('staging ומחיקת המקור שומרים את כל פריטי הספרייה שנבחרו', () async {
+      final source = src('from');
+      final staged = src('staging');
+      final dest = src('books');
+      final talmud = DatabaseConstants.talmudBavliFolderName;
+      await Directory(p.join(source, talmud, 'empty')).create(recursive: true);
+      await File(p.join(source, talmud, 'book.pdf')).writeAsString('pdf');
+      await File(p.join(source, 'my_notes.txt')).writeAsString('נשאר');
+      final target = await File(src('outside-db')).writeAsString('db');
+      final database = DatabaseConstants.databaseFileName;
+      try {
+        await Link(p.join(source, database)).create(target.path);
+      } on FileSystemException {
+        markTestSkipped('אין אפשרות ליצור קישור סימבולי בסביבה זו');
+        return;
+      }
+      final include = DatabaseConstants.libraryManagedEntryNames();
+
+      await copyDirectoryEntries(source, staged, includeOnly: include);
+      await Directory(staged).rename(dest);
+      expect(await deleteMovedEntries(source, includeOnly: include), isNull);
+
+      expect(await Link(p.join(dest, database)).target(), target.path);
+      expect(await Directory(p.join(dest, talmud, 'empty')).exists(), isTrue);
+      expect(
+        await File(p.join(dest, talmud, 'book.pdf')).readAsString(),
+        'pdf',
+      );
+      expect(await File(p.join(source, 'my_notes.txt')).readAsString(), 'נשאר');
+      expect(await Link(p.join(source, database)).exists(), isFalse);
+      expect(await Directory(p.join(source, talmud)).exists(), isFalse);
+      expect(await target.readAsString(), 'db');
+    });
+
     test('copy מעתיק בלי למחוק מהמקור', () async {
       final source = src('from');
       final dest = src('to');

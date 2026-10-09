@@ -92,9 +92,11 @@ Future<void> _copyEntity(
     if (await _entityExists(destPath)) {
       throw Exception('היעד כבר מכיל פריט בשם "${p.basename(destPath)}"');
     }
-    created?.add(
-      await Link(destPath).create(await entity.target(), recursive: true),
+    final copied = await Link(destPath).create(
+      await entity.target(),
+      recursive: true,
     );
+    created?.add(copied);
   } else if (entity is File) {
     if (await _entityExists(destPath)) {
       throw Exception('היעד כבר מכיל קובץ בשם "${p.basename(destPath)}"');
@@ -105,7 +107,10 @@ Future<void> _copyEntity(
   } else if (entity is Directory) {
     // יצירת תיקיית היעד גם כשהיא ריקה, ואז העתקה רקורסיבית של תכנה.
     final sub = Directory(destPath);
-    if (!await sub.exists()) created?.add(await sub.create(recursive: true));
+    if (!await sub.exists()) {
+      final copied = await sub.create(recursive: true);
+      created?.add(copied);
+    }
     await for (final child in entity.list(followLinks: false)) {
       await _copyEntity(
         child,
