@@ -139,6 +139,7 @@ import 'package:otzaria/utils/navigation/book_open_coordinator.dart';
 import 'package:otzaria/utils/navigation/external_action_dispatcher.dart';
 import 'package:otzaria/utils/navigation/external_book_link_resolver.dart';
 import 'package:otzaria/utils/navigation/open_book.dart';
+import 'package:otzaria/utils/file/open_in_file_manager.dart';
 import 'package:kosher_dart/kosher_dart.dart' show Daf;
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart'
     show getDafYomi, formatAmud;
@@ -4001,14 +4002,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
   Future<void> _openErrorLogFile() async {
     if (!await verifySaferModePassword(context)) return;
     ErrorLogFile.ensureExists();
-    final path = ErrorLogFile.resolvePath();
-    if (Platform.isWindows) {
-      unawaited(Process.run('explorer', [path]));
-    } else if (Platform.isMacOS) {
-      unawaited(Process.run('open', [path]));
-    } else if (Platform.isLinux) {
-      unawaited(Process.run('xdg-open', [path]));
-    }
+    unawaited(openInFileManager(ErrorLogFile.resolvePath()));
   }
 
   int? _pageIndexForScreen(Screen screen) {

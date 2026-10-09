@@ -44,6 +44,7 @@ import 'package:otzaria/widgets/misc/app_popup_menu.dart';
 import 'package:otzaria/widgets/misc/app_dropdown_field.dart';
 import 'package:otzaria/tools/calendar/helpers/calendar_date_helpers.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/utils/file/open_in_file_manager.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/plugins/view/webview_environment_holder.dart';
 import 'package:otzaria/widgets/misc/restart_widget.dart';
@@ -828,14 +829,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
               await _exportBackupFile(file);
               return;
             }
-            final dir = file.parent;
-            if (Platform.isWindows) {
-              await Process.run('explorer', [dir.path]);
-            } else if (Platform.isMacOS) {
-              await Process.run('open', [dir.path]);
-            } else if (Platform.isLinux) {
-              await Process.run('xdg-open', [dir.path]);
-            }
+            await openInFileManager(file.parent.path);
           },
           icon: FluentIcons.checkmark_circle_24_regular,
         );
@@ -1152,24 +1146,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _handleToggleProtectedMode(
     BuildContext context,
-    SettingsRepository repository,
     bool newValue,
   ) async {
-    final verified = await showDialog<bool>(
-      context: context,
-      builder: settingsDialogBuilder(
-        context,
-        (ctx) => SaferModePasswordDialog(
-          title: ctx.settingsText('אמת סיסמה'),
-          hint: newValue
-              ? ctx.settingsText('הזן את הסיסמה כדי להפעיל את המצב המוגן')
-              : ctx.settingsText('הזן את הסיסמה כדי להשבית את המצב המוגן'),
-          onVerify: (password) async =>
-              repository.verifyProtectedModePassword(password),
-        ),
-      ),
+    final verified = await showSaferModePasswordDialog(
+      context,
+      title: 'אמת סיסמה',
+      hint: newValue
+          ? 'הזן את הסיסמה כדי להפעיל את המצב המוגן'
+          : 'הזן את הסיסמה כדי להשבית את המצב המוגן',
     );
-    if (verified != true) return;
+    if (!verified) return;
     if (context.mounted) {
       context.read<SettingsBloc>().add(UpdateProtectedModeEnabled(newValue));
       UiSnack.show(
@@ -1182,24 +1168,16 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
 
   Future<void> _handleSetPassword(
     BuildContext context,
-    SettingsRepository repository,
     bool hasExistingPassword,
     bool isSaferModeEnabled,
   ) async {
-    if (hasExistingPassword) {
-      final verified = await showDialog<bool>(
-        context: context,
-        builder: settingsDialogBuilder(
+    if (hasExistingPassword &&
+        !await showSaferModePasswordDialog(
           context,
-          (ctx) => SaferModePasswordDialog(
-            title: ctx.settingsText('אמת סיסמה נוכחית'),
-            hint: ctx.settingsText('הזן את הסיסמה הנוכחית כדי לשנות אותה'),
-            onVerify: (password) async =>
-                repository.verifyProtectedModePassword(password),
-          ),
-        ),
-      );
-      if (verified != true) return;
+          title: 'אמת סיסמה נוכחית',
+          hint: 'הזן את הסיסמה הנוכחית כדי לשנות אותה',
+        )) {
+      return;
     }
     if (!context.mounted) return;
     final settingsBloc = context.read<SettingsBloc>();
@@ -1249,7 +1227,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
     final retentionProfile = RetentionProfile.fromName(
       Settings.getValue<String>(BackupMaintenance.keyRetentionProfile),
     );
-    final repository = RepositoryProvider.of<SettingsRepository>(context);
     final hasPassword = state.protectedModePasswordSet;
 
     return SettingsCard(
@@ -1431,17 +1408,8 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                       ? _defaultBackupPath
                       : null,
                 ),
-                onOpenFolder: () {
-                  final path = _resolvedBackupPath;
-                  if (path.isEmpty) return;
-                  if (Platform.isWindows) {
-                    unawaited(Process.run('explorer', [path]));
-                  } else if (Platform.isMacOS) {
-                    unawaited(Process.run('open', [path]));
-                  } else if (Platform.isLinux) {
-                    unawaited(Process.run('xdg-open', [path]));
-                  }
-                },
+                onOpenFolder: () =>
+                    unawaited(openInFileManager(_resolvedBackupPath)),
                 onClearPath: () {
                   Settings.setValue<String>(
                     SettingsRepository.keyBackupPath,
@@ -1587,8 +1555,7 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                   : 'נעילת ההגדרות וסייר הקבצים מושבתת',
             ),
             value: state.protectedModeEnabled,
-            onChanged: (value) =>
-                _handleToggleProtectedMode(context, repository, value),
+            onChanged: (value) => _handleToggleProtectedMode(context, value),
           )
         else
           SettingsActionTile.text(
@@ -1603,7 +1570,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: context.settingsText('בחר סיסמה'),
                 onPressed: () => _handleSetPassword(
                   context,
-                  repository,
                   hasPassword,
                   state.protectedModeEnabled,
                 ),
@@ -1623,7 +1589,6 @@ class _SystemSettingsTabState extends State<SystemSettingsTab> {
                 text: context.settingsText('אפשרויות'),
                 onPressed: () => _handleSetPassword(
                   context,
-                  repository,
                   hasPassword,
                   state.protectedModeEnabled,
                 ),
