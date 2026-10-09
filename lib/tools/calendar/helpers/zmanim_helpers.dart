@@ -1098,7 +1098,7 @@ final List<ZmanDefinition> kZmanimRegistry = [
     subtitle: '120 דק׳ (זמניות)',
     category: 'רבנו תם',
     explanation:
-        '''ה' מיל של 24 דק' בימות השיויון, שמינית מאורך היום שמהנץ לשקיעה''',
+        '''ה' מיל של 24 דק' בימות השיויון, שישית מאורך היום שמהנץ לשקיעה''',
     compute: (c) => c.cal.getTzais120Zmanis(),
   ),
   ZmanDefinition(
