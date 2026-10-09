@@ -393,10 +393,9 @@ String referenceFromPageNumber(
 
   void searchOutline(List<PdfOutlineNode> entries, {int level = 0}) {
     for (final entry in entries) {
-      if (entry.dest?.pageNumber == null ||
-          entry.dest!.pageNumber > pageNumber) {
-        return;
-      }
+      final entryPage = entry.dest?.pageNumber;
+      if (entryPage == null) continue;
+      if (entryPage > pageNumber) return;
       if (level + 1 > texts.length) {
         texts.add(entry.title);
       } else {
