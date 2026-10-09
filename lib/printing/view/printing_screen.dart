@@ -941,7 +941,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     );
   }
 
-  TextDisplayProfile get _exportProfile =>
+  late final TextDisplayProfile _exportProfile =
       widget.displayProfile ??
       SettingsRepository().loadTextDisplayPolicy().resolve(
         const TextDisplaySlot(
@@ -955,25 +955,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   bool get _shouldReplaceHolyNames => _exportProfile.replaceHolyNames;
 
-  /// מסיר ניקוד/טעמים ומחליף שמות קודש לפי בחירת המשתמש.
-  String _applyTextTransforms(String input, bool shouldReplaceHolyNames) {
-    var text = input;
-    if (_removeNikud && _removeTaamim) {
-      text = removeVolwels(text);
-    } else if (_removeNikud && !_removeTaamim) {
-      text = text
-          .replaceAll('־', ' ')
-          .replaceAll('׀', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[ְ-ׇ]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      text = removeTeamim(text);
-    }
-    if (shouldReplaceHolyNames) {
-      text = replaceHolyNames(text, style: _holyNameStyle);
-    }
-    return text;
-  }
+  /// מחיל את פרופיל הייצוא; מתגי הניקוד והטעמים שבמסך גוברים עליו.
+  String _applyTextTransforms(String input, bool shouldReplaceHolyNames) =>
+      applyTextDisplayProfile(
+        input,
+        _exportProfile.copyWith(
+          nikud: _removeNikud ? MarkVisibility.hide : MarkVisibility.show,
+          teamim: _removeTaamim ? TeamimVisibility.hide : TeamimVisibility.show,
+          holyName: shouldReplaceHolyNames ? null : HolyNameDisplay.asIs,
+        ),
+      );
 
   /// ממיר בלוקים מוכנים לייצוג הפנימי, תוך החלת הסרת ניקוד/טעמים ושמות קודש.
   List<Map<String, String>> _mapPrebuiltBlocks(List<PrintBlock> source) {
@@ -1322,15 +1313,17 @@ class _PrintingScreenState extends State<PrintingScreen> {
         blocks: blocks,
       );
     }
-    String dataString = await _dataFuture;
+    final dataString = await _dataFuture;
 
     final shouldReplaceHolyNames = _shouldReplaceHolyNames;
-    dataString = _applyTextTransforms(dataString, shouldReplaceHolyNames);
 
     // שומרים את תגיות ה-HTML — WordExportService ממיר אותן לעיצוב במסמך
     final allLines = dataString.split('\n').toList();
     var bookName = allLines.isNotEmpty
-        ? stripHtmlIfNeeded(allLines.first)
+        ? _applyTextTransforms(
+            stripHtmlIfNeeded(allLines.first),
+            shouldReplaceHolyNames,
+          )
         : widget.bookId;
     if (bookName.trim().isEmpty) {
       bookName = widget.bookId;
