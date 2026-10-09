@@ -142,8 +142,8 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     Emitter<LibraryState> emit,
   ) async {
     if (state.library == null) return;
-    final hadResults = _showsSearch;
     final library = await _visibleLibrary();
+    final hadResults = _showsSearch;
     // כל קטגוריה מיוצגת באובייקט אחר בעץ החדש. מי שמחזיק הפניה לישן ימשיך
     // להציג את הספירה הישנה — לכן גם הקטגוריה הנוכחית וגם זו שבתצוגה
     // המקדימה נפתרות מחדש לפי הנתיב.
@@ -253,18 +253,18 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     RefreshLibrary event,
     Emitter<LibraryState> emit,
   ) async {
-    final hadResults = _showsSearch;
-    emit(state.copyWith(isLoading: true));
+    emit(
+      state.copyWith(
+        isLoading: true,
+        searchResults: state.searchResults,
+        searchCategoryResults: state.searchCategoryResults,
+      ),
+    );
     try {
       // רק רענון כללי עלול לנבוע מתיקייה אישית שנמחקה — האחרים מדלגים על prune.
       if (event.source == RefreshSource.general) {
         await _pruneRemovedCustomFoldersIfNeeded();
       }
-
-      // שמירת המיקום הנוכחי בספרייה
-      final currentCategoryPath = _getCurrentCategoryPath(
-        state.currentCategory,
-      );
 
       // צלם את מפתחות הספרים ונתיביהם לפני הרענון לזיהוי ספרים חדשים ומוזזים
       final previousLibrary = await _repository.librarySnapshotForRefresh();
@@ -339,8 +339,11 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         changedAttachedSlugs: event.changedAttachedSlugs,
       );
 
-      // חזרה לאותה תיקייה שהיתה פתוחה קודם
-      final targetCategory = _findCategoryByPath(library, currentCategoryPath);
+      final hadResults = _showsSearch;
+      final targetCategory = _findCategoryByPath(
+        library,
+        _getCurrentCategoryPath(state.currentCategory),
+      );
 
       emit(
         state.copyWith(
@@ -357,6 +360,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
               : null,
         ),
       );
+      _repeatSearch(hadResults);
     } catch (e) {
       emit(
         state.copyWith(
@@ -368,7 +372,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
         ),
       );
     }
-    _repeatSearch(hadResults);
   }
 
   Future<void> _pruneRemovedCustomFoldersIfNeeded() async {
@@ -633,12 +636,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     NavigateToCategory event,
     Emitter<LibraryState> emit,
   ) {
+    _searchGeneration++;
     final isCategoryChange = !identical(event.category, state.currentCategory);
     emit(
       state.copyWith(
         currentCategory: event.category,
         searchQuery: null,
         searchResults: null,
+        isSearching: false,
         selectedTopics: null,
         previewCategory: isCategoryChange ? event.category : null,
       ),
@@ -652,12 +657,14 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     final currentCategory = state.currentCategory;
     final parent = currentCategory?.parent;
     if (parent == null || identical(parent, currentCategory)) return;
+    _searchGeneration++;
 
     emit(
       state.copyWith(
         currentCategory: parent,
         searchQuery: null,
         searchResults: null,
+        isSearching: false,
         selectedTopics: null,
         previewCategory: parent,
       ),
@@ -682,6 +689,7 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     Emitter<LibraryState> emit,
   ) async {
     _lastSearch = event;
+    final searchGeneration = ++_searchGeneration;
     if (state.searchQuery == null || state.searchQuery!.length < 3) {
       emit(
         state.copyWith(
@@ -693,7 +701,6 @@ class LibraryBloc extends Bloc<LibraryEvent, LibraryState> {
     }
 
     try {
-      final searchGeneration = ++_searchGeneration;
       final query = state.searchQuery!;
       final category = state.currentCategory;
       final includeOtzar = event.showOtzarHachochma ?? false;
