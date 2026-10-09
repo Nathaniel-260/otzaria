@@ -1055,9 +1055,7 @@ class BackupService {
       await repo.replaceBookmarks(bookmarks);
       return;
     }
-    // ⚠️ `mutate` ולא `load` + `replace`. הייבוא הממזג הוא **תוספת**, ולכן
-    // הוא בדיוק המקרה שבו read-modify-write מוחק: סימנייה שנוספה בחלון אחר
-    // בין הקריאה לכתיבה נעלמה. אותה המרה נעשתה כבר בשולחנות העבודה.
+    // `mutate` משמר סימנייה שנוספה בחלון אחר בין הקריאה לכתיבה.
     var added = 0;
     await repo.mutateBookmarks((current) {
       final result = BackupImportMerge.mergeBookmarks(current, bookmarks);
@@ -1126,7 +1124,7 @@ class BackupService {
     final database = PersonalNotesDatabase.instance;
     var anchorlessNotes = 0;
     // כתיבה בטרנזקציה אחת: commit לכל הערה עולה כחצי מילישנייה ותוקע את ה-UI.
-    final toWrite = <PersonalNote>[];
+    final toWrite = <String, PersonalNote>{};
 
     for (final entry in notesData) {
       try {
@@ -1142,22 +1140,30 @@ class BackupService {
               final json = noteData as Map<String, dynamic>;
               var note = PersonalNote.fromJson(json);
               if (!json.containsKey(_noteAnchorKey)) {
-                note = await _restoreNoteAnchoredAsBefore(database, note);
+                note = await _restoreNoteAnchoredAsBefore(
+                  database,
+                  note,
+                  pendingNote: toWrite[note.id],
+                );
                 if (!note.isWordAnchored) anchorlessNotes++;
               }
               if (counts != null) {
-                // הכתיבה היא INSERT OR REPLACE — בייבוא ממזג היא הייתה
-                // דורסת הערה מקומית שנערכה מאוחר יותר מזו שבקובץ.
-                final existing = await database.getNote(note.id);
-                if (existing == null) {
-                  counts.notes++;
-                } else if (note.updatedAt.isAfter(existing.updatedAt)) {
-                  counts.notesUpdated++;
-                } else {
+                // בייבוא ממזג אין לדרוס הערה מקומית או ממתינה חדשה יותר.
+                final existing =
+                    toWrite[note.id] ?? await database.getNote(note.id);
+                if (existing != null &&
+                    !note.updatedAt.isAfter(existing.updatedAt)) {
                   continue;
                 }
+                if (!toWrite.containsKey(note.id)) {
+                  if (existing == null) {
+                    counts.notes++;
+                  } else {
+                    counts.notesUpdated++;
+                  }
+                }
               }
-              toWrite.add(note);
+              toWrite[note.id] = note;
             } catch (e) {
               _logger.warning('Failed to restore single note from backup: $e');
             }
@@ -1169,7 +1175,7 @@ class BackupService {
     }
 
     try {
-      await database.batchInsertNotes(toWrite, replace: true);
+      await database.batchInsertNotes(toWrite.values.toList(), replace: true);
     } catch (e) {
       _logger.warning('Failed to write restored notes: $e');
     }
@@ -1177,18 +1183,14 @@ class BackupService {
     return anchorlessNotes;
   }
 
-  /// משמר את עוגן ההערה הקיימת כששדות העיגון חסרים לגמרי בקובץ הגיבוי.
-  ///
-  /// גיבוי מלפני שהעיגון נכנס אליו אינו מבדיל בין "הערה על כל השורה" לבין
-  /// "הערה על מילה" — בשניהם המפתח נעדר. הכתיבה היא `INSERT OR REPLACE`,
-  /// ולכן בלי השימור שחזור כזה מוחק עיגון קיים והערה שהצביעה על מילה מסוימת
-  /// נמתחת על כל השורה. מפתח שקיים בערך `null` הוא בחירת משתמש ומכובד.
+  /// משמר עוגן קיים כששדות העיגון חסרים בגיבוי; `null` מפורש מכובד.
   static Future<PersonalNote> _restoreNoteAnchoredAsBefore(
     PersonalNotesDatabase database,
-    PersonalNote note,
-  ) async {
+    PersonalNote note, {
+    PersonalNote? pendingNote,
+  }) async {
     try {
-      final existing = await database.getNote(note.id);
+      final existing = pendingNote ?? await database.getNote(note.id);
       if (existing == null || !existing.isWordAnchored) return note;
       return note.copyWith(
         anchorText: existing.anchorText,
@@ -1202,28 +1204,6 @@ class BackupService {
       return note;
     }
   }
-
-  // [EDITING DISABLED]
-  /// Restore user overrides to files
-  // static Future<void> _restoreUserOverrides(
-  //     Map<String, dynamic> overridesData) async {
-  //   final overridesDir = Directory(await AppPaths.getUserOverridesRootPath());
-  //   for (final entry in overridesData.entries) {
-  //     try {
-  //       final relativePath = entry.key;
-  //       final content = entry.value as String;
-  //       final filePath = p.join(overridesDir.path, relativePath);
-  //       final file = File(filePath);
-  // Ensure parent directory exists
-  //       await file.parent.create(recursive: true);
-  // Only restore if file doesn't exist, to not overwrite user's latest edits,
-  // or overwrite it if wanted. The standard restore overwrites.
-  //       await file.writeAsString(content);
-  //     } catch (e) {
-  //       _logger.warning('Failed to restore override file ${entry.key}: $e');
-  //     }
-  //   }
-  // }
 
   // כשל בתוסף אחד מדווח כשחזור חלקי בלי למנוע שחזור של שאר התוספים.
   static Future<({bool hadFailures, int restored})> _restorePlugins(
