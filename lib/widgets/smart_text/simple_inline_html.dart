@@ -48,12 +48,12 @@ class SimpleInlineHtml {
   static final Map<String, _Highlight> _searchHighlightOpens = {
     '<span style="color: red">': _Highlight(_red, null),
     '<span style="color: red; ">': _Highlight(_red, null),
-    '<span style="color: blue; background-color: rgba(255, 255, 0, 0.6);">':
+    '<span style="color: blue; background-color: rgba(255, 255, 0, 0.8);">':
         _Highlight(
           const Color(0xFF0000FF),
           _yellowPaint,
         ),
-    '<span style="background-color: rgba(255, 255, 0, 0.6); color: black">':
+    '<span style="background-color: rgba(255, 255, 0, 0.8); color: black">':
         _Highlight(
           const Color(0xFF000000),
           _yellowPaint,
@@ -61,8 +61,8 @@ class SimpleInlineHtml {
   };
   static const Color _red = Color(0xFFFF0000);
   // background ולא backgroundColor — כמו ש-fwfh מצייר background-color.
-  // שקוף-למחצה: הבחירה מצוירת מתחת לטקסט, ורקע אטום היה מסתיר אותה.
-  static final Paint _yellowPaint = Paint()..color = const Color(0x99FFFF00);
+  // 80% שומר ניגודיות לכחול גם בכהה, ומותיר את הבחירה שמתחת לטקסט נראית.
+  static final Paint _yellowPaint = Paint()..color = const Color(0xCCFFFF00);
 
   /// מנסה להמיר את [html]. מחזיר null אם נדרש HtmlWidget.
   ///
