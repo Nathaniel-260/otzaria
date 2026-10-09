@@ -397,6 +397,48 @@ void main() {
       expect(indexRows(library.slug), 1);
       expect(await externalIn(book), isEmpty);
     });
+
+    test('כל יעדי האינדקס נמצאים — כמה כותרות בכמה מסדים', () async {
+      final target = await attach(attachedDb('ext'));
+      final library = await attach(
+        attachedDb(
+          'src',
+          rows: [
+            _row(0, targetLineIndex: 1),
+            _row(
+              1,
+              targetTitle: SeforimFixtureIds.rashiTitle,
+              targetLineIndex: 0,
+            ),
+            _row(
+              2,
+              targetSource: 'ext',
+              targetTitle: _baseTitle,
+              targetLineIndex: 1,
+            ),
+          ],
+        ),
+      );
+      expect(await links.sync(), containsAll([library.slug]));
+      final source = BookSource.attached(library.slug);
+      for (final (bookSource, title) in [
+        (BookSource.official, SeforimFixtureIds.bereshitTitle),
+        (BookSource.official, SeforimFixtureIds.rashiTitle),
+        (BookSource.attached(target.slug), _baseTitle),
+      ]) {
+        final reverse = await externalIn(await bookOf(bookSource, title));
+        expect(
+          reverse.where((l) => l.targetSource == source),
+          hasLength(1),
+          reason: '$bookSource $title',
+        );
+      }
+      final unlinked = await bookOf(
+        BookSource.attached(target.slug),
+        _commentaryTitle,
+      );
+      expect(await externalIn(unlinked), isEmpty);
+    });
   });
 
   group('חיווט לסיכומים, למפרשים בטווח ולמפרשים נוספים', () {

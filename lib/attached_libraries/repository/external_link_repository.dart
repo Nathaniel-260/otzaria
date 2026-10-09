@@ -357,7 +357,7 @@ class ExternalLinkRepository {
     ].join(';');
     final cached = _indexedTargetsCache;
     if (cached != null && cached.key == key) return cached.titles;
-    final titles = _inIsolate(_queryIndexedTargets, (path, served));
+    final titles = _inIsolate(_queryIndexedTargets, path);
     _indexedTargetsCache = (key: key, titles: titles);
     titles.then<void>(
       (_) {},
@@ -710,35 +710,35 @@ List<ResolvedExternalLink> _forwardRows(
   }
 }
 
-/// כל היעדים (wireKey + כותרת) שיש אליהם שורות מוגשות באינדקס ההפוך.
-Set<String> _queryIndexedTargets((String, Map<String, String>) args) {
-  final (path, served) = args;
+/// היעדים (wireKey + כותרת) שיש אליהם שורות באינדקס, גם ממסד שאינו מוגש
+/// ([_queryReverseRows] מסנן) — בקפיצות באינדקס היעד, בלי לסרוק את כל השורות.
+Set<String> _queryIndexedTargets(String path) {
   if (!File(path).existsSync()) return const {};
   final db = _openCacheDb(path);
   try {
-    if (!_hasTable(db, _indexTable) || !_hasTable(db, _metaTable)) {
-      return const {};
+    if (!_hasTable(db, _indexTable)) return const {};
+    const nextSource =
+        'SELECT targetSource AS v FROM $_indexTable '
+        'WHERE targetSource > ? ORDER BY targetSource LIMIT 1';
+    const nextTitle =
+        'SELECT targetTitle AS v FROM $_indexTable '
+        'WHERE targetSource = ? AND targetTitle > ? ORDER BY targetTitle LIMIT 1';
+    String? next(String sql, List<Object> args) {
+      final rows = db.select(sql, args);
+      return rows.isEmpty ? null : rows.first['v'] as String;
     }
-    final pairs = served.entries.toList();
-    final pairPlaceholders = List.filled(pairs.length, '(?, ?)').join(', ');
-    return {
-      for (final row in db.select(
-        '''
-        WITH served(slug, fingerprint) AS (VALUES $pairPlaceholders)
-        SELECT DISTINCT i.targetSource, i.targetTitle
-        FROM $_indexTable i
-        JOIN $_metaTable m ON m.sourceSlug = i.sourceSlug
-        JOIN served s ON s.slug = m.sourceSlug AND s.fingerprint = m.fingerprint
-        ''',
-        [
-          for (final pair in pairs) ...[pair.key, pair.value],
-        ],
-      ))
-        ExternalLinkRepository._targetKey(
-          row['targetSource'] as String,
-          row['targetTitle'] as String,
-        ),
-    };
+
+    final result = <String>{};
+    var source = next(nextSource, ['']);
+    while (source != null) {
+      var title = next(nextTitle, [source, '']);
+      while (title != null) {
+        result.add(ExternalLinkRepository._targetKey(source, title));
+        title = next(nextTitle, [source, title]);
+      }
+      source = next(nextSource, [source]);
+    }
+    return result;
   } finally {
     db.close();
   }
