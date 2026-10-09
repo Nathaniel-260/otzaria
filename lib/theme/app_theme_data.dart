@@ -132,51 +132,9 @@ class AppThemeData {
     );
   }
 
-  // ── Dark Theme ───────────────────────────────────────────────────────────
-  static ThemeData dark(
-    ColorScheme cs, {
-    required bool compactMenuMode,
-  }) {
-    final compactMenus = _usesCompactMenus(compactMenuMode);
-    final menuBackground = _menuBackground(cs);
-    final menuMetrics = AppMenuMetrics.create(compactMenus: compactMenus);
-
-    return ThemeData(
-      useMaterial3: true,
-      visualDensity: VisualDensity.adaptivePlatformDensity,
-      fontFamily: 'Roboto',
-      colorScheme: cs,
-      textTheme: const TextTheme(
-        bodyMedium: TextStyle(fontSize: 18.0),
-      ),
-      cardTheme: const CardThemeData(shape: AppTokens.roundedShape),
-      iconButtonTheme: _iconButtonTheme(cs),
-      filledButtonTheme: _filledButtonTheme(cs),
-      textButtonTheme: _textButtonTheme(cs),
-      outlinedButtonTheme: _outlinedButtonTheme(cs),
-      tabBarTheme: _tabBarTheme(cs),
-      tooltipTheme: _tooltipTheme(cs),
-      dropdownMenuTheme: _dropdownMenuTheme(cs, menuMetrics),
-      menuButtonTheme: _menuButtonTheme(cs, menuMetrics),
-      popupMenuTheme: _popupMenuTheme(
-        cs,
-        backgroundColor: menuBackground,
-        metrics: menuMetrics,
-      ),
-      menuTheme: _menuTheme(
-        cs,
-        backgroundColor: menuBackground,
-        metrics: menuMetrics,
-      ),
-      extensions: [menuMetrics],
-    ).copyWith(
-      dialogTheme: DialogThemeData(
-        barrierColor: AppColors.dialogBarrier,
-        backgroundColor: cs.surfaceContainerHigh,
-        shape: AppTokens.roundedShape,
-      ),
-    );
-  }
+  // ── Dark Theme ── זהה לבהיר; ההבדל כולו ב-[cs].
+  static ThemeData dark(ColorScheme cs, {required bool compactMenuMode}) =>
+      light(cs, compactMenuMode: compactMenuMode);
 
   static PopupMenuThemeData _popupMenuTheme(
     ColorScheme cs, {
