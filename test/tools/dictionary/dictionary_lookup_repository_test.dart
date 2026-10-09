@@ -41,6 +41,14 @@ void main() {
       expect(entry!.meanings, contains('וכולי, וכן הלאה'));
     });
 
+    test('מזהה ראשי תיבות עם גרשיים טיפוגרפיים', () {
+      expect(repository.isLikelyAcronym('רש”י'), isTrue);
+      expect(repository.isLikelyAcronym('רש“י'), isTrue);
+      expect(repository.isLikelyAcronym('וכו’'), isTrue);
+      expect(repository.isLikelyAcronym('וכו‘'), isTrue);
+      expect(repository.isLikelyAcronym('רשי'), isFalse);
+    });
+
     test('מחזיר הרחבות לראשי תיבות חלקיים עם גרש בודד', () async {
       repository = DictionaryLookupRepository(
         loadAcronyms: () async => <String, List<String>>{
