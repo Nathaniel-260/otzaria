@@ -514,21 +514,52 @@ class _PersonalNotesManagerScreenState
     return allNotes;
   }
 
-  Future<void> _exportNotes() async {
+  /// זרימת ייצוא משותפת: סיסמת מצב בטוח, בחירת הערות, בניית הקובץ ושמירתו.
+  Future<void> _exportSelected({
+    required String title,
+    required String confirmText,
+    required String dialogTitle,
+    required String fileName,
+    required String extension,
+    required String successMessage,
+    required Future<Uint8List?> Function(NotesExportSelection selection)
+    buildBytes,
+  }) async {
     if (!await verifySaferModePassword(context)) return;
     if (!mounted) return;
     final selection = await showDialog<NotesExportSelection>(
       context: context,
       builder: (context) => PersonalNotesExportDialog(
         allNotes: _collectAllNotes(),
-        title: 'גיבוי הערות',
-        confirmText: 'גבה',
+        title: title,
+        confirmText: confirmText,
       ),
     );
     if (!mounted) return;
     if (selection == null || selection.notes.isEmpty) return;
 
-    final bytes = Uint8List.fromList(
+    final bytes = await buildBytes(selection);
+    if (bytes == null) return;
+    final path = await saveFileWithExtension(
+      dialogTitle: dialogTitle,
+      fileName: fileName,
+      extension: extension,
+      bytes: bytes,
+    );
+    if (!mounted) return;
+    if (path == null) return;
+
+    UiSnack.show(successMessage);
+  }
+
+  Future<void> _exportNotes() => _exportSelected(
+    title: 'גיבוי הערות',
+    confirmText: 'גבה',
+    dialogTitle: 'בחר מיקום לשמירת קובץ הגיבוי',
+    fileName: 'otzaria_notes_backup.json',
+    extension: 'json',
+    successMessage: NotesMessages.backupCompleted,
+    buildBytes: (selection) async => Uint8List.fromList(
       utf8.encode(
         jsonEncode(
           _importExportService.buildExport(
@@ -537,69 +568,37 @@ class _PersonalNotesManagerScreenState
           ),
         ),
       ),
-    );
-    final path = await saveFileWithExtension(
-      dialogTitle: 'בחר מיקום לשמירת קובץ הגיבוי',
-      fileName: 'otzaria_notes_backup.json',
-      extension: 'json',
-      bytes: bytes,
-    );
-    if (!mounted) return;
-    if (path == null) return;
+    ),
+  );
 
-    if (!mounted) return;
-    UiSnack.show(NotesMessages.backupCompleted);
-  }
-
-  Future<void> _exportNotesToText() async {
-    if (!await verifySaferModePassword(context)) return;
-    if (!mounted) return;
-    final selection = await showDialog<NotesExportSelection>(
-      context: context,
-      builder: (context) => PersonalNotesExportDialog(
-        allNotes: _collectAllNotes(),
-        title: 'ייצוא לטקסט',
-        confirmText: 'ייצא',
-      ),
-    );
-    if (!mounted) return;
-    if (selection == null || selection.notes.isEmpty) return;
-
-    final bytes = Uint8List.fromList(
+  Future<void> _exportNotesToText() => _exportSelected(
+    title: 'ייצוא לטקסט',
+    confirmText: 'ייצא',
+    dialogTitle: 'בחר מיקום לשמירת קובץ הטקסט',
+    fileName: 'otzaria_notes.txt',
+    extension: 'txt',
+    successMessage: NotesMessages.textExportCompleted,
+    buildBytes: (selection) async => Uint8List.fromList(
       utf8.encode(
         _importExportService.buildPlainTextExport(
           notes: selection.notes,
           description: selection.description,
         ),
       ),
-    );
-    final path = await saveFileWithExtension(
-      dialogTitle: 'בחר מיקום לשמירת קובץ הטקסט',
-      fileName: 'otzaria_notes.txt',
-      extension: 'txt',
-      bytes: bytes,
-    );
-    if (!mounted) return;
-    if (path == null) return;
+    ),
+  );
 
-    if (!mounted) return;
-    UiSnack.show(NotesMessages.textExportCompleted);
-  }
+  Future<void> _exportNotesToWord() => _exportSelected(
+    title: 'ייצוא לוורד',
+    confirmText: 'ייצא',
+    dialogTitle: 'בחר מיקום לשמירת קובץ הוורד',
+    fileName: 'otzaria_notes.docx',
+    extension: 'docx',
+    successMessage: NotesMessages.wordExportCompleted,
+    buildBytes: _buildWordExport,
+  );
 
-  Future<void> _exportNotesToWord() async {
-    if (!await verifySaferModePassword(context)) return;
-    if (!mounted) return;
-    final selection = await showDialog<NotesExportSelection>(
-      context: context,
-      builder: (context) => PersonalNotesExportDialog(
-        allNotes: _collectAllNotes(),
-        title: 'ייצוא לוורד',
-        confirmText: 'ייצא',
-      ),
-    );
-    if (!mounted) return;
-    if (selection == null || selection.notes.isEmpty) return;
-
+  Future<Uint8List?> _buildWordExport(NotesExportSelection selection) async {
     final fontFamily = context.read<SettingsBloc>().state.fontFamily;
 
     // כתובת המיקום (פרק/דף) לכל הערה נגזרת מתוכן העניינים של ספרה.
@@ -620,13 +619,13 @@ class _PersonalNotesManagerScreenState
         );
       }
     }
-    if (!mounted) return;
+    if (!mounted) return null;
 
     final blocks = _importExportService.buildWordExportBlocks(
       notes: selection.notes,
       locationRef: (note) => refByNoteId[note.id],
     );
-    final bytes = WordExportService.createWordDocument(
+    return WordExportService.createWordDocument(
       title: 'הערות אישיות',
       blocks: blocks,
       format: PdfPageFormat.a4,
@@ -634,16 +633,6 @@ class _PersonalNotesManagerScreenState
       pageMargin: 20,
       fontFamily: fontFamily,
     );
-    final path = await saveFileWithExtension(
-      dialogTitle: 'בחר מיקום לשמירת קובץ הוורד',
-      fileName: 'otzaria_notes.docx',
-      extension: 'docx',
-      bytes: bytes,
-    );
-    if (!mounted) return;
-    if (path == null) return;
-
-    UiSnack.show(NotesMessages.wordExportCompleted);
   }
 
   Future<void> _importNotes() async {
