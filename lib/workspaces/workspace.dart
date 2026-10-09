@@ -122,18 +122,22 @@ class Workspace extends Equatable {
       }
     }
 
-    final decoded =
-        (json['tabs'] as List?)
-            ?.map((raw) => decodeTab(castMap(raw)))
-            .whereType<OpenedTab>()
-            .toList() ??
-        <OpenedTab>[];
+    final rawTabs = json['tabs'] as List? ?? const [];
+    final savedIndex = json['currentTab'] as int? ?? 0;
+    final decoded = <OpenedTab>[];
+    var currentIndex = 0;
+    for (var i = 0; i < rawTabs.length; i++) {
+      final tab = decodeTab(castMap(rawTabs[i]));
+      if (tab == null) continue;
+      if (i <= savedIndex) currentIndex = decoded.length;
+      decoded.add(tab);
+    }
 
     // הגיזום אחרי הנירמול: בפיצול מקונן ששוחזר מגרסה קודמת חלונית מפרשי
     // PDF יכולה לשבת בעומק שאליו הגיזום אינו יורד.
     final restored = flattenRestoredSplits(
       decoded,
-      currentIndex: json['currentTab'] as int? ?? 0,
+      currentIndex: currentIndex,
     );
     final tabs = restored.tabs
         .map(_withoutPdfCommentators)
