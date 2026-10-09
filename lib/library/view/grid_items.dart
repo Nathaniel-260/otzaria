@@ -162,6 +162,45 @@ TextStyle _libraryTooltipTextStyle(BuildContext context) {
   );
 }
 
+/// כפתור "פרטים" של פריט ברשת, עם [tooltip] מלא כשיש.
+Widget _libraryInfoButton(
+  BuildContext context, {
+  required String? tooltip,
+  required VoidCallback onPressed,
+}) {
+  final cs = Theme.of(context).colorScheme;
+  final button = Container(
+    width: 28,
+    height: 28,
+    decoration: BoxDecoration(
+      color: cs.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: IconButton(
+      onPressed: onPressed,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+      icon: Icon(
+        FluentIcons.info_24_regular,
+        size: 15,
+        color: cs.onSurfaceVariant,
+      ),
+    ),
+  );
+  if (tooltip == null) return button;
+  return Tooltip(
+    message: tooltip,
+    waitDuration: const Duration(milliseconds: 400),
+    textAlign: TextAlign.right,
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+    margin: const EdgeInsets.all(12),
+    constraints: const BoxConstraints(maxWidth: 320),
+    textStyle: _libraryTooltipTextStyle(context),
+    decoration: _libraryTooltipDecoration(context),
+    child: button,
+  );
+}
+
 class LibraryOverflowTooltipText extends StatelessWidget {
   final String text;
   final TextStyle? style;
@@ -353,40 +392,10 @@ class CategoryGridItem extends StatelessWidget {
             const SizedBox(width: 18),
             if (infoText != null)
               ExcludeFocusTraversal(
-                child: Tooltip(
-                  message: infoText,
-                  waitDuration: const Duration(milliseconds: 400),
-                  textAlign: TextAlign.right,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  margin: const EdgeInsets.all(12),
-                  constraints: const BoxConstraints(maxWidth: 320),
-                  textStyle: _libraryTooltipTextStyle(context),
-                  decoration: _libraryTooltipDecoration(context),
-                  child: Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: IconButton(
-                      onPressed: () =>
-                          showCategoryDetailsDialog(context, category),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 28,
-                        height: 28,
-                      ),
-                      icon: Icon(
-                        FluentIcons.info_24_regular,
-                        size: 15,
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
+                child: _libraryInfoButton(
+                  context,
+                  tooltip: infoText,
+                  onPressed: () => showCategoryDetailsDialog(context, category),
                 ),
               ),
             const SizedBox(width: 4),
@@ -723,47 +732,16 @@ class _BookGridActionColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final infoTooltipText = _bookInfoTooltipText(book);
-
-    final infoButton = Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: IconButton(
-        onPressed: () => showBookDetailsDialog(context, book),
-        padding: EdgeInsets.zero,
-        constraints: const BoxConstraints.tightFor(width: 28, height: 28),
-        icon: Icon(
-          FluentIcons.info_24_regular,
-          size: 15,
-          color: theme.colorScheme.onSurfaceVariant,
-        ),
-      ),
-    );
-
     // הפעולות המשניות מוחרגות ממסלול הפוקוס — חיצים/Tab עוצרים רק על הכרטיס.
     return ExcludeFocusTraversal(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (infoTooltipText != null)
-            Tooltip(
-              message: infoTooltipText,
-              waitDuration: const Duration(milliseconds: 400),
-              textAlign: TextAlign.right,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              margin: const EdgeInsets.all(12),
-              constraints: const BoxConstraints(maxWidth: 320),
-              textStyle: _libraryTooltipTextStyle(context),
-              decoration: _libraryTooltipDecoration(context),
-              child: infoButton,
-            )
-          else
-            infoButton,
+          _libraryInfoButton(
+            context,
+            tooltip: _bookInfoTooltipText(book),
+            onPressed: () => showBookDetailsDialog(context, book),
+          ),
           BookActionsMenuButton(book: book, onBookDeleted: onBookDeleted),
         ],
       ),

@@ -59,6 +59,35 @@ bool shouldShowFacetFilterBanner({
   return normalizedScope.isNotEmpty;
 }
 
+/// אירוע הרצת [query] בטאב עם הגדרות החיפוש השמורות בו (חיוביות ושליליות),
+/// מנורמלות למצב החיפוש הנוכחי של הטאב.
+UpdateSearchQuery searchQueryEventForTab(SearchingTab tab, String query) {
+  final searchMode = tab.searchBloc.state.configuration.searchMode;
+  final negativeQuery = tab.negativeQueryController.text;
+  final positive = SearchQueryBuilder.normalizeParametersForMode(
+    searchMode,
+    customSpacing: tab.spacingValues,
+    alternativeWords: tab.alternativeWords,
+    searchOptions: tab.effectiveSearchOptions(query: query),
+  );
+  final negative = SearchQueryBuilder.normalizeParametersForMode(
+    searchMode,
+    customSpacing: tab.negativeSpacingValues,
+    alternativeWords: tab.negativeAlternativeWords,
+    searchOptions: tab.effectiveNegativeSearchOptions(query: negativeQuery),
+  );
+  return UpdateSearchQuery(
+    query,
+    negativeQuery: negativeQuery,
+    customSpacing: positive.customSpacing,
+    alternativeWords: positive.alternativeWords,
+    searchOptions: positive.searchOptions,
+    negativeCustomSpacing: negative.customSpacing,
+    negativeAlternativeWords: negative.alternativeWords,
+    negativeSearchOptions: negative.searchOptions,
+  );
+}
+
 class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     with AutomaticKeepAliveClientMixin {
   static const _externalCountLineMaxWidth = 240.0;
@@ -95,35 +124,7 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     widget.tab.updateTitleFromAppliedQuery(suggestion);
     context.read<HistoryBloc>().add(AddHistory(widget.tab));
 
-    final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
-    final normalizedParameters = SearchQueryBuilder.normalizeParametersForMode(
-      searchMode,
-      customSpacing: widget.tab.spacingValues,
-      alternativeWords: widget.tab.alternativeWords,
-      searchOptions: widget.tab.effectiveSearchOptions(query: suggestion),
-    );
-    final negativeQuery = widget.tab.negativeQueryController.text;
-    final normalizedNegativeParameters =
-        SearchQueryBuilder.normalizeParametersForMode(
-          searchMode,
-          customSpacing: widget.tab.negativeSpacingValues,
-          alternativeWords: widget.tab.negativeAlternativeWords,
-          searchOptions: widget.tab.effectiveNegativeSearchOptions(
-            query: negativeQuery,
-          ),
-        );
-    widget.tab.searchBloc.add(
-      UpdateSearchQuery(
-        suggestion,
-        negativeQuery: negativeQuery,
-        customSpacing: normalizedParameters.customSpacing,
-        alternativeWords: normalizedParameters.alternativeWords,
-        searchOptions: normalizedParameters.searchOptions,
-        negativeCustomSpacing: normalizedNegativeParameters.customSpacing,
-        negativeAlternativeWords: normalizedNegativeParameters.alternativeWords,
-        negativeSearchOptions: normalizedNegativeParameters.searchOptions,
-      ),
-    );
+    widget.tab.searchBloc.add(searchQueryEventForTab(widget.tab, suggestion));
   }
 
   void _openEditDialog() {
@@ -174,38 +175,8 @@ class _TantivyFullTextSearchState extends State<TantivyFullTextSearch>
     if (widget.tab.autoRunInitialSearch &&
         pendingQuery.isNotEmpty &&
         widget.tab.searchBloc.state.searchQuery.isEmpty) {
-      final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
-      final normalizedParameters =
-          SearchQueryBuilder.normalizeParametersForMode(
-            searchMode,
-            customSpacing: widget.tab.spacingValues,
-            alternativeWords: widget.tab.alternativeWords,
-            searchOptions: widget.tab.effectiveSearchOptions(
-              query: pendingQuery,
-            ),
-          );
-      final negativeQuery = widget.tab.negativeQueryController.text;
-      final normalizedNegativeParameters =
-          SearchQueryBuilder.normalizeParametersForMode(
-            searchMode,
-            customSpacing: widget.tab.negativeSpacingValues,
-            alternativeWords: widget.tab.negativeAlternativeWords,
-            searchOptions: widget.tab.effectiveNegativeSearchOptions(
-              query: negativeQuery,
-            ),
-          );
       widget.tab.searchBloc.add(
-        UpdateSearchQuery(
-          pendingQuery,
-          negativeQuery: negativeQuery,
-          customSpacing: normalizedParameters.customSpacing,
-          alternativeWords: normalizedParameters.alternativeWords,
-          searchOptions: normalizedParameters.searchOptions,
-          negativeCustomSpacing: normalizedNegativeParameters.customSpacing,
-          negativeAlternativeWords:
-              normalizedNegativeParameters.alternativeWords,
-          negativeSearchOptions: normalizedNegativeParameters.searchOptions,
-        ),
+        searchQueryEventForTab(widget.tab, pendingQuery),
       );
     }
   }

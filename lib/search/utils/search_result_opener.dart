@@ -44,31 +44,38 @@ Future<OpenedTab?> openSearchResultInReader(
   final dedupeKey =
       'search:${isPdf ? 'pdf' : 'text'}|$title|$reference|$segment|$filePath';
 
+  PdfBookTab buildPdfTab(PdfBook book, int page) => PdfBookTab(
+    book: book,
+    pageNumber: page,
+    dedupeKey: dedupeKey,
+    searchText: searchText,
+    searchOptions: searchOptions,
+    alternativeWords: alternativeWords,
+    spacingValues: spacingValues,
+    searchMode: inBook.searchMode,
+    searchDistance: inBook.distance,
+    matchPolicy: inBook.matchPolicy,
+    openLeftPane: openLeftPane,
+    requiresStableLayout: true,
+  );
+
+  void open(OpenedTab tab) => tabsBloc.add(
+    OpenOrFocusTab(
+      tab,
+      targetTitle: reference,
+      insertAdjacent: true,
+      inBackground: inBackground,
+    ),
+  );
+
   if (isPdf) {
-    final pdfTab = PdfBookTab(
-      book: resolvedBook is PdfBook
+    final pdfTab = buildPdfTab(
+      resolvedBook is PdfBook
           ? resolvedBook
           : PdfBook(title: title, path: filePath),
-      pageNumber: segment + 1,
-      dedupeKey: dedupeKey,
-      searchText: searchText,
-      searchOptions: searchOptions,
-      alternativeWords: alternativeWords,
-      spacingValues: spacingValues,
-      searchMode: inBook.searchMode,
-      searchDistance: inBook.distance,
-      matchPolicy: inBook.matchPolicy,
-      openLeftPane: openLeftPane,
-      requiresStableLayout: true,
+      segment + 1,
     );
-    tabsBloc.add(
-      OpenOrFocusTab(
-        pdfTab,
-        targetTitle: reference,
-        insertAdjacent: true,
-        inBackground: inBackground,
-      ),
-    );
+    open(pdfTab);
     return pdfTab;
   }
 
@@ -109,30 +116,10 @@ Future<OpenedTab?> openSearchResultInReader(
           textIndex: segment,
           dedupeKey: dedupeKey,
           buildTextTab: (_) => buildTextTab(),
-          buildPdfTab: (page, _) => PdfBookTab(
-            book: target.pdfBook,
-            pageNumber: page,
-            dedupeKey: dedupeKey,
-            searchText: searchText,
-            searchOptions: searchOptions,
-            alternativeWords: alternativeWords,
-            spacingValues: spacingValues,
-            searchMode: inBook.searchMode,
-            searchDistance: inBook.distance,
-            matchPolicy: inBook.matchPolicy,
-            openLeftPane: openLeftPane,
-            requiresStableLayout: true,
-          ),
+          buildPdfTab: (page, _) => buildPdfTab(target.pdfBook, page),
         );
 
-  tabsBloc.add(
-    OpenOrFocusTab(
-      tab,
-      targetTitle: reference,
-      insertAdjacent: true,
-      inBackground: inBackground,
-    ),
-  );
+  open(tab);
   unawaited(IndexFreshnessWarner.instance.warnIfContentDrifted(textBook));
   return tab;
 }

@@ -429,23 +429,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
         query = utils.removeVolwels(query);
       }
 
-      final searchMode = widget.tab.searchBloc.state.configuration.searchMode;
-      final normalizedParameters =
-          SearchQueryBuilder.normalizeParametersForMode(
-            searchMode,
-            customSpacing: widget.tab.spacingValues,
-            alternativeWords: widget.tab.alternativeWords,
-            searchOptions: widget.tab.effectiveSearchOptions(query: query),
-          );
-      final normalizedNegativeParameters =
-          SearchQueryBuilder.normalizeParametersForMode(
-            searchMode,
-            customSpacing: widget.tab.negativeSpacingValues,
-            alternativeWords: widget.tab.negativeAlternativeWords,
-            searchOptions: widget.tab.effectiveNegativeSearchOptions(
-              query: widget.tab.negativeQueryController.text,
-            ),
-          );
+      final searchEvent = searchQueryEventForTab(widget.tab, query);
 
       widget.tab.updateTitleFromAppliedQuery(query);
       // תחביר `@קטגוריה`/`@ספר` גובר על scope הקיים של הטאב. מעבירים את
@@ -463,19 +447,7 @@ class _EnhancedSearchFieldState extends State<EnhancedSearchField> {
           SetFacetsWithoutSearch(parsedCategory.facets!),
         );
       }
-      context.read<SearchBloc>().add(
-        UpdateSearchQuery(
-          query,
-          negativeQuery: widget.tab.negativeQueryController.text,
-          customSpacing: normalizedParameters.customSpacing,
-          alternativeWords: normalizedParameters.alternativeWords,
-          searchOptions: normalizedParameters.searchOptions,
-          negativeCustomSpacing: normalizedNegativeParameters.customSpacing,
-          negativeAlternativeWords:
-              normalizedNegativeParameters.alternativeWords,
-          negativeSearchOptions: normalizedNegativeParameters.searchOptions,
-        ),
-      );
+      context.read<SearchBloc>().add(searchEvent);
       widget.tab.isLeftPaneOpen.value = false;
     }
   }
