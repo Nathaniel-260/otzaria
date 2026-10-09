@@ -357,7 +357,7 @@ class ExternalLinkRepository {
     ].join(';');
     final cached = _indexedTargetsCache;
     if (cached != null && cached.key == key) return cached.titles;
-    final titles = _inIsolate(_queryIndexedTargets, (path, served));
+    final titles = _inIsolate(_queryIndexedTargets, path);
     _indexedTargetsCache = (key: key, titles: titles);
     titles.then<void>(
       (_) {},
@@ -710,29 +710,16 @@ List<ResolvedExternalLink> _forwardRows(
   }
 }
 
-/// כל היעדים (wireKey + כותרת) שיש אליהם שורות מוגשות באינדקס ההפוך.
-Set<String> _queryIndexedTargets((String, Map<String, String>) args) {
-  final (path, served) = args;
+/// קבוצת-על של היעדים המוגשים, מתוך אינדקס מכסה; [_queryReverseRows]
+/// מסנן את שורות הקישורים לפי המקורות המוגשים וגרסאותיהם.
+Set<String> _queryIndexedTargets(String path) {
   if (!File(path).existsSync()) return const {};
   final db = _openCacheDb(path);
   try {
-    if (!_hasTable(db, _indexTable) || !_hasTable(db, _metaTable)) {
-      return const {};
-    }
-    final pairs = served.entries.toList();
-    final pairPlaceholders = List.filled(pairs.length, '(?, ?)').join(', ');
+    if (!_hasTable(db, _indexTable)) return const {};
     return {
       for (final row in db.select(
-        '''
-        WITH served(slug, fingerprint) AS (VALUES $pairPlaceholders)
-        SELECT DISTINCT i.targetSource, i.targetTitle
-        FROM $_indexTable i
-        JOIN $_metaTable m ON m.sourceSlug = i.sourceSlug
-        JOIN served s ON s.slug = m.sourceSlug AND s.fingerprint = m.fingerprint
-        ''',
-        [
-          for (final pair in pairs) ...[pair.key, pair.value],
-        ],
+        'SELECT DISTINCT targetSource, targetTitle FROM $_indexTable',
       ))
         ExternalLinkRepository._targetKey(
           row['targetSource'] as String,
