@@ -669,11 +669,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     );
     if (raw == null) return;
     final notifications = NotificationService();
-    if (!notifications.isInitialized) return;
     final ids = (jsonDecode(raw) as List).whereType<int>();
-    for (final id in ids) {
-      await notifications.cancelNotification(id);
-    }
+    await notifications.cancelNotifications(ids);
   }
 
   Future<void> _onEnablePluginRequested(

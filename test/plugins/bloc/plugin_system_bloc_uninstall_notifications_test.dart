@@ -45,16 +45,15 @@ InstalledPlugin _plugin(String id) => InstalledPlugin(
 
 /// התוסף תזמן התראה 7; המזהה שמור ב-KV הפנימי כמו בגשר.
 class _FakeRepo implements PluginRegistryRepository {
-  final plugins = {'p1': _plugin('p1')};
+  final plugins = {'p1': _plugin('p1'), 'p2': _plugin('p2')};
+  final ids = <String, String>{'p1': '[7]', 'p2': '[99]'};
 
   @override
   Future<InstalledPlugin?> getPlugin(String pluginId) async =>
       plugins[pluginId];
   @override
   Future<String?> getKV(String id, String ns, String key) async =>
-      plugins.containsKey(id) && ns == '_internal' && key == 'notification_ids'
-      ? '[7]'
-      : null;
+      ns == '_internal' && key == 'notification_ids' ? ids[id] : null;
   @override
   Future<List<PluginPermissionGrant>> getPluginPermissions(String id) async =>
       [];
@@ -75,16 +74,23 @@ class _StubInstaller extends PluginInstallerService {
   final _FakeRepo repo;
 
   @override
-  Future<void> uninstallPlugin(String pluginId) async =>
-      repo.plugins.remove(pluginId);
+  Future<void> uninstallPlugin(String pluginId) async {
+    repo.plugins.remove(pluginId);
+    repo.ids.remove(pluginId);
+  }
+
   @override
-  Future<void> resetPluginData(String pluginId) async {}
+  Future<void> resetPluginData(String pluginId) async {
+    repo.ids.remove(pluginId);
+  }
 }
 
-void main() {
+void main({bool initializeNotifications = true, bool resetFirst = false}) {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('dexterous.com/flutter/local_notifications');
+  final calls = <MethodCall>[];
   final cancelled = <Object?>[];
+  String? failureMethod;
 
   setUpAll(() async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
@@ -92,34 +98,109 @@ void main() {
         MacOSFlutterLocalNotificationsPlugin();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          if (call.method == failureMethod) {
+            throw PlatformException(code: 'unavailable');
+          }
           if (call.method == 'cancel') cancelled.add(call.arguments);
           return true;
         });
-    await NotificationService().init();
+    if (initializeNotifications) await NotificationService().init();
   });
 
-  tearDownAll(() => debugDefaultTargetPlatformOverride = null);
-  setUp(cancelled.clear);
+  tearDownAll(() {
+    debugDefaultTargetPlatformOverride = null;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null);
+  });
+  setUp(() {
+    calls.clear();
+    cancelled.clear();
+    failureMethod = null;
+  });
 
-  Future<void> run(PluginSystemEvent event) async {
-    final repo = _FakeRepo();
+  PluginSystemBloc blocFor(_FakeRepo repo) {
     final bloc = PluginSystemBloc(
       repository: repo,
       installerService: _StubInstaller(repo),
     );
     addTearDown(bloc.close);
-    bloc.add(event);
-    await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+    return bloc;
   }
 
-  test('איפוס נתוני התוסף מבטל את ההתראה שתזמן', () async {
-    expect(NotificationService().isInitialized, isTrue);
-    await run(const ResetPluginDataRequested('p1'));
-    expect(cancelled, [7]);
+  Future<_FakeRepo> run(
+    PluginSystemEvent event, {
+    _FakeRepo? repository,
+  }) async {
+    final repo = repository ?? _FakeRepo();
+    final bloc = blocFor(repo);
+    bloc.add(event);
+    await expectLater(bloc.stream, emitsThrough(isA<PluginSystemLoaded>()));
+    return repo;
+  }
+
+  for (final ids in <String?>[null, '[]', '["7", null]']) {
+    test('בלי מזהים שלמים ($ids) אין אתחול או ביטול', () async {
+      final repo = _FakeRepo();
+      if (ids == null) {
+        repo.ids.remove('p1');
+      } else {
+        repo.ids['p1'] = ids;
+      }
+      await run(const UninstallPluginRequested('p1'), repository: repo);
+      expect(calls, isEmpty);
+      expect(NotificationService().isInitialized, initializeNotifications);
+      expect(repo.plugins.containsKey('p1'), isFalse);
+      expect(repo.ids['p2'], '[99]');
+    });
+  }
+
+  final events = <PluginSystemEvent>[
+    const UninstallPluginRequested('p1'),
+    const ResetPluginDataRequested('p1'),
+  ];
+  for (final event in resetFirst ? events.reversed : events) {
+    test('${event.runtimeType} מבטל לפני מחיקת המזהים', () async {
+      final wasInitialized = NotificationService().isInitialized;
+      final repo = await run(event);
+      expect(cancelled, [7]);
+      expect(repo.ids.containsKey('p1'), isFalse);
+      expect(repo.ids['p2'], '[99]');
+      expect(repo.plugins.containsKey('p2'), isTrue);
+      expect(calls.map((call) => call.method), ['cancel']);
+      expect(NotificationService().isInitialized, wasInitialized);
+    });
+  }
+
+  for (final event in events) {
+    test('כשל ביטול ב-${event.runtimeType} משאיר את נתוני התוסף', () async {
+      failureMethod = 'cancel';
+      final repo = _FakeRepo();
+      blocFor(repo).add(event);
+      await pumpEventQueue();
+      expect(calls.map((call) => call.method), ['cancel']);
+      expect(repo.plugins.containsKey('p1'), isTrue);
+      expect(repo.ids['p1'], '[7]');
+      expect(repo.ids['p2'], '[99]');
+    });
+  }
+
+  test('כל מזהי התוסף מבוטלים בלי לגעת בתוסף אחר', () async {
+    final repo = _FakeRepo()..ids['p1'] = '[7,11]';
+    await run(const UninstallPluginRequested('p1'), repository: repo);
+    expect(cancelled, [7, 11]);
+    expect(repo.ids['p2'], '[99]');
   });
 
-  test('הסרת התוסף מבטלת את ההתראה שתזמן', () async {
-    await run(const UninstallPluginRequested('p1'));
-    expect(cancelled, [7]);
+  test('אתחול רגיל שומר על בקשת ההרשאות', () async {
+    await NotificationService().init();
+    final settings =
+        calls.firstWhere((call) => call.method == 'initialize').arguments
+            as Map;
+    for (final permission in ['Sound', 'Badge', 'Alert']) {
+      expect(settings['request${permission}Permission'], isTrue);
+    }
+    expect(NotificationService().isInitialized, isTrue);
+    expect(NotificationService().hasPermissions, isTrue);
   });
 }
