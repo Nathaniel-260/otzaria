@@ -2809,6 +2809,27 @@ void main() {
     });
   });
 
+  test('ספר בטקסט מפוענח נמסר למנוע כבתי UTF-8 ולא כ-String', () async {
+    // קידוד String על גשר המנוע רץ על ה-UI isolate: ספר מצויר של 18M תווים
+    // חסם אותו 337ms.
+    final engine = _CancellationRecordingEngine();
+    final repository = _FakeExtractionRepository(
+      _RecordingTantivyDataProvider(engine),
+    );
+    final book = TextBook(id: 101, title: 'ספר');
+    final library = Library(categories: [])..books.add(book);
+
+    final result = await repository.indexBooks(
+      [book],
+      library,
+      onProgress: (_, _) {},
+    );
+
+    expect(result.completed, isTrue);
+    expect(engine.stringTextFilePaths, isEmpty);
+    expect(engine.bytesByFilePath, {'id:101': utf8.encode('תוכן')});
+  });
+
   group('IndexingRepository — ביטול אחרי כתיבת הספר הנוכחי', () {
     test('indexBooks: שומר את הקודם, מסיר את הנוכחי ומנסה אותו שוב', () async {
       final engine = _CancellationRecordingEngine();
@@ -3741,10 +3762,27 @@ class _CancellationRecordingEngine extends _RecordingSearchEngine {
   final committedCounts = <String, int>{};
   final textStorageByFilePath = <String, TextStorage>{};
   final storedLinesByFilePath = <String, Uint32List?>{};
+
+  /// מה שהגיע ל-addTextBookBytes; ספר שנמסר כ-String אינו נרשם כאן.
+  final bytesByFilePath = <String, List<int>>{};
+  final stringTextFilePaths = <String>[];
   void Function(String title)? onTextAdded;
 
   void _add(String key) =>
       pendingCounts.update(key, (n) => n + 1, ifAbsent: () => 1);
+
+  int _addText(
+    String title,
+    String filePath,
+    TextStorage textStorage,
+    Uint32List? storedLines,
+  ) {
+    _add(filePath);
+    textStorageByFilePath[filePath] = textStorage;
+    storedLinesByFilePath[filePath] = storedLines;
+    onTextAdded?.call(title);
+    return 1;
+  }
 
   @override
   Future<int> addTextBook({
@@ -3758,11 +3796,24 @@ class _CancellationRecordingEngine extends _RecordingSearchEngine {
     required TextStorage textStorage,
     Uint32List? storedLines,
   }) async {
-    _add(filePath);
-    textStorageByFilePath[filePath] = textStorage;
-    storedLinesByFilePath[filePath] = storedLines;
-    onTextAdded?.call(title);
-    return 1;
+    stringTextFilePaths.add(filePath);
+    return _addText(title, filePath, textStorage, storedLines);
+  }
+
+  @override
+  Future<int> addTextBookBytes({
+    required String title,
+    required String topics,
+    required String filePath,
+    required int catalogueOrder,
+    required int generationOrder,
+    required List<int> text,
+    List<String>? extraFacets,
+    required TextStorage textStorage,
+    Uint32List? storedLines,
+  }) async {
+    bytesByFilePath[filePath] = text;
+    return _addText(title, filePath, textStorage, storedLines);
   }
 
   @override

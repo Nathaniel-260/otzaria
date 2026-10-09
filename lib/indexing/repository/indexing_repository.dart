@@ -777,29 +777,19 @@ class IndexingRepository {
       final storedLines = textStorage == TextStorage.libraryDb
           ? source.dataUriLines
           : null;
-      final added = hasBytes
-          ? await engine.addTextBookBytes(
-              title: title,
-              topics: topics,
-              filePath: filePath,
-              catalogueOrder: order,
-              generationOrder: generationOrder,
-              text: bytes,
-              extraFacets: extraFacets,
-              textStorage: textStorage,
-              storedLines: storedLines,
-            )
-          : await engine.addTextBook(
-              title: title,
-              topics: topics,
-              filePath: filePath,
-              catalogueOrder: order,
-              generationOrder: generationOrder,
-              text: text!,
-              extraFacets: extraFacets,
-              textStorage: textStorage,
-              storedLines: storedLines,
-            );
+      // קידוד String על גשר המנוע רץ על ה-UI isolate (337ms לספר של 18M תווים).
+      final payload = hasBytes ? bytes : await _utf8EncodeOffFrame(text!);
+      final added = await engine.addTextBookBytes(
+        title: title,
+        topics: topics,
+        filePath: filePath,
+        catalogueOrder: order,
+        generationOrder: generationOrder,
+        text: payload,
+        extraFacets: extraFacets,
+        textStorage: textStorage,
+        storedLines: storedLines,
+      );
       engineStopwatch.stop();
       final size = hasBytes
           ? '${bytes.length} בייטים'
@@ -1423,6 +1413,9 @@ class IndexingRepository {
     }
     return false;
   }
+
+  static Future<Uint8List> _utf8EncodeOffFrame(String text) =>
+      Isolate.run(() => utf8.encode(text));
 
   /// [stripDataUrisForIndex] בלי לחסום פריים בספר גדול. כאן, בשונה ממסלול
   /// ה-bytes, גם הסריקה עוברת ל-isolate: מחרוזת אינה מועתקת בהעברה (נמדד
