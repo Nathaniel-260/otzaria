@@ -335,14 +335,19 @@ void main() {
     });
   });
 
-  test('הפטרה מתחילה ומסתיימת בדיוק בטווח הפסוקים שלה', () {
+  test('הפטרה מתחילה ומסתיימת בדיוק בטווח הפסוקים שלה', () async {
     final haftarah = TikkunData.haftarot.firstWhere(
       (h) => h.id == 'p:Bereshit',
     );
     final segments = getHaftarahSegments(haftarah, 'ashkenaz');
-    final lines = buildHaftarahLines(haftarah, 'ashkenaz', {
-      fixtureBookNames['yeshayahu']!: tokensById['yeshayahu']!,
-    }, _widths);
+    final lines = await buildVersePartLines(
+      const TikkunEngineImpl(),
+      haftarahParts(haftarah, 'ashkenaz'),
+      {
+        fixtureBookNames['yeshayahu']!: tokensById['yeshayahu']!,
+      },
+      _widths,
+    );
 
     expect(lines, isNotEmpty);
     expect(lines.first.firstChapterNum, segments.first.fromCh);
@@ -354,14 +359,19 @@ void main() {
     expect(lastChapter.firstChapterNum, segments.last.toCh);
   });
 
-  test('קריאת מועד — עליות רצופות מתאחדות, וכל עליה מסומנת פעם אחת', () {
+  test('קריאת מועד — עליות רצופות מתאחדות, וכל עליה מסומנת פעם אחת', () async {
     final reading = TikkunData.torahReadings.firstWhere(
       (r) => r.id == 'tr:Pesach I',
     );
-    final lines = buildTorahReadingLines(reading, {
-      for (final id in TikkunData.booksOrder)
-        fixtureBookNames[id]!: tokensById[id]!,
-    }, _widths);
+    final lines = await buildVersePartLines(
+      const TikkunEngineImpl(),
+      readingParts(reading),
+      {
+        for (final id in TikkunData.booksOrder)
+          fixtureBookNames[id]!: tokensById[id]!,
+      },
+      _widths,
+    );
 
     expect(
       lines.where((l) => l.aliyaName != null || l.maftirName != null).length,
