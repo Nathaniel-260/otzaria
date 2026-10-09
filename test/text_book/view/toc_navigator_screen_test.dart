@@ -820,6 +820,45 @@ Future<void> main() async {
   );
 
   testWidgets(
+    'פסקה נבחרת באמצע פרק מסמנת את הפרק וגוללת אליו (issue #2228)',
+    (tester) async {
+      final toc = List.generate(
+        50,
+        (i) => TocEntry(text: 'פרק $i', index: i * 10, level: 1),
+      );
+      // שורה 455 היא פסקה בתוך "פרק 45", למשל תוצאת חיפוש שנפתחה.
+      final bloc = _TestTextBookBloc(
+        _loadedState(toc: toc, visibleIndices: const [0], selectedIndex: 455),
+      );
+      addTearDown(bloc.close);
+      final focusNode = FocusNode();
+      addTearDown(focusNode.dispose);
+
+      await tester.pumpWidget(
+        _wrap(
+          TocViewer(
+            scrollController: ItemScrollController(),
+            closeLeftPaneCallback: () {},
+            focusNode: focusNode,
+          ),
+          bloc,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final selected = tester
+          .widgetList<NavTreeTile>(find.byType(NavTreeTile))
+          .where((tile) => tile.isSelected)
+          .map((tile) => tile.title);
+      expect(selected, ['פרק 45']);
+      final viewport = tester.getRect(find.byType(SingleChildScrollView));
+      final row = tester.getRect(find.text('פרק 45'));
+      expect(row.top, greaterThanOrEqualTo(viewport.top));
+      expect(row.bottom, lessThanOrEqualTo(viewport.bottom));
+    },
+  );
+
+  testWidgets(
     'ניקוי חיפוש בין תזמון הגלילה לביצועה אינו זורק (מסלול שהוחלף)',
     (tester) async {
       // הגלילה מתוזמנת במסלול הרקורסיבי, וניקוי החיפוש לפני ביצועה מחזיר את

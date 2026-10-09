@@ -234,20 +234,21 @@ class _TocViewerState extends State<TocViewer>
     return [];
   }
 
+  /// הכותרת של השורה הנבחרת, ובהיעדרה של השורה הגלויה הראשונה.
+  int? _activeTocIndex(TextBookLoaded state) {
+    final line = state.selectedIndex ?? state.visibleIndices.firstOrNull;
+    return line == null
+        ? null
+        : closestTocEntryIndex(state.tableOfContents, line);
+  }
+
   void _scrollToActiveItem(TextBookLoaded state) {
     if (_isManuallyScrolling) return;
     // כשהפאנל סגור הגלילה נכשלת (רוחב 0) אך משבשת את _lastScrolledTocIndex
     // ואז חוסמת את הגלילה האמיתית בפתיחה הבאה.
     if (!state.showLeftPane) return;
 
-    final int? activeIndex =
-        state.selectedIndex ??
-        (state.visibleIndices.isNotEmpty
-            ? closestTocEntryIndex(
-                state.tableOfContents,
-                state.visibleIndices.first,
-              )
-            : null);
+    final int? activeIndex = _activeTocIndex(state);
 
     if (activeIndex == null || activeIndex == _lastScrolledTocIndex) return;
 
@@ -631,16 +632,8 @@ class _TocViewerState extends State<TocViewer>
         },
         builder: (context, state) {
           if (state is! TextBookLoaded) return const Center();
-          // חישוב יחיד של ה"ערך הפעיל" - מועבר כפרמטר ל-_buildTocItem
-          // במקום שכל פריט יחשב בעצמו (שזה מה שיצר את ה-O(n²)).
-          final int? activeIndex =
-              state.selectedIndex ??
-              (state.visibleIndices.isNotEmpty
-                  ? closestTocEntryIndex(
-                      state.tableOfContents,
-                      state.visibleIndices.first,
-                    )
-                  : null);
+          // מחושב פעם אחת ומועבר לכל הפריטים, כדי שהבנייה לא תהיה O(n²).
+          final int? activeIndex = _activeTocIndex(state);
 
           // גם חיפוש עשוי להציג עשרות אלפי ערכים, ולכן הסף נגזר מהפלט.
           final display = _displayDataFor(
