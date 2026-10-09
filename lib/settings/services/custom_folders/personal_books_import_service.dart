@@ -110,21 +110,30 @@ class PersonalBooksImportService {
       }
       final fileName = p.basename(sourcePath);
       final targetPath = p.join(folderPath, fileName);
-      // openWrite מרוקן את היעד מיד; כתיבה לקובץ זמני שומרת על הגרסה הקודמת בכשל.
-      final partial = File('$targetPath.part');
+      Directory? temporary;
       try {
         // העתקת קובץ על עצמו (openRead+openWrite לאותו נתיב) מרוקנת אותו.
         if (p.equals(sourcePath, targetPath)) {
           copied++;
           continue;
         }
+        // אותה מערכת קבצים ל-rename; שם קצר וייחודי שאינו תלוי בשם הספר.
+        temporary = await Directory(folderPath).createTemp('.import-');
+        final partial = File(p.join(temporary.path, 'book.part'));
         // העתקה בזרימה — קבצי PDF עלולים להיות גדולים מהזיכרון הפנוי.
         await File(sourcePath).openRead().pipe(partial.openWrite());
         await partial.rename(targetPath);
         copied++;
       } catch (e) {
-        if (await partial.exists()) await partial.delete();
         errors.add(describeCopyError(fileName, e));
+      } finally {
+        if (temporary != null) {
+          try {
+            await temporary.delete(recursive: true);
+          } on FileSystemException {
+            // ניקוי best-effort: כשל בו אינו מסתיר את שגיאת הייבוא או עוצר את האצווה.
+          }
+        }
       }
     }
 
