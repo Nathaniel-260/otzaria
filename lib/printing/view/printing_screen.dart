@@ -1228,10 +1228,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
         : <Link>[];
 
     for (var i = selectedStart; i < selectedEnd; i++) {
-      // הסרת HTML + ניקוד/טעמים + שמות קודש מוחלת כאן, על שורות הטווח הנבחר
-      // בלבד (הועברה לכאן מהטרנספורמציה על כל הספר ב-createPdf).
+      // הטרנספורמציות מוחלות רק על שורות הטווח; ב-Word ה-HTML נשמר לעיצוב.
       final lineText = _applyTextTransforms(
-        stripHtmlIfNeeded(allLines[i]),
+        keepHtml ? allLines[i] : stripHtmlIfNeeded(allLines[i]),
         shouldReplaceHolyNames,
       );
       blocks.add({'kind': 'text', 'text': lineText});
