@@ -563,9 +563,8 @@ TextStyle _styleForElement(
     );
   }
 
-  // הדגשת תוצאות חיפוש מגיעות כ-`<span style="color: red">` או
-  // `<span style="color: blue; background-color: yellow">` (התוצאה הנוכחית).
-  // המפרסר חייב לכבד את ה-styles האלה אחרת תוצאות חיפוש לא יסומנו במצב רציף.
+  // הדגשות החיפוש מגיעות כ-color/background-color ב-style; בלי פרסורן הן לא
+  // יסומנו במצב רציף.
   final inlineColor = _inlineCssColor(_colorRe, inlineStyle);
   if (inlineColor != null) {
     style = style.copyWith(color: inlineColor);
