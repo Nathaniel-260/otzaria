@@ -398,6 +398,59 @@ void main() {
       expect(await externalIn(book), isEmpty);
     });
 
+    test('יעדי אינדקס עם Unicode ו-NUL פנימי נשמרים בנפרד', () async {
+      final titles = [
+        'א',
+        'א\u0000ב',
+        'א\u0000ג',
+        'A',
+        'a',
+        'é',
+        'e\u0301',
+        '😀',
+        '𐀀',
+      ];
+      final db = sqlite3.sqlite3.open(officialPath);
+      try {
+        for (var i = 0; i < titles.length; i++) {
+          db.execute(
+            'INSERT INTO book (id, title, categoryId, sourceId) '
+            'VALUES (?, ?, 1, 1)',
+            [9000 + i, titles[i]],
+          );
+          db.execute(
+            'INSERT INTO line (id, bookId, lineIndex, heRef, content) '
+            'VALUES (?, ?, 1, ?, ?)',
+            [90000 + i, 9000 + i, titles[i], 'שורת יעד'],
+          );
+        }
+      } finally {
+        db.close();
+      }
+      final library = await attach(
+        attachedDb(
+          'unicode',
+          rows: [
+            for (final title in titles)
+              _row(0, targetTitle: title, targetLineIndex: 1),
+          ],
+        ),
+      );
+      await links.sync();
+      expect(indexRows(library.slug), titles.length);
+      for (final title in titles) {
+        final reverse = await links.linksInRange(
+          title: title,
+          categoryId: null,
+          source: BookSource.official,
+          startLineIndex: 0,
+          endLineIndex: 3,
+        );
+        expect(reverse, hasLength(1), reason: title.codeUnits.toString());
+        expect(reverse.single.targetSource, BookSource.attached(library.slug));
+      }
+    });
+
     test('כל יעדי האינדקס נמצאים — כמה כותרות בכמה מסדים', () async {
       final target = await attach(attachedDb('ext'));
       final library = await attach(

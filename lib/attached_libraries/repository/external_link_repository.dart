@@ -710,35 +710,22 @@ List<ResolvedExternalLink> _forwardRows(
   }
 }
 
-/// היעדים (wireKey + כותרת) שיש אליהם שורות באינדקס, גם ממסד שאינו מוגש
-/// ([_queryReverseRows] מסנן) — בקפיצות באינדקס היעד, בלי לסרוק את כל השורות.
+/// קבוצת-על של היעדים המוגשים, מתוך אינדקס מכסה; [_queryReverseRows]
+/// מסנן את שורות הקישורים לפי המקורות המוגשים וגרסאותיהם.
 Set<String> _queryIndexedTargets(String path) {
   if (!File(path).existsSync()) return const {};
   final db = _openCacheDb(path);
   try {
     if (!_hasTable(db, _indexTable)) return const {};
-    const nextSource =
-        'SELECT targetSource AS v FROM $_indexTable '
-        'WHERE targetSource > ? ORDER BY targetSource LIMIT 1';
-    const nextTitle =
-        'SELECT targetTitle AS v FROM $_indexTable '
-        'WHERE targetSource = ? AND targetTitle > ? ORDER BY targetTitle LIMIT 1';
-    String? next(String sql, List<Object> args) {
-      final rows = db.select(sql, args);
-      return rows.isEmpty ? null : rows.first['v'] as String;
-    }
-
-    final result = <String>{};
-    var source = next(nextSource, ['']);
-    while (source != null) {
-      var title = next(nextTitle, [source, '']);
-      while (title != null) {
-        result.add(ExternalLinkRepository._targetKey(source, title));
-        title = next(nextTitle, [source, title]);
-      }
-      source = next(nextSource, [source]);
-    }
-    return result;
+    return {
+      for (final row in db.select(
+        'SELECT DISTINCT targetSource, targetTitle FROM $_indexTable',
+      ))
+        ExternalLinkRepository._targetKey(
+          row['targetSource'] as String,
+          row['targetTitle'] as String,
+        ),
+    };
   } finally {
     db.close();
   }
