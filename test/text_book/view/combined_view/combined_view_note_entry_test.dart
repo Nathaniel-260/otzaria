@@ -12,6 +12,7 @@ import 'package:otzaria/models/links.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_bloc.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_event.dart';
 import 'package:otzaria/personal_notes/bloc/personal_notes_state.dart';
+import 'package:otzaria/personal_notes/widgets/inline_note_editor.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
@@ -114,6 +115,39 @@ void main() {
     expect(note.lineNumber, 5);
     expect(note.bookId, 'בראשית');
     expect(note.selectedText, anyOf(isNull, isEmpty));
+  });
+
+  testWidgets('"הערה" באותה שורה משחזרת טיוטה שהעורך שמר עם categoryId', (
+    tester,
+  ) async {
+    final book = TextBook(title: 'ספר בדיקה', categoryId: 42);
+    // העורך מקבל מהחלונית את categoryId של הספר, וסגירה בלי שמירה שומרת טיוטה.
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InlineNoteEditor(
+            bookId: 'ספר בדיקה',
+            categoryId: book.categoryId,
+            draftLineNumber: 2,
+            initialContent: 'טקסט שלא נשמר',
+            linkableNotes: const [],
+            onSave: (_) {},
+            onCancel: () {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.runAsync(() => Future<void>.delayed(Duration.zero));
+
+    final fixture = await _pumpView(tester, continuous: false, book: book);
+    final note = await _openNote(
+      tester,
+      fixture,
+      _textBox(tester, 'שניה').center,
+    );
+    expect(note.lineNumber, 2);
+    expect(note.initialContent, contains('טקסט שלא נשמר'));
   });
 
   for (final continuous in [false, true]) {

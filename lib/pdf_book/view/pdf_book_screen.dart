@@ -5516,6 +5516,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
     final draftService = PersonalNoteDraftService();
     final draft = await draftService.loadDraft(
       bookId: personalNotesBookKey(widget.tab.book),
+      categoryId: widget.tab.book.categoryId,
       lineNumber: anchorLine,
     );
 

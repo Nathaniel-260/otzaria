@@ -1913,6 +1913,7 @@ class _CombinedViewState extends State<CombinedView> {
     final draftService = PersonalNoteDraftService();
     final draft = await draftService.loadDraft(
       bookId: personalNotesBookKey(widget.tab.book),
+      categoryId: widget.tab.book.categoryId,
       lineNumber: currentIndex + 1,
     );
 
