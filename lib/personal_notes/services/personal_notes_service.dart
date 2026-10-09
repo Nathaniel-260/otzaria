@@ -220,7 +220,6 @@ class PersonalNotesService {
         return note.copyWith(
           lineNumber: previousLine,
           status: PersonalNoteStatus.located,
-          updatedAt: DateTime.now(),
         );
       }
       return note;
@@ -233,7 +232,6 @@ class PersonalNotesService {
         status: PersonalNoteStatus.missing,
         lastKnownLineNumber: note.lineNumber,
         clearLineNumber: true,
-        updatedAt: DateTime.now(),
       );
     }
 
@@ -267,7 +265,6 @@ class PersonalNotesService {
         lineNumber: match.line,
         lastKnownLineNumber: note.lineNumber,
         status: PersonalNoteStatus.located,
-        updatedAt: DateTime.now(),
       );
     }
 
@@ -275,7 +272,6 @@ class PersonalNotesService {
       status: PersonalNoteStatus.missing,
       lastKnownLineNumber: note.lineNumber,
       clearLineNumber: true,
-      updatedAt: DateTime.now(),
     );
   }
 
