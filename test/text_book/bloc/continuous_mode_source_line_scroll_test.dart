@@ -89,6 +89,11 @@ void main() {
         showPageShapeView: true,
       ),
     );
+    final contentApplied = bloc.stream.firstWhere(
+      (state) => state is TextBookLoaded && state.contentVersion > 0,
+    );
+    bloc.add(ApplyFullBookContent(bookTitle: book.title, content: _content));
+    await contentApplied;
   });
 
   tearDown(() => bloc.close());
@@ -113,6 +118,66 @@ void main() {
       bloc.add(const TogglePageShapeView(false));
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
+      expect(scroll.scrolledTo, [3]);
+    },
+  );
+  for (final continuous in [false, true]) {
+    test('delayed page shape exit uses current mode: $continuous', () async {
+      if (continuous) {
+        final initial = bloc.state as TextBookLoaded;
+        bloc.emit(
+          initial.copyWith(
+            continuousReadingMode: false,
+            readingSegments: buildReadingSegments(_content, continuous: false),
+          ),
+        );
+      }
+      bloc.add(const TogglePageShapeView(false));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      bloc.add(ToggleContinuousReadingMode(continuous));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final current = bloc.state as TextBookLoaded;
+      expect(current.continuousReadingMode, continuous);
+      expect(current.selectedIndex, 7);
+      expect(scroll.scrolledTo, [continuous ? 3 : 7]);
+    });
+  }
+
+  test('delayed page shape exit skips a closed bloc', () async {
+    bloc.add(const TogglePageShapeView(false));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await bloc.close();
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+    expect(scroll.scrolledTo, isEmpty);
+  });
+
+  for (final change in ['page shape', 'tzurat hadaf', 'book']) {
+    test('delayed page shape exit skips changed $change', () async {
+      bloc.add(const TogglePageShapeView(false));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final current = bloc.state as TextBookLoaded;
+      switch (change) {
+        case 'page shape':
+          bloc.add(const TogglePageShapeView(true));
+        case 'tzurat hadaf':
+          bloc.add(const ToggleTzuratHadafView(true));
+        case 'book':
+          bloc.emit(current.copyWith(book: TextBook(title: 'שמות')));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(scroll.scrolledTo, isEmpty);
+    });
+  }
+  test(
+    'delayed page shape exit preserves the target after selection clears',
+    () async {
+      bloc.add(const TogglePageShapeView(false));
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      bloc.add(const UpdateVisibleIndecies([1]));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      expect((bloc.state as TextBookLoaded).selectedIndex, isNull);
       expect(scroll.scrolledTo, [3]);
     },
   );

@@ -1264,11 +1264,19 @@ class TextBookBloc extends Bloc<TextBookEvent, TextBookState> {
 
       if (!event.show && currentState.selectedIndex != null) {
         Future.delayed(const Duration(milliseconds: 100), () {
+          final latestState = state;
+          if (isClosed ||
+              latestState is! TextBookLoaded ||
+              latestState.book != currentState.book ||
+              latestState.showPageShapeView ||
+              latestState.showTzuratHadafView) {
+            return;
+          }
           if (scrollController.isAttached) {
             scrollController.scrollTo(
               index: resolveItemIndexForSourceLine(
                 lineIndex: currentState.selectedIndex!,
-                readingSegments: currentState.readingSegments,
+                readingSegments: latestState.readingSegments,
               ),
               duration: const Duration(milliseconds: 300),
             );
