@@ -491,6 +491,8 @@ class ShortcutsSettingsTab extends StatelessWidget {
   }
 
   Widget _buildContent(BuildContext context) {
+    // הטעינה העצלה רושמת בוולידטור את הקיצורים לפני צילום הערכים.
+    final dynamicShortcuts = DynamicShortcutRegistry.instance.shortcuts;
     final currentValues = ShortcutDropDownTile.readCurrentValues();
     final unconfiguredKeys = [
       for (final MapEntry(:key, :value) in currentValues.entries)
@@ -982,7 +984,7 @@ class ShortcutsSettingsTab extends StatelessWidget {
             'או העתקה עם תצוגה שונה',
           ),
           children: [
-            for (final shortcut in DynamicShortcutRegistry.instance.shortcuts)
+            for (final shortcut in dynamicShortcuts)
               SettingsActionTile.text(
                 icon: FluentIcons.flash_24_regular,
                 title: shortcut.describe(),
@@ -1138,7 +1140,6 @@ class ShortcutsSettingsTab extends StatelessWidget {
 }
 
 // ── _ShortcutTile ─────────────────────────────────────────────────────────────
-// פה מחקנו את כל עטיפות ה-Theme המסורבלות
 class _ShortcutTile extends StatelessWidget {
   final String settingKey;
   final String label;
