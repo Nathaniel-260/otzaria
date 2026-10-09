@@ -43,19 +43,6 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
     super.dispose();
   }
 
-  String _generateUniqueWorkspaceName(List<Workspace> existingWorkspaces) {
-    final existingNames = existingWorkspaces.map((w) => w.name).toSet();
-    int counter = existingWorkspaces.length + 1;
-
-    while (true) {
-      final candidateName = "שולחן עבודה $counter";
-      if (!existingNames.contains(candidateName)) {
-        return candidateName;
-      }
-      counter++;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -152,7 +139,7 @@ class _WorkspaceSwitcherDialogState extends State<WorkspaceSwitcherDialog> {
           child: InkWell(
             onTap: () {
               final workspaceBloc = context.read<WorkspaceBloc>();
-              final newWorkspaceName = _generateUniqueWorkspaceName(
+              final newWorkspaceName = uniqueWorkspaceName(
                 workspaceBloc.state.workspaces,
               );
               workspaceBloc.add(
