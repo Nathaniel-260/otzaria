@@ -312,11 +312,6 @@ class BookDao {
     ]);
   }
 
-  Future<List<Book>> getBooksByAuthor(String authorName) async {
-    if (!(await _capabilities).hasAuthors) return const [];
-    return _selectMany(_queries['selectByAuthor']!, ['%$authorName%']);
-  }
-
   Future<int> insertBook(
     int categoryId,
     int sourceId,

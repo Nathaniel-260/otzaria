@@ -28,13 +28,6 @@ SELECT * FROM book WHERE title = ? AND categoryId = ? AND fileType = ? LIMIT 1;
 selectByTitleAndFileType:
 SELECT * FROM book WHERE title = ? AND fileType = ? LIMIT 1;
 
-selectByAuthor:
-SELECT b.* FROM book b
-JOIN book_author ba ON b.id = ba.bookId
-JOIN author a ON ba.authorId = a.id
-WHERE a.name LIKE ?
-ORDER BY b.orderIndex, b.title;
-
 insert:
 INSERT INTO book (categoryId, sourceId, title, heShortDesc, orderIndex, totalLines, isBaseBook,
     hasTargumConnection, hasReferenceConnection, hasSourceConnection, hasCommentaryConnection, hasOtherConnection,
