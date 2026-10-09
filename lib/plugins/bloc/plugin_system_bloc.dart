@@ -624,6 +624,7 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
       // מיד, ולא בסנכרון שאחרי: רשימה שבאמצע שמירה הייתה נכתבת שוב ל-DB.
       PluginLibraryBooksRegistry.instance.removePlugin(event.pluginId);
       PluginNewTabPageRegistry.instance.remove(event.pluginId);
+      await _cancelPluginNotifications(event.pluginId);
       await _installerService.uninstallPlugin(event.pluginId);
       add(LoadPlugins());
     } catch (e) {
@@ -668,11 +669,8 @@ class PluginSystemBloc extends Bloc<PluginSystemEvent, PluginSystemState> {
     );
     if (raw == null) return;
     final notifications = NotificationService();
-    if (!notifications.isInitialized) return;
     final ids = (jsonDecode(raw) as List).whereType<int>();
-    for (final id in ids) {
-      await notifications.cancelNotification(id);
-    }
+    await notifications.cancelNotifications(ids);
   }
 
   Future<void> _onEnablePluginRequested(
