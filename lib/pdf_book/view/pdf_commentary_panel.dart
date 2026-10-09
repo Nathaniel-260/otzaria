@@ -39,6 +39,7 @@ import 'package:otzaria/widgets/feedback/scrollable_positioned_list_scrollbar.da
 import 'package:otzaria/book_common/models/commentator_group.dart';
 import 'package:otzaria/book_common/utils/commentary_search_utils.dart';
 import 'package:otzaria/text_display/models/text_display_profile.dart';
+import 'package:otzaria/text_display/models/text_display_slot.dart';
 import 'package:otzaria/book_common/utils/commentary_type_filter.dart';
 import 'package:otzaria/book_common/utils/commentator_group_builder.dart';
 import 'package:otzaria/book_common/utils/link_anchor_markers.dart';
@@ -1298,7 +1299,7 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
     }
 
     final groups = await visibleContent.sortedGroupsFuture;
-    final blocks = await buildCommentaryPrintBlocks(groups);
+    final blocks = await buildCommentaryPrintBlocks(groups, keepHtml: true);
     if (blocks.isEmpty) {
       UiSnack.show(PdfMessages.noCommentariesToPrint);
       return;
@@ -1319,6 +1320,15 @@ class PdfCommentaryPanelState extends State<PdfCommentaryPanel>
             .toList(growable: false),
         removeNikud: widget.displayProfile.removeNikud,
         removeTaamim: widget.displayProfile.removeTeamim,
+        commentaryDisplayProfile: context
+            .read<SettingsBloc>()
+            .state
+            .textDisplayPolicy
+            .resolve(
+              TextDisplaySlot.commentaryDisplay.copyWith(
+                channel: TextChannel.export,
+              ),
+            ),
       ),
     );
   }

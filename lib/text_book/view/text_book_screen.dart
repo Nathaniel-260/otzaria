@@ -652,6 +652,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
         displayProfile: _exportProfile(state),
+        commentaryDisplayProfile: state.displayProfile(
+          target: TextTarget.commentary,
+          channel: TextChannel.export,
+        ),
         tableOfContents: state.tableOfContents,
       ),
     );
@@ -2465,6 +2469,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             activeCommentators: state.activeCommentators,
             startLine: _topmostVisibleSourceLine(state),
             displayProfile: _exportProfile(state),
+            commentaryDisplayProfile: state.displayProfile(
+              target: TextTarget.commentary,
+              channel: TextChannel.export,
+            ),
             tableOfContents: state.tableOfContents,
           ),
         );
@@ -3155,6 +3163,10 @@ bool _handleGlobalKeyEvent(
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
         displayProfile: _exportProfile(state),
+        commentaryDisplayProfile: state.displayProfile(
+          target: TextTarget.commentary,
+          channel: TextChannel.export,
+        ),
         tableOfContents: state.tableOfContents,
       ),
     );

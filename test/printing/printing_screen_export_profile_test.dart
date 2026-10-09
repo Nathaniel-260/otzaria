@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:bloc_test/bloc_test.dart';
@@ -10,13 +11,20 @@ import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:opentype_shaper/opentype_shaper.dart';
 import 'package:otzaria/models/books.dart';
+import 'package:otzaria/models/links.dart';
+import 'package:otzaria/printing/commentary_print_builder.dart';
 import 'package:otzaria/printing/export_restriction_service.dart';
+import 'package:otzaria/printing/print_content_models.dart';
 import 'package:otzaria/printing/view/printing_screen.dart';
 import 'package:otzaria/settings/engine/settings_bloc.dart';
 import 'package:otzaria/settings/engine/settings_event.dart';
 import 'package:otzaria/settings/engine/settings_repository.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
+import 'package:otzaria/services/commentary_service.dart';
 import 'package:otzaria/text_display/text_display_exports.dart';
+import 'package:pdf/pdf.dart' hide PdfDocument;
+import 'package:pdfrx/pdfrx.dart';
+import 'package:xml/xml.dart';
 // ignore: depend_on_referenced_packages
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
@@ -59,8 +67,12 @@ const _book = ['<h1>בראשית</h1>', '<h2>פרק א</h2>', _verse];
 /// מייצא את הספר ל-Word ממסך ההדפסה לפי [profile] ומחזיר את word/document.xml.
 Future<String> _exportWord(
   WidgetTester tester,
-  TextDisplayProfile profile,
-) async {
+  TextDisplayProfile profile, {
+  List<String> book = _book,
+  List<PrintBlock>? blocks,
+  TextDisplayProfile? commentaryProfile,
+  Future<void> Function(WidgetTester)? verifyPdf,
+}) async {
   tester.view.physicalSize = const Size(1600, 1200);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -87,7 +99,7 @@ Future<String> _exportWord(
             child: child!,
           ),
           home: PrintingScreen(
-            data: Future.value(_book.join('\n')),
+            data: Future.value(book.join('\n')),
             bookId: 'בראשית',
             startLine: 1,
             tableOfContents: [
@@ -95,6 +107,8 @@ Future<String> _exportWord(
               TocEntry(text: 'פרק א', index: 1, level: 2),
             ],
             displayProfile: profile,
+            commentaryDisplayProfile: commentaryProfile,
+            prebuiltBlocks: blocks,
           ),
         ),
       ),
@@ -106,6 +120,7 @@ Future<String> _exportWord(
     );
     await tester.pump();
   }
+  await verifyPdf?.call(tester);
   await tester.tap(find.text('שמירה'));
   for (var i = 0; i < 300 && picker.bytes == null; i++) {
     await tester.runAsync(
@@ -125,19 +140,33 @@ Future<String> _exportWord(
 void main() {
   // התצוגה המקדימה של מסך ההדפסה נבנית במעצב הנייטיבי.
   final shaperPath = findNativeShaperLibrary();
+  final originalPdfiumPath = Pdfrx.pdfiumModulePath;
   const pathProviderChannel = MethodChannel('plugins.flutter.io/path_provider');
 
   setUpAll(() async {
     await Settings.init(cacheProvider: MemorySettingsCache());
     await Settings.setValue<int>('key-print-destination', 1);
     ShaperLibrary.path = shaperPath;
+    if (Platform.isMacOS) {
+      Pdfrx.pdfiumModulePath = File(
+        'build/native_assets/macos/libpdfium.dylib',
+      ).absolute.path;
+    }
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, (_) async => '/tmp');
   });
 
   tearDownAll(() {
+    Pdfrx.pdfiumModulePath = originalPdfiumPath;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(pathProviderChannel, null);
+  });
+
+  setUp(() async {
+    await Settings.setValue<String>(
+      SettingsRepository.keyTextDisplayPolicy,
+      jsonEncode(TextDisplayPolicy.empty.toJson()),
+    );
   });
 
   testWidgets('הסרת ניקוד בלבד בהדפסה שומרת מתג וסוף פסוק', (tester) async {
@@ -157,4 +186,155 @@ void main() {
     expect(xml, contains(applyTextDisplayProfile(_verse, profile)));
     expect(xml, isNot(contains(',')), reason: 'הפיסוק לא הוסר');
   }, skip: shaperPath == null);
+
+  testWidgets('הסתרת פיסוק שומרת על פיסוק כותרת הספר', (tester) async {
+    final xml = await _exportWord(
+      tester,
+      const TextDisplayProfile(punctuation: MarkVisibility.hide),
+      book: ['<h1>ספר, בדיקה</h1>', '<h2>פרק א</h2>', _verse],
+    );
+    expect(xml, contains('ספר, בדיקה'));
+    expect(
+      xml,
+      contains(
+        applyTextDisplayProfile(
+          _verse,
+          const TextDisplayProfile(punctuation: MarkVisibility.hide),
+        ),
+      ),
+    );
+  }, skip: shaperPath == null);
+
+  testWidgets('הסתרת פיסוק ב-PDF שומרת פיסוק של כותרת h2 בגוף', (tester) async {
+    await _exportWord(
+      tester,
+      const TextDisplayProfile(punctuation: MarkVisibility.hide),
+      book: ['<h1>בראשית</h1>', '<h2>פרק, א</h2>', _verse],
+      verifyPdf: (tester) async {
+        final dynamic state = tester.state(find.byType(PrintingScreen));
+        final text = await tester.runAsync(() async {
+          final bytes =
+              await (state.createPdf(PdfPageFormat.a4) as Future<Uint8List>);
+          final doc = await PdfDocument.openData(bytes);
+          try {
+            final pages = <String>[];
+            for (final page in doc.pages) {
+              pages.add((await page.loadText())!.fullText);
+            }
+            return pages.join('\n');
+          } finally {
+            await doc.dispose();
+          }
+        });
+        expect(text, contains(','), reason: 'רק כותרת h2 אמורה לשמור פסיק');
+      },
+    );
+  }, skip: shaperPath == null);
+
+  testWidgets('מפרש עם כותרת HTML שומר פיסוק ב-Word וב-PDF', (tester) async {
+    const profile = TextDisplayProfile(punctuation: MarkVisibility.hide);
+    final blocks = await buildCommentaryPrintBlocks(
+      [
+        LinkGroup(
+          bookTitle: 'מפרש',
+          links: [
+            Link(
+              heRef: 'ref',
+              index1: 1,
+              path2: 'מפרש.txt',
+              index2: 1,
+              connectionType: 'COMMENTARY',
+            ),
+          ],
+        ),
+      ],
+      contentResolver: (_) async => '<h2>מפרש, בדיקה</h2>\n$_verse',
+      keepHtml: true,
+    );
+    final xml = await _exportWord(
+      tester,
+      profile,
+      blocks: blocks,
+      commentaryProfile: profile,
+      verifyPdf: (tester) async {
+        final dynamic state = tester.state(find.byType(PrintingScreen));
+        final text = await tester.runAsync(() async {
+          final bytes =
+              await (state.createPdf(PdfPageFormat.a4) as Future<Uint8List>);
+          final doc = await PdfDocument.openData(bytes);
+          try {
+            final pages = <String>[];
+            for (final page in doc.pages) {
+              pages.add((await page.loadText())!.fullText);
+            }
+            return pages.join('\n');
+          } finally {
+            await doc.dispose();
+          }
+        });
+        expect(text, contains(','), reason: 'כותרת המפרש איבדה את הפיסוק');
+        expect(
+          text,
+          isNot(contains('<h2>')),
+          reason: 'התגיות חייבות להימחק בפלט PDF',
+        );
+      },
+    );
+    expect(
+      XmlDocument.parse(
+        xml,
+      ).findAllElements('w:t').map((e) => e.innerText).join('\n'),
+      contains('מפרש, בדיקה'),
+    );
+    expect(xml, contains(applyTextDisplayProfile(_verse, profile)));
+  }, skip: shaperPath == null);
+
+  for (final commentaryPunctuation in MarkVisibility.values) {
+    testWidgets('ייצוא מפרש מכבד פרופיל נפרד: $commentaryPunctuation', (
+      tester,
+    ) async {
+      final body = TextDisplayProfile(
+        nikud: MarkVisibility.hide,
+        teamim: TeamimVisibility.show,
+        punctuation: commentaryPunctuation == MarkVisibility.show
+            ? MarkVisibility.hide
+            : MarkVisibility.show,
+        holyName: HolyNameDisplay.hehApostrophe,
+      );
+      final commentary = TextDisplayProfile(
+        nikud: MarkVisibility.hide,
+        teamim: TeamimVisibility.show,
+        punctuation: commentaryPunctuation,
+        holyName: HolyNameDisplay.asIs,
+      );
+      final policy = TextDisplayPolicy.empty.withSlot(
+        TextDisplayBookClass.general,
+        TextDisplaySlot.commentaryDisplay.copyWith(channel: TextChannel.export),
+        TextDisplayPatch(
+          punctuation: commentaryPunctuation,
+          holyName: HolyNameDisplay.asIs,
+        ),
+      );
+      await Settings.setValue<String>(
+        SettingsRepository.keyTextDisplayPolicy,
+        jsonEncode(policy.toJson()),
+      );
+      const text = '$_verse יהוה';
+      final xml = await _exportWord(
+        tester,
+        body,
+        blocks: [
+          const PrintBlock(kind: PrintBlockKind.text, text: text),
+          const PrintBlock(kind: PrintBlockKind.commentary, text: text),
+        ],
+      );
+      final exportedText = XmlDocument.parse(
+        xml,
+      ).findAllElements('w:t').map((node) => node.innerText).join('\n');
+      expect(exportedText, contains(applyTextDisplayProfile(text, body)));
+      expect(exportedText, contains(applyTextDisplayProfile(text, commentary)));
+      expect(xml, contains('ֽ'), reason: 'המתג חייב להישמר גם ללא ניקוד');
+      expect(xml, contains('׃'), reason: 'סוף הפסוק חייב להישמר גם ללא ניקוד');
+    }, skip: shaperPath == null);
+  }
 }
