@@ -408,11 +408,6 @@ class NotificationService {
     }
   }
 
-  Future<void> cancelAllNotifications() async {
-    if (!_isInitialized) return;
-    await flutterLocalNotificationsPlugin.cancelAll();
-  }
-
   Future<void> cancelNotification(int id) async {
     if (!_isInitialized) return;
     try {

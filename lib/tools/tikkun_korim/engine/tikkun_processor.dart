@@ -528,16 +528,6 @@ ProcessedBook processBook(
   );
 }
 
-/// שמות הספרים שיש לטעון כדי להציג את [haftarah] בנוסח [nusach].
-List<String> haftarahBooks(Haftarah haftarah, String nusach) => [
-  for (final seg in getHaftarahSegments(haftarah, nusach)) seg.book,
-];
-
-/// שמות הספרים שיש לטעון כדי להציג את [reading].
-List<String> readingBooks(TorahReading reading) => [
-  for (final a in reading.aliyot) a.range.book,
-];
-
 /// שורות ההפטרה: כל מקטע נחתך מהספר שלו, עם הפסק בין המקטעים.
 /// [tokensByBook] — אסימוני הספרים לפי שמם העברי (ראה [tokenizeBook]).
 List<TikkunLine> buildHaftarahLines(

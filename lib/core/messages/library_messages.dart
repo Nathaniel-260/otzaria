@@ -20,9 +20,6 @@ abstract class LibraryMessages {
   static String talmudPdfEditionMissing(String title) =>
       'לא נמצאה מהדורת PDF ל"$title" — המסכת נפתחה כטקסט';
 
-  static String zipExtractedSuccessfully(String fileName) =>
-      'הקובץ "$fileName" חולץ בהצלחה!';
-
   static String hebrewBookDownloaded(String location) =>
       'הספר הורד אל $location';
 
@@ -72,8 +69,6 @@ abstract class LibraryMessages {
 
   static String pdfBookNotFoundById(Object bookId) =>
       'ספר ה-PDF עם המזהה $bookId לא נמצא בספרייה';
-
-  static String pluginNotFound(String pluginId) => 'התוסף "$pluginId" לא נמצא';
 
   static String pluginDisabled(String name) => 'התוסף "$name" מושבת';
 

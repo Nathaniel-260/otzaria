@@ -919,12 +919,6 @@ class AppPaths {
     return getDefaultBackupPath();
   }
 
-  /// Gets the manifest file path (library_path/files_manifest.json)
-  static Future<String> getManifestPath() async {
-    final libraryPath = await getLibraryPath();
-    return p.join(libraryPath, 'files_manifest.json');
-  }
-
   /// מסדי הנתונים האישיים שעוברים יחד בנפילה לאחסון הפנימי. `cache.db`
   /// אינו ברשימה: הוא מטמון שנבנה מחדש, ומגיע למאות MB.
   static const List<String> _personalDatabaseFileNames = [

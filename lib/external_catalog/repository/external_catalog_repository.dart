@@ -149,12 +149,6 @@ class ExternalCatalogRepository {
     }
   }
 
-  /// מחזיר את גרסת הקטלוג העדכנית ביותר שפורסמה ב-GitHub.
-  Future<int> fetchLatestDatabaseVersion() async {
-    final release = await _fetchLatestReleaseInfo();
-    return _fetchReleaseVersion(release);
-  }
-
   /// מעדכן את מסד הקטלוגים רק אם קיימת גרסה חדשה יותר.
   ///
   /// מחזיר `true` אם בוצע עדכון בפועל.

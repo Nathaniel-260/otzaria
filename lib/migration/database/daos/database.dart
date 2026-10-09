@@ -3,9 +3,7 @@ import 'package:otzaria/data/sqlite/sqlite3_api.dart' as sqlite3;
 import 'author_dao.dart';
 import 'book_acronym_dao.dart';
 import 'book_dao.dart';
-import 'book_has_links_dao.dart';
 import 'category_dao.dart';
-import 'connection_type_dao.dart';
 import 'docx_text_cache_dao.dart';
 import 'line_dao.dart';
 import 'line_dh_dao.dart';
@@ -67,9 +65,7 @@ class MyDatabase {
   AuthorDao? _authorDao;
   BookAcronymDao? _bookAcronymDao;
   BookDao? _bookDao;
-  BookHasLinksDao? _bookHasLinksDao;
   CategoryDao? _categoryDao;
-  ConnectionTypeDao? _connectionTypeDao;
   DocxTextCacheDao? _docxTextCacheDao;
   LineDao? _lineDao;
   LineDhDao? _lineDhDao;
@@ -98,19 +94,9 @@ class MyDatabase {
     return _bookDao!;
   }
 
-  BookHasLinksDao get bookHasLinksDao {
-    _ensureDaosInitialized();
-    return _bookHasLinksDao!;
-  }
-
   CategoryDao get categoryDao {
     _ensureDaosInitialized();
     return _categoryDao!;
-  }
-
-  ConnectionTypeDao get connectionTypeDao {
-    _ensureDaosInitialized();
-    return _connectionTypeDao!;
   }
 
   DocxTextCacheDao get docxTextCacheDao {
@@ -441,9 +427,7 @@ class MyDatabase {
     _authorDao = AuthorDao(this);
     _bookAcronymDao = BookAcronymDao(this);
     _bookDao = BookDao(this);
-    _bookHasLinksDao = BookHasLinksDao(this);
     _categoryDao = CategoryDao(this);
-    _connectionTypeDao = ConnectionTypeDao(this);
     _docxTextCacheDao = DocxTextCacheDao(this);
     _lineDao = LineDao(this);
     _lineDhDao = LineDhDao(this);

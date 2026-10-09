@@ -149,14 +149,6 @@ class DatabaseConstants {
     );
   }
 
-  /// Gets the full path for the compressed external catalogs archive.
-  static String getExternalCatalogArchivePath() {
-    return path.join(
-      getDatabaseDirectoryPath(),
-      externalCatalogArchiveFileName,
-    );
-  }
-
   /// Gets the full path for the bundled Talmud Bavli PDF directory.
   static String getTalmudBavliDirectoryPath([
     String? libraryPath,

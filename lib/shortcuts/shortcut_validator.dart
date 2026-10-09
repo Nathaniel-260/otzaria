@@ -167,8 +167,6 @@ class ShortcutValidator {
     _dynamicShortcuts = Map.unmodifiable(shortcuts);
   }
 
-  static Iterable<String> get dynamicShortcutKeys => _dynamicShortcuts.keys;
-
   /// המפתחות של קיצורי המקלדת שהתוספים הצהירו עליהם כעת.
   static Iterable<String> get declaredPluginShortcutKeys =>
       _pluginShortcuts.keys;

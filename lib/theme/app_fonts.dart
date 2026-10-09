@@ -798,13 +798,6 @@ class AppFonts {
   /// בייטים של קובץ גופן מהדיסק, או null כשאינו קריא.
   static Uint8List? readFontBytes(String path) => _readFontBytesSync(path);
 
-  /// מיפוי גופנים לשמות בעברית (לשימוש בהדפסה)
-  /// מחושב אוטומטית מ-availableFonts, רק עבור גופנים עם קבצים
-  static Map<String, String> get fontLabels => {
-    for (final font in availableFonts)
-      if (fontPaths.containsKey(font.value)) font.value: font.label,
-  };
-
   /// יצירת רשימת DropdownMenuItem לבחירת גופן
   static List<DropdownMenuItem<String>> buildDropdownItems({
     String? selectedValue,

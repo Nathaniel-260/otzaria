@@ -512,12 +512,6 @@ class PageShapeSettingsManager {
 
   // ==================== איפוס הגדרות ====================
 
-  /// איפוס כל הגדרות פר-ספר (מפרשים + תצוגה)
-  static Future<void> resetBookSettings(String bookTitle) async {
-    await resetBookCommentatorConfig(bookTitle);
-    await resetBookDisplaySettings(bookTitle);
-  }
-
   /// איפוס הגדרות מפרשים פר-ספר בלבד
   static Future<void> resetBookCommentatorConfig(String bookTitle) async {
     await _removeConfiguration('$_bookConfigPrefix$bookTitle');

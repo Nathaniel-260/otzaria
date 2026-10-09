@@ -38,7 +38,6 @@ class TantivyDataProvider {
 
   /// Track if index is being reopened to prevent concurrent reopens
   final ReopenGate _reopenGate = ReopenGate();
-  Future<bool>? _magicDictionaryDownload;
 
   static final TantivyDataProvider _singleton = TantivyDataProvider._internal();
   static TantivyDataProvider instance = _singleton;
@@ -340,51 +339,6 @@ class TantivyDataProvider {
       if (a[i] != b[i]) return false;
     }
     return true;
-  }
-
-  /// מוריד את מילון המורפולוגיה האחרון (אם חסר/ישן) וטוען אותו אל המנוע
-  /// החי, כך שהחיפוש המקורב יתחיל להשתמש בו מיד — בלי הפעלה מחדש.
-  ///
-  /// מחזיר `true` אם בסיום קיים מילון טעון. best-effort: כשל הורדה אינו
-  /// משפיע על שאר המנוע.
-  Future<bool> downloadMagicDictionary({
-    void Function(double progress)? onProgress,
-    bool force = false,
-  }) async {
-    final currentDownload = _magicDictionaryDownload;
-    if (currentDownload != null) return currentDownload;
-
-    final download = _downloadMagicDictionary(
-      onProgress: onProgress,
-      force: force,
-    );
-    _magicDictionaryDownload = download;
-    try {
-      return await download;
-    } finally {
-      if (identical(_magicDictionaryDownload, download)) {
-        _magicDictionaryDownload = null;
-      }
-    }
-  }
-
-  Future<bool> _downloadMagicDictionary({
-    void Function(double progress)? onProgress,
-    required bool force,
-  }) async {
-    final downloader = MagicDictionaryDownloader(
-      aroundReplace: replaceMagicDictionaryDetached,
-    );
-    try {
-      final ok = await downloader.ensureLatest(
-        onProgress: onProgress,
-        force: force,
-      );
-      if (!ok) return false;
-      return await _attachMagicDictionary(await engine);
-    } finally {
-      downloader.dispose();
-    }
   }
 
   /// מספר ניסיונות הפתיחה שנכשלו לפי תוכן קובץ הסנטינל. תוכן לא-מספרי

@@ -55,7 +55,6 @@ class BackupStatus {
 /// Service for backing up and restoring app data
 class BackupService {
   static final Logger _logger = Logger('BackupService');
-  static const String backupFolderName = 'backups';
 
   /// תקרת סך תוכן התוספים בגיבוי אחד. עם [BackupStore] הבייטים נכתבים כ-blob
   /// לדיסק ומוסרים מהזיכרון; בגיבוי ידני הם נכנסים כ-base64 (×1.33) למחרוזת
