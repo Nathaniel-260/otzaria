@@ -669,6 +669,38 @@ void main() {
     expectNoLeftovers();
   });
 
+  test('ייבוא תיקייה גולמית שומר קישורים ותיקיות ריקות ב-staging', () async {
+    final source = await Directory(p.join(temp.path, 'src')).create();
+    await File(p.join(source.path, dbName)).writeAsString('db');
+    await Directory(
+      p.join(source.path, talmud, 'empty'),
+    ).create(recursive: true);
+    await File(p.join(source.path, talmud, 'book.pdf')).writeAsString('pdf');
+    final target = await File(
+      p.join(temp.path, 'outside.pdf'),
+    ).writeAsString('קישור');
+    final linkName = p.join(talmud, 'linked.pdf');
+    try {
+      await Link(p.join(source.path, linkName)).create(target.path);
+    } on FileSystemException {
+      markTestSkipped('אין אפשרות ליצור קישור סימבולי בסביבה זו');
+      return;
+    }
+    final bloc = build();
+    addTearDown(bloc.close);
+
+    final state = await import(bloc, DirectoryPackageFolder(source.path));
+
+    expect(state, isA<EmptyLibraryDirectorySelected>());
+    expect(await File(p.join(books, dbName)).readAsString(), 'db');
+    expect(await File(p.join(books, talmud, 'book.pdf')).readAsString(), 'pdf');
+    expect(await Directory(p.join(books, talmud, 'empty')).exists(), isTrue);
+    expect(await Link(p.join(books, linkName)).target(), target.path);
+    expect(await Link(p.join(source.path, linkName)).exists(), isTrue);
+    expect(await target.readAsString(), 'קישור');
+    expectNoLeftovers();
+  });
+
   test('runRawAssetJobInIsolate פורס מתיקייה רגילה ב-isolate', () async {
     if (lib == null) return markTestSkipped('libzstd אינו זמין');
     final src = await Directory(p.join(temp.path, 'src', 'library_db')).create(
