@@ -1,6 +1,9 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+import 'package:otzaria/core/error_log_file.dart';
+
 /// ספר שנשאר באמצע אינדוקס כשהתהליך מת, פעמיים ברצף.
 class IndexingCrashedBefore implements Exception {
   const IndexingCrashedBefore();
@@ -30,7 +33,11 @@ class IndexingCrashCanary {
       canary._attempts.removeWhere((key, _) => !keys.contains(key));
       if (canary._attempts.length != previousCount) canary._write();
     }
+    if (canary != null && canary.recovering) canary._logCrash();
   }
+
+  @visibleForTesting
+  static void Function(String entry) writeLog = ErrorLogFile.appendText;
 
   static const finishRequest = 'finishIndexingCrashCanary';
 
@@ -97,6 +104,23 @@ class IndexingCrashCanary {
     try {
       _raf?.closeSync();
       _raf = null;
+    } catch (_) {}
+  }
+
+  // קריסה native אינה משאירה רשומה; בלי זה דיווח שנשלח מיד אחריה אינו מזהה את הספר.
+  void _logCrash() {
+    try {
+      final books = _attempts.entries.toList();
+      writeLog(
+        ErrorLogFile.formatEntry(
+          title: 'Indexing crash detected',
+          error: 'The previous indexing run died while these books were open',
+          details: {
+            for (var i = 0; i < books.length; i++)
+              'Book ${i + 1}': '${books[i].key} (attempts: ${books[i].value})',
+          },
+        ),
+      );
     } catch (_) {}
   }
 
