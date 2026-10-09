@@ -804,7 +804,7 @@ class CommentaryListBaseState extends State<CommentaryListBase>
     }
 
     final groups = await _getCachedGroups(links);
-    final blocks = await buildCommentaryPrintBlocks(groups);
+    final blocks = await buildCommentaryPrintBlocks(groups, keepHtml: true);
     if (blocks.isEmpty) {
       UiSnack.show(TextBookMessages.noCommentatorsToPrint);
       return;
@@ -824,6 +824,10 @@ class CommentaryListBaseState extends State<CommentaryListBase>
         activeCommentators: groups
             .map((group) => group.bookTitle)
             .toList(growable: false),
+        commentaryDisplayProfile: blocState.displayProfile(
+          target: TextTarget.commentary,
+          channel: TextChannel.export,
+        ),
         removeNikud: profile.removeNikud,
         removeTaamim: profile.removeTeamim,
       ),

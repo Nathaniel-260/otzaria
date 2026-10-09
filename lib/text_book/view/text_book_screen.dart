@@ -69,7 +69,6 @@ import 'package:otzaria/data/book_locator.dart';
 import 'package:otzaria/utils/file/page_converter.dart';
 import 'package:otzaria/utils/file/save_file_with_extension.dart';
 import 'package:otzaria/utils/text/ref_helper.dart';
-import 'package:otzaria/utils/text/text_manipulation.dart' show HolyNameStyle;
 // [EDITING DISABLED] import 'package:otzaria/text_book/editing/widgets/text_section_editor_dialog.dart';
 import 'package:otzaria/book_common/view/book_source_dialog.dart';
 import 'package:otzaria/text_book/view/page_shape/simple_text_viewer.dart';
@@ -130,20 +129,14 @@ enum _TextBookExportFormat {
 class _WordExportRequest {
   final String title;
   final String rawContent;
-  final bool removeNikud;
-  final bool removeTaamim;
-  final bool shouldReplaceHolyNames;
-  final HolyNameStyle holyNameStyle;
+  final TextDisplayProfile profile;
   final String? fontFamily;
   final double fontSize;
 
   const _WordExportRequest({
     required this.title,
     required this.rawContent,
-    required this.removeNikud,
-    required this.removeTaamim,
-    required this.shouldReplaceHolyNames,
-    required this.holyNameStyle,
+    required this.profile,
     required this.fontFamily,
     required this.fontSize,
   });
@@ -151,18 +144,9 @@ class _WordExportRequest {
 
 class _TextExportRequest {
   final String rawContent;
-  final bool removeNikud;
-  final bool removeTaamim;
-  final bool shouldReplaceHolyNames;
-  final HolyNameStyle holyNameStyle;
+  final TextDisplayProfile profile;
 
-  const _TextExportRequest({
-    required this.rawContent,
-    required this.removeNikud,
-    required this.removeTaamim,
-    required this.shouldReplaceHolyNames,
-    required this.holyNameStyle,
-  });
+  const _TextExportRequest({required this.rawContent, required this.profile});
 }
 
 Uint8List _createTextBookWordExport(_WordExportRequest request) {
@@ -171,12 +155,9 @@ Uint8List _createTextBookWordExport(_WordExportRequest request) {
       .map(
         (line) => PrintBlock(
           kind: PrintBlockKind.text,
-          text: applyTextBookExportTextTransforms(
+          text: applyTextBookExportProfile(
             line,
-            removeNikud: request.removeNikud,
-            removeTaamim: request.removeTaamim,
-            shouldReplaceHolyNames: request.shouldReplaceHolyNames,
-            holyNameStyle: request.holyNameStyle,
+            profile: request.profile,
             stripHtml: false,
           ),
         ),
@@ -202,12 +183,9 @@ String _createTextBookTextExport(_TextExportRequest request) {
   return request.rawContent
       .split('\n')
       .map(
-        (line) => applyTextBookExportTextTransforms(
+        (line) => applyTextBookExportProfile(
           line,
-          removeNikud: request.removeNikud,
-          removeTaamim: request.removeTaamim,
-          shouldReplaceHolyNames: request.shouldReplaceHolyNames,
-          holyNameStyle: request.holyNameStyle,
+          profile: request.profile,
           stripHtml: true,
         ),
       )
@@ -674,6 +652,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
         displayProfile: _exportProfile(state),
+        commentaryDisplayProfile: state.displayProfile(
+          target: TextTarget.commentary,
+          channel: TextChannel.export,
+        ),
         tableOfContents: state.tableOfContents,
       ),
     );
@@ -713,10 +695,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _WordExportRequest(
             title: state.book.title,
             rawContent: fullContent,
-            removeNikud: profile.removeNikud,
-            removeTaamim: profile.removeTeamim,
-            shouldReplaceHolyNames: profile.replaceHolyNames,
-            holyNameStyle: profile.holyNameStyle,
+            profile: profile,
             fontFamily: settingsState.fontFamily,
             fontSize: state.fontSize,
           ),
@@ -727,10 +706,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           _createTextBookTextExport,
           _TextExportRequest(
             rawContent: fullContent,
-            removeNikud: profile.removeNikud,
-            removeTaamim: profile.removeTeamim,
-            shouldReplaceHolyNames: profile.replaceHolyNames,
-            holyNameStyle: profile.holyNameStyle,
+            profile: profile,
           ),
         );
         bytes = Uint8List.fromList(utf8.encode(text));
@@ -2493,6 +2469,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             activeCommentators: state.activeCommentators,
             startLine: _topmostVisibleSourceLine(state),
             displayProfile: _exportProfile(state),
+            commentaryDisplayProfile: state.displayProfile(
+              target: TextTarget.commentary,
+              channel: TextChannel.export,
+            ),
             tableOfContents: state.tableOfContents,
           ),
         );
@@ -3183,6 +3163,10 @@ bool _handleGlobalKeyEvent(
         activeCommentators: state.activeCommentators,
         startLine: _topmostVisibleSourceLine(state),
         displayProfile: _exportProfile(state),
+        commentaryDisplayProfile: state.displayProfile(
+          target: TextTarget.commentary,
+          channel: TextChannel.export,
+        ),
         tableOfContents: state.tableOfContents,
       ),
     );

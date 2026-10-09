@@ -77,9 +77,11 @@ class PrintingScreen extends StatefulWidget {
   final bool removeNikud;
   final bool removeTaamim;
 
-  /// פרופיל ערוץ הייצוא של הספר. כשמסופק — קובע את ברירת המחדל של הניקוד
-  /// והטעמים ואת טיפול שם הוי"ה, במקום [removeNikud]/[removeTaamim] וההגדרות.
+  /// פרופיל גוף הספר בערוץ הייצוא. מתגי הניקוד והטעמים במסך גוברים עליו.
   final TextDisplayProfile? displayProfile;
+
+  /// פרופיל המפרשים בערוץ הייצוא, כולל עקיפות הספר והכרטיסייה.
+  final TextDisplayProfile? commentaryDisplayProfile;
   final int startLine;
 
   /// סוף טווח ההדפסה ההתחלתי (בלעדי). כשמסופק — הטווח [startLine]..[endLine]
@@ -111,6 +113,7 @@ class PrintingScreen extends StatefulWidget {
     this.removeNikud = false,
     this.removeTaamim = false,
     this.displayProfile,
+    this.commentaryDisplayProfile,
     this.tableOfContents = const [],
     this.initialPage,
     this.isBookView = false,
@@ -263,7 +266,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
     });
 
     // אתחול הגדרות ניקוד וטעמים לפי תצוגת הספר
-    final profile = widget.displayProfile;
+    final profile =
+        widget.displayProfile ??
+        (widget.prebuiltBlocks != null
+            ? widget.commentaryDisplayProfile
+            : null);
     _removeNikud = profile?.removeNikud ?? widget.removeNikud;
     _removeTaamim = profile?.removeTeamim ?? widget.removeTaamim;
 
@@ -900,8 +907,9 @@ class _PrintingScreenState extends State<PrintingScreen> {
     final pageMargin = this.pageMargin;
     final fontSize = this.fontSize;
 
-    String bookName = allLines.isNotEmpty ? stripHtmlIfNeeded(allLines[0]) : '';
-    bookName = _applyTextTransforms(bookName, shouldReplaceHolyNames);
+    final bookName = allLines.isNotEmpty
+        ? stripHtmlIfNeeded(_applyTextTransforms(allLines[0]))
+        : '';
     final selectedStart = startLine.clamp(0, allLines.length);
     final selectedEnd = endLine.clamp(selectedStart, allLines.length);
 
@@ -941,7 +949,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
     );
   }
 
-  TextDisplayProfile get _exportProfile =>
+  late final TextDisplayProfile _exportProfile =
       widget.displayProfile ??
       SettingsRepository().loadTextDisplayPolicy().resolve(
         const TextDisplaySlot(
@@ -951,33 +959,28 @@ class _PrintingScreenState extends State<PrintingScreen> {
         ),
       );
 
+  late final TextDisplayProfile _commentaryExportProfile =
+      widget.commentaryDisplayProfile ??
+      SettingsRepository().loadTextDisplayPolicy().resolve(
+        TextDisplaySlot.commentaryDisplay.copyWith(channel: TextChannel.export),
+      );
+
   HolyNameStyle get _holyNameStyle => _exportProfile.holyNameStyle;
 
   bool get _shouldReplaceHolyNames => _exportProfile.replaceHolyNames;
 
-  /// מסיר ניקוד/טעמים ומחליף שמות קודש לפי בחירת המשתמש.
-  String _applyTextTransforms(String input, bool shouldReplaceHolyNames) {
-    var text = input;
-    if (_removeNikud && _removeTaamim) {
-      text = removeVolwels(text);
-    } else if (_removeNikud && !_removeTaamim) {
-      text = text
-          .replaceAll('־', ' ')
-          .replaceAll('׀', ' ')
-          .replaceAll('|', ' ')
-          .replaceAll(RegExp(r'[ְ-ׇ]'), '');
-    } else if (!_removeNikud && _removeTaamim) {
-      text = removeTeamim(text);
-    }
-    if (shouldReplaceHolyNames) {
-      text = replaceHolyNames(text, style: _holyNameStyle);
-    }
-    return text;
-  }
+  /// מחיל את פרופיל הייצוא; מתגי הניקוד והטעמים שבמסך גוברים עליו.
+  String _applyTextTransforms(String input, {bool commentary = false}) =>
+      applyTextDisplayProfile(
+        input,
+        (commentary ? _commentaryExportProfile : _exportProfile).copyWith(
+          nikud: _removeNikud ? MarkVisibility.hide : MarkVisibility.show,
+          teamim: _removeTaamim ? TeamimVisibility.hide : TeamimVisibility.show,
+        ),
+      );
 
   /// ממיר בלוקים מוכנים לייצוג הפנימי, תוך החלת הסרת ניקוד/טעמים ושמות קודש.
   List<Map<String, String>> _mapPrebuiltBlocks(List<PrintBlock> source) {
-    final shouldReplaceHolyNames = _shouldReplaceHolyNames;
     final result = <Map<String, String>>[];
     for (final block in source) {
       switch (block.kind) {
@@ -988,13 +991,15 @@ class _PrintingScreenState extends State<PrintingScreen> {
         case PrintBlockKind.commentary:
           result.add({
             'kind': 'commentary',
-            'text': _applyTextTransforms(block.text, shouldReplaceHolyNames),
+            'text': stripHtmlIfNeeded(
+              _applyTextTransforms(block.text, commentary: true),
+            ),
           });
         case PrintBlockKind.heading:
         case PrintBlockKind.text:
           result.add({
             'kind': 'text',
-            'text': _applyTextTransforms(block.text, shouldReplaceHolyNames),
+            'text': stripHtmlIfNeeded(_applyTextTransforms(block.text)),
           });
       }
     }
@@ -1229,11 +1234,11 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
     for (var i = selectedStart; i < selectedEnd; i++) {
       // הטרנספורמציות מוחלות רק על שורות הטווח; ב-Word ה-HTML נשמר לעיצוב.
-      final lineText = _applyTextTransforms(
-        keepHtml ? allLines[i] : stripHtmlIfNeeded(allLines[i]),
-        shouldReplaceHolyNames,
-      );
-      blocks.add({'kind': 'text', 'text': lineText});
+      final lineText = _applyTextTransforms(allLines[i]);
+      blocks.add({
+        'kind': 'text',
+        'text': keepHtml ? lineText : stripHtmlIfNeeded(lineText),
+      });
 
       final lineNumber1Based = i + 1;
 
@@ -1261,7 +1266,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
             final content = await _getCommentaryContent(
               link,
-              shouldReplaceHolyNames: shouldReplaceHolyNames,
               keepHtml: keepHtml,
             );
             if (content.trim().isEmpty) continue;
@@ -1295,7 +1299,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   Future<PreparedPrintDocument> _prepareWordDocument() async {
     if (widget.prebuiltBlocks != null) {
-      final shouldReplaceHolyNames = _shouldReplaceHolyNames;
       final blocks = widget.prebuiltBlocks!
           .map((block) {
             switch (block.kind) {
@@ -1306,7 +1309,7 @@ class _PrintingScreenState extends State<PrintingScreen> {
                   kind: block.kind,
                   text: _applyTextTransforms(
                     block.text,
-                    shouldReplaceHolyNames,
+                    commentary: block.kind == PrintBlockKind.commentary,
                   ),
                   headingLevel: block.headingLevel,
                   footnotes: block.footnotes,
@@ -1322,15 +1325,14 @@ class _PrintingScreenState extends State<PrintingScreen> {
         blocks: blocks,
       );
     }
-    String dataString = await _dataFuture;
+    final dataString = await _dataFuture;
 
     final shouldReplaceHolyNames = _shouldReplaceHolyNames;
-    dataString = _applyTextTransforms(dataString, shouldReplaceHolyNames);
 
     // שומרים את תגיות ה-HTML — WordExportService ממיר אותן לעיצוב במסמך
     final allLines = dataString.split('\n').toList();
     var bookName = allLines.isNotEmpty
-        ? stripHtmlIfNeeded(allLines.first)
+        ? stripHtmlIfNeeded(_applyTextTransforms(allLines.first))
         : widget.bookId;
     if (bookName.trim().isEmpty) {
       bookName = widget.bookId;
@@ -1541,7 +1543,6 @@ class _PrintingScreenState extends State<PrintingScreen> {
 
   Future<String> _getCommentaryContent(
     Link link, {
-    required bool shouldReplaceHolyNames,
     bool keepHtml = false,
   }) async {
     // המפתח כולל את דגלי הניקוד/טעמים/שמות-קודש: אחרת החלפת "הדפסה עם ניקוד"
@@ -1550,17 +1551,16 @@ class _PrintingScreenState extends State<PrintingScreen> {
       link,
       removeNikud: _removeNikud,
       removeTaamim: _removeTaamim,
-      replaceHolyNames: shouldReplaceHolyNames,
+      replaceHolyNames: _commentaryExportProfile.replaceHolyNames,
       keepHtml: keepHtml,
     );
     final cached = _commentaryContentCache[key];
     if (cached != null) return cached;
 
-    var text = await link.content;
+    var text = _applyTextTransforms(await link.content, commentary: true);
     if (!keepHtml) {
       text = stripHtmlIfNeeded(text);
     }
-    text = _applyTextTransforms(text, shouldReplaceHolyNames);
 
     _commentaryContentCache[key] = text;
     return text;
