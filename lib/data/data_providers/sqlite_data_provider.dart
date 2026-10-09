@@ -507,8 +507,7 @@ class SqliteDataProvider {
         );
       } else {
         final isolate = await FindRefDbIsolate.instance();
-        final tocRows = await isolate.getBookTocRows(book.id);
-        migrationTocEntries = tocRows.map(db_models.TocEntry.fromMap).toList();
+        migrationTocEntries = await isolate.getBookTocEntries(book.id);
       }
 
       // Convert migration TOC entries to otzaria TOC entries

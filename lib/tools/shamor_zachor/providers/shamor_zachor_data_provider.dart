@@ -362,8 +362,7 @@ class ShamorZachorDataProvider with ChangeNotifier {
     try {
       final repository = _sqliteDataProvider!.repository!;
       final isolate = await FindRefDbIsolate.instance();
-      final tocRows = await isolate.getBookTocRows(bookId);
-      final tocEntries = tocRows.map(db_models.TocEntry.fromMap).toList();
+      final tocEntries = await isolate.getBookTocEntries(bookId);
 
       if (tocEntries.isEmpty) {
         _tocCache[bookId] = [];
