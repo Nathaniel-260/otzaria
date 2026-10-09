@@ -20,8 +20,8 @@ import 'package:hive_ce/hive.dart';
 import 'package:otzaria/plugins/view/safe_mode_controls.dart';
 import 'package:otzaria/plugins/services/startup_crash_counter.dart';
 import 'package:otzaria/attached_libraries/bloc/attached_libraries_bloc.dart';
-import 'package:otzaria/attached_libraries/repository/attached_libraries_repository.dart';
 import 'package:otzaria/attached_libraries/repository/attached_library_registry.dart';
+import 'package:otzaria/attached_libraries/repository/attached_libraries_repository.dart';
 import 'package:otzaria/attached_libraries/repository/external_link_repository.dart';
 import 'package:otzaria/app_report/services/app_crash_session.dart';
 import 'package:otzaria/app_report/services/app_report_service.dart';
@@ -345,9 +345,9 @@ void main(List<String> args) async {
     return;
   }
   StartupTimeline.instance.start();
-  AttachedLibraryRegistry.startupGate = () => _mainWindowRevealedCompleter
-      .future
-      .timeout(const Duration(seconds: 20), onTimeout: () {});
+  // SQLite סינכרוני יכול לחסום גם טיימרים: אין לעקוף את החשיפה עם timeout.
+  AttachedLibraryRegistry.startupGate = () =>
+      _mainWindowRevealedCompleter.future;
 
   PluginDevToolsMode.initFromArgs(args);
   PluginSafeMode.initFromArgs(args);

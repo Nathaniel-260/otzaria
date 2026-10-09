@@ -32,8 +32,7 @@ class AttachedLibraryRegistry {
   /// ניתן להחלפה בבדיקות.
   static AttachedLibraryRegistry instance = AttachedLibraryRegistry();
 
-  /// הפתיחה הראשונה ממתינה לו — main.dart מציב כאן את הצגת החלון, כך שכרטיסיה
-  /// משוחזרת של ספר מצורף אינה פותחת קובץ (אולי בכונן רשת) לפני ההצגה.
+  /// מונע פתיחת SQLite סינכרונית לפני חשיפת החלון הראשי.
   static Future<void> Function() startupGate = _noGate;
   static Future<void> _noGate() async {}
 

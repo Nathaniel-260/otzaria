@@ -780,10 +780,8 @@ class MainWindowScreenState extends State<MainWindowScreen>
     });
   }
 
-  /// מתזמן את חשיפת החלון המלא, תוך מתן עדיפות לטעינת הספר הפעיל: אם נפתח ספר
-  /// טקסט שעדיין נטען — ממתינים שה-[TextBookBloc] שלו יגיע ל-[TextBookLoaded]/
-  /// [TextBookError] (או ייסגר) לפני שחושפים. בכל מקרה אחר (מסך שאינו קריאה /
-  /// PDF / ספר שכבר נטען) — חושפים מיד. אין timeout שרירותי בנתיב הזה.
+  /// ספר מצורף נטען אחרי החשיפה כדי לא לפתוח SQLite סינכרוני לפני הציור.
+  /// בספרי טקסט אחרים ממתינים לטעינה או לשגיאה לפני החשיפה.
   void _scheduleSplashReveal() {
     // _revealStarted (ולא _initialContentReady) כשומר: במסך שאינו קריאה
     // התוכן כבר נצבע מהפריים הראשון (_initialContentReady=true מ-initState),
@@ -810,6 +808,7 @@ class MainWindowScreenState extends State<MainWindowScreen>
     final shouldWaitForBook =
         navigationState.currentScreen == Screen.reading &&
         pendingPane is TextBookTab &&
+        !pendingPane.book.source.isAttached &&
         pendingPane.bloc.state is! TextBookLoaded &&
         pendingPane.bloc.state is! TextBookError;
 
