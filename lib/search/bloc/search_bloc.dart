@@ -802,10 +802,8 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
   static bool facetContains(String parent, String child) =>
       parent == '/' || child == parent || child.startsWith('$parent/');
 
-  /// חיתוך הענף הנלחץ [facet] עם היקף החיפוש [scopeFacets]: מכל facet בהיקף
-  /// נשמר הצד הצר יותר. חיתוך ריק (הענף זר להיקף) נופל ל-[facet] עצמו —
-  /// העץ הראה אותו, ותוצאותיו עדיפות על רשימה ריקה.
-  @visibleForTesting
+  /// חיתוך [facet] עם [scopeFacets] שומר את הצד הצר בכל ענף.
+  /// ענף זר שהעץ הציג נשמר כפי שהוא כדי לא לרוקן את הבחירה.
   static List<String> intersectFacetWithScope(
     String facet,
     List<String> scopeFacets,

@@ -107,14 +107,17 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       return;
     }
 
-    // כשפעילים facets ממדיים (/base, /era/, /author/) עוקפים את AddFacet/
-    // RemoveFacet: המסלול הממוזער בצד-לקוח שלהם מסנן לפי נתיבי קטגוריה
-    // בלבד ואינו מכיר את סמנטיקת ה-AND של הממדים במנוע.
+    // סינון מקומי לפי קטגוריות אינו מכיר את סמנטיקת ה-AND של הממדים;
+    // לכן בחירה ממדית נשלחת למנוע.
     final categories = FacetHelper.categoryFacetsOf(state.currentFacets);
-    if (categories.contains(facet)) {
-      categories.remove(facet);
+    final selectedFacets = SearchBloc.intersectFacetWithScope(
+      facet,
+      FacetHelper.categoryFacetsOf(state.searchScopeFacets),
+    );
+    if (selectedFacets.every(categories.contains)) {
+      categories.removeWhere(selectedFacets.contains);
     } else {
-      categories.add(facet);
+      categories.addAll(selectedFacets.where((f) => !categories.contains(f)));
     }
     if (categories.isEmpty) {
       categories.addAll(FacetHelper.categoryFacetsOf(state.searchScopeFacets));
@@ -152,11 +155,11 @@ class _SearchFacetFilteringState extends State<SearchFacetFiltering>
       return;
     }
 
-    // שחזור סמנטיקת SetFacet('/') — "כל הספרים בתוך ההיקף" — תוך שימור
-    // ה-facets הממדיים שרוכבים על אותה רשימה.
-    final categories = facet == '/'
-        ? FacetHelper.categoryFacetsOf(state.searchScopeFacets)
-        : <String>[facet];
+    // גם בחירת אב של ספר נשארת בתוך ההיקף שעליו מחושבים מנייני העץ.
+    final categories = SearchBloc.intersectFacetWithScope(
+      facet,
+      FacetHelper.categoryFacetsOf(state.searchScopeFacets),
+    );
     _dispatchCategoriesWithDimensions(
       searchBloc,
       categories,
