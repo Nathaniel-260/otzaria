@@ -12,6 +12,7 @@ import 'package:otzaria/theme/theme_exports.dart';
 import 'package:otzaria/tools/aramaic_dictionary/widgets/aramaic_result_card.dart';
 import 'package:otzaria/tools/dictionary/repository/dictionary_lookup_repository.dart';
 import 'package:otzaria/tools/tool_query.dart';
+import 'package:otzaria/utils/text/text_manipulation.dart';
 import 'package:otzaria/widgets/navigation/app_top_bar.dart';
 import 'package:otzaria/widgets/text/otzaria_search_field.dart';
 import 'package:otzaria/widgets/feedback/tool_empty_state.dart';
@@ -85,6 +86,9 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen>
           return <String, String>{
             'aramaic': entry.aramaic,
             'hebrew': entry.hebrew,
+            // שדות החיפוש בלי ניקוד, כדי שהקלדה רגילה תמצא ערכים מנוקדים.
+            'aramaicPlain': removeVolwels(entry.aramaic),
+            'hebrewPlain': removeVolwels(entry.hebrew),
           };
         }).toList();
         _isLoading = false;
@@ -101,7 +105,7 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen>
   }
 
   void _performSearch(String query) {
-    query = query.trim();
+    query = removeVolwels(query.trim());
 
     if (query.isEmpty) {
       setState(() {
@@ -110,16 +114,14 @@ class _AramaicDictionaryScreenState extends State<AramaicDictionaryScreen>
       return;
     }
 
+    final field = _isHebrewToAramaic ? 'hebrewPlain' : 'aramaicPlain';
     setState(() {
       _filteredResults =
           _dictionaryData.where((entry) {
-            final searchIn = _isHebrewToAramaic
-                ? entry['hebrew']!
-                : entry['aramaic']!;
-            return searchIn.contains(query);
+            return entry[field]!.contains(query);
           }).toList()..sort((a, b) {
-            final textA = _isHebrewToAramaic ? a['hebrew']! : a['aramaic']!;
-            final textB = _isHebrewToAramaic ? b['hebrew']! : b['aramaic']!;
+            final textA = a[field]!;
+            final textB = b[field]!;
             final rankCompare = _matchRank(
               textA,
               query,
