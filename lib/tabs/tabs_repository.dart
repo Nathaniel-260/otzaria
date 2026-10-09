@@ -88,6 +88,7 @@ class TabsRepository {
     int originalTabsCount,
   ) {
     if (persistedIndexByOriginalIndex.isEmpty) return 0;
+    currentTabIndex = currentTabIndex.clamp(0, originalTabsCount - 1);
 
     final directMatch = persistedIndexByOriginalIndex[currentTabIndex];
     if (directMatch != null) return directMatch;
