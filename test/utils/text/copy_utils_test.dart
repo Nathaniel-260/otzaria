@@ -241,6 +241,126 @@ void main() {
       );
     });
 
+    test('שורה ריקה טעונה אינה מאחדת כותרות דרך ה-TOC', () async {
+      const content = [
+        '<h1>ספר</h1>',
+        '<h2>פרק א</h2><h3>הלכה א</h3>',
+        '',
+        'טקסט',
+      ];
+      final book = _TocBook(
+        TocParser.parseEntriesFromContent(content.join('\n')),
+      );
+      for (final available in <bool Function(int)?>[null, (_) => true]) {
+        expect(
+          await CopyUtils.extractCurrentPath(
+            book,
+            3,
+            bookContent: content,
+            isLineLoaded: available,
+          ),
+          'פרק א, הלכה א',
+        );
+      }
+    });
+
+    test('שורה ריקה עם TOC ריק שומרת את הנתיב מהתוכן', () async {
+      expect(
+        await CopyUtils.extractCurrentPath(
+          _TocBook(const []),
+          2,
+          bookContent: const ['<h2>פרק א</h2>', '', 'טקסט'],
+        ),
+        'פרק א',
+      );
+    });
+
+    test('הורה חסר משלים כותרות נפרדות באותה שורה', () async {
+      const full = [
+        '<h1>ספר</h1>',
+        '<h2>פרק א</h2>',
+        'טקסט',
+        '<h3>הלכה א</h3><h4>סעיף א</h4>',
+        'טקסט',
+      ];
+      const partial = ['', '', '', '<h3>הלכה א</h3><h4>סעיף א</h4>', 'טקסט'];
+      expect(
+        await CopyUtils.extractCurrentPath(
+          _TocBook(TocParser.parseEntriesFromContent(full.join('\n'))),
+          4,
+          bookContent: partial,
+          isLineLoaded: (i) => i >= 3,
+        ),
+        'פרק א, הלכה א, סעיף א',
+      );
+    });
+
+    test('הורה מרמות DB משלים בלי לשכפל כותרת טעונה', () async {
+      final root = TocEntry(text: 'ספר', index: 0, level: 0);
+      final chapter = TocEntry(text: 'פרק א', index: 1, level: 1, parent: root);
+      chapter.children.add(
+        TocEntry(text: 'הלכה א', index: 3, level: 2, parent: chapter),
+      );
+      root.children.add(chapter);
+      expect(
+        await CopyUtils.extractCurrentPath(
+          _TocBook([root]),
+          4,
+          bookContent: const ['', '', '', '<h3>הלכה א</h3>', 'טקסט'],
+          isLineLoaded: (i) => i >= 3,
+        ),
+        'פרק א, הלכה א',
+      );
+    });
+
+    test('TOC ריק או נכשל שומר את הכותרות שכבר נמצאו', () async {
+      for (final book in [_TocBook(const []), _TocBook(const [], fail: true)]) {
+        expect(
+          await CopyUtils.extractCurrentPath(
+            book,
+            3,
+            bookContent: const ['', '', '<h3>הלכה א</h3>', 'טקסט'],
+            isLineLoaded: (i) => i >= 2,
+          ),
+          'הלכה א',
+        );
+      }
+    });
+
+    test('TOC שאינו מכיר כותרת טעונה אינו משייך אליה מקטע קודם', () async {
+      final toc = TocParser.parseEntriesFromContent(
+        '<h1>ספר</h1>\n<h2>פרק א</h2>\n<h3>הלכה קודמת</h3>\nטקסט\nטקסט',
+      );
+      expect(
+        await CopyUtils.extractCurrentPath(
+          _TocBook(toc),
+          4,
+          bookContent: const ['', '', '', '<h3>הלכה חדשה</h3>', 'טקסט'],
+          isLineLoaded: (i) => i >= 3,
+        ),
+        'הלכה חדשה',
+      );
+    });
+
+    test('חיפוש סמוך ל-h2 אינו בודק זמינות של שורות הספר האחרות', () async {
+      final content = List<String>.filled(100000, 'טקסט', growable: true)
+        ..addAll(['<h2>פרק א</h2>', 'טקסט']);
+      var calls = 0;
+      expect(
+        await CopyUtils.extractCurrentPath(
+          _TocBook(const [], fail: true),
+          content.length - 1,
+          bookContent: content,
+          isLineLoaded: (_) {
+            calls++;
+            return false;
+          },
+        ),
+        'פרק א',
+      );
+      expect(calls, 0);
+    });
+
     test('תוכן טעון חלקית לא מחסיר כותרות שלא נטענו', () async {
       const full = [
         '<h1>ספר</h1>',
@@ -253,7 +373,12 @@ void main() {
       // השורות שמחוץ לחלון הטעון הן placeholders ריקים.
       const partial = ['', '', '', '<h3>פרק כ</h3>', 'טקסט נבחר'];
       expect(
-        await CopyUtils.extractCurrentPath(book, 4, bookContent: partial),
+        await CopyUtils.extractCurrentPath(
+          book,
+          4,
+          bookContent: partial,
+          isLineLoaded: (i) => i >= 3,
+        ),
         'הלכות שבת, פרק כ',
       );
     });
@@ -261,10 +386,15 @@ void main() {
 }
 
 class _TocBook extends TextBook {
-  _TocBook(this._toc) : super(title: 'ספר');
+  _TocBook(this._toc, {this.fail = false}) : super(title: 'ספר');
+
+  final bool fail;
 
   final List<TocEntry> _toc;
 
   @override
-  Future<List<TocEntry>> get tableOfContents async => _toc;
+  Future<List<TocEntry>> get tableOfContents async {
+    if (fail) throw StateError('TOC unavailable');
+    return _toc;
+  }
 }

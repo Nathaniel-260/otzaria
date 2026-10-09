@@ -1765,6 +1765,7 @@ class _CombinedViewState extends State<CombinedView> {
       copyHeaderFormat: settingsState.copyHeaderFormat,
       headerBook: loaded?.book,
       bookContent: loaded?.content,
+      isLineLoaded: loaded?.isContentLineLoaded,
       fontFamily: settingsState.fontFamily,
       fontSize: widget.textSize,
       plainTextOnly: plainTextOnly,

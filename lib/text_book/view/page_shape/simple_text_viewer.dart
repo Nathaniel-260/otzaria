@@ -2442,6 +2442,9 @@ class _SimpleTextViewerState extends State<SimpleTextViewer> {
       copyHeaderFormat: settingsState.copyHeaderFormat,
       headerBook: loaded == null ? null : (widget.reportBook ?? loaded.book),
       bookContent: widget.reportBook != null ? widget.content : loaded?.content,
+      isLineLoaded: widget.reportBook == null
+          ? loaded?.isContentLineLoaded
+          : null,
       fontFamily: widget.fontFamily ?? settingsState.fontFamily,
       fontSize: widget.fontSize,
       plainTextOnly: plainTextOnly,
