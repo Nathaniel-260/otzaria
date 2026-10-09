@@ -2421,7 +2421,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הקודמת ב-TOC
   void _navigateToPreviousToc(TextBookLoaded state) {
-    final currentIndex = _pendingTocLine ?? _topmostVisibleSourceLine(state);
+    final currentIndex = _pendingTocLine ?? _displayedSourceLine(state);
     _scrollToTocLine(
       state,
       _findPreviousTocIndex(
@@ -2434,7 +2434,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
 
   /// ניווט לכותרת הבאה ב-TOC
   void _navigateToNextToc(TextBookLoaded state) {
-    final currentIndex = _pendingTocLine ?? _topmostVisibleSourceLine(state);
+    final currentIndex = _pendingTocLine ?? _displayedSourceLine(state);
     _scrollToTocLine(
       state,
       _findNextTocIndex(state.tableOfContents, currentIndex, state.book.title),
@@ -2672,10 +2672,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
     }
 
     // PDF נמדד מול שורות מקור; ל-tab.index גם רוצים שורת מקור (לשמירה).
-    final currentIndex = displayedSourceLine(
-      state.visibleIndices,
-      _topmostVisibleSourceLine(state),
-    );
+    final currentIndex = _displayedSourceLine(state);
     widget.tab.index = currentIndex;
 
     final index = await textToPdfPage(
@@ -3043,6 +3040,9 @@ KeyEventResult passSegmentArrowsToGlobalShortcuts(FocusNode _, KeyEvent event) {
   }
   return KeyEventResult.skipRemainingHandlers;
 }
+
+int _displayedSourceLine(TextBookLoaded state) =>
+    displayedSourceLine(state.visibleIndices, _topmostVisibleSourceLine(state));
 
 int _topmostVisibleSourceLine(TextBookLoaded state) =>
     state.positionsListener.itemPositions.value.isEmpty ||
@@ -3587,7 +3587,7 @@ void _addBookmarkFromKeyboard(
   BuildContext context,
   TextBookLoaded state,
 ) async {
-  final index = _topmostVisibleSourceLine(state);
+  final index = _displayedSourceLine(state);
   await addTextSectionBookmark(context, state, index);
 }
 
@@ -3703,7 +3703,7 @@ void _togglePdfView(
   TextBookLoaded state,
   TextBookTab tab,
 ) async {
-  final currentIndex = _topmostVisibleSourceLine(state);
+  final currentIndex = _displayedSourceLine(state);
   tab.index = currentIndex;
 
   final library = await DataRepository.instance.library;
