@@ -48,18 +48,21 @@ class SimpleInlineHtml {
   static final Map<String, _Highlight> _searchHighlightOpens = {
     '<span style="color: red">': _Highlight(_red, null),
     '<span style="color: red; ">': _Highlight(_red, null),
-    '<span style="color: blue; background-color: yellow;">': _Highlight(
-      const Color(0xFF0000FF),
-      _yellowPaint,
-    ),
-    '<span style="background-color: yellow; color: black">': _Highlight(
-      const Color(0xFF000000),
-      _yellowPaint,
-    ),
+    '<span style="color: blue; background-color: rgba(255, 255, 0, 0.6);">':
+        _Highlight(
+          const Color(0xFF0000FF),
+          _yellowPaint,
+        ),
+    '<span style="background-color: rgba(255, 255, 0, 0.6); color: black">':
+        _Highlight(
+          const Color(0xFF000000),
+          _yellowPaint,
+        ),
   };
   static const Color _red = Color(0xFFFF0000);
   // background ולא backgroundColor — כמו ש-fwfh מצייר background-color.
-  static final Paint _yellowPaint = Paint()..color = const Color(0xFFFFFF00);
+  // שקוף-למחצה: הבחירה מצוירת מתחת לטקסט, ורקע אטום היה מסתיר אותה.
+  static final Paint _yellowPaint = Paint()..color = const Color(0x99FFFF00);
 
   /// מנסה להמיר את [html]. מחזיר null אם נדרש HtmlWidget.
   ///

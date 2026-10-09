@@ -1187,7 +1187,7 @@ String highLight(
     final String replacement;
     if (currentIndex == -1) {
       final style = yellowBackground
-          ? 'background-color: yellow; color: black'
+          ? 'background-color: rgba(255, 255, 0, 0.6); color: black'
           : 'color: red';
       // הדגשת קטע מקושר (רקע צהוב) צריכה להיות רציפה כמו מרקר,
       // בניגוד להדגשת חיפוש שמסמנת רק את מילות החיפוש עצמן.
@@ -1202,7 +1202,7 @@ String highLight(
       // התוצאה הנוכחית בכחול, השאר באדום.
       final color = i == currentIndex ? 'blue' : 'red';
       final backgroundColor = i == currentIndex
-          ? 'background-color: yellow;'
+          ? 'background-color: rgba(255, 255, 0, 0.6);'
           : '';
       replacement = _highlightMatchedSearchWords(
         matchedText,
