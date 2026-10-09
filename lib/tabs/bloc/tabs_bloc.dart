@@ -478,7 +478,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     emit(
       state.copyWith(
         tabs: newTabs,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
@@ -1466,7 +1465,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       state.copyWith(
         tabs: newTabs,
         currentTabIndex: newCurrentIndex,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
@@ -1503,7 +1501,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
       state.copyWith(
         tabs: newTabs,
         currentTabIndex: index,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
         // החלונית החדשה היא זו שהמשתמש ביקש לקרוא בה.
         activePane: ActivePaneUpdate.set(event.tab),
@@ -1544,7 +1541,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         state.copyWith(
           tabs: newTabs,
           currentTabIndex: newCurrentIndex,
-          forceUpdate: true,
           selectedTabs: _normalizedSelection(newTabs),
         ),
       );
@@ -1591,7 +1587,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     emit(
       state.copyWith(
         tabs: newTabs,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
@@ -1624,7 +1619,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     emit(
       state.copyWith(
         tabs: newTabs,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
@@ -1658,7 +1652,6 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
         tabs: newTabs,
         // החלונית שנגררה החוצה נשארת מול העיניים, כמו גרירת כרטיסיה בדפדפן.
         currentTabIndex: insertIndex,
-        forceUpdate: true,
         selectedTabs: _normalizedSelection(newTabs),
       ),
     );
