@@ -764,10 +764,13 @@ final List<ZmanDefinition> kZmanimRegistry = [
     subtitle: '90 דק׳ (מעלות)',
     category: 'מנחה',
     explanation: '''9.5 שעות זמניות מעה"ש לצאה"כ 90 דק' במעלות''',
-    compute: (c) => c.cal.getMinchaKetana(
-      c.cal.getAlos19Point8Degrees(),
-      c.cal.getTzais19Point8Degrees(),
-    ),
+    compute: (c) {
+      final dawn = c.cal.getAlos19Point8Degrees();
+      final dusk = c.cal.getTzais19Point8Degrees();
+      // getMinchaKetana עובר לחישוב הגר״א כשחסר אחד מקצוות היום.
+      if (dawn == null || dusk == null) return null;
+      return c.cal.getMinchaKetana(dawn, dusk);
+    },
   ),
   ZmanDefinition(
     id: 'minchaKetana72',
