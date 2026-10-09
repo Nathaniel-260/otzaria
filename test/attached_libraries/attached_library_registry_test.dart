@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -170,6 +171,26 @@ void main() {
       final fresh = await registry.repositoryFor('a');
       expect(fresh, isNot(same(stale)));
       expect(await fresh!.getBook(SeforimFixtureIds.bereshitId), isNotNull);
+      await registry.closeAll();
+    });
+
+    test('הפתיחה הראשונה ממתינה לשער העלייה', () async {
+      final gate = Completer<void>();
+      final previous = AttachedLibraryRegistry.startupGate;
+      AttachedLibraryRegistry.startupGate = () => gate.future;
+      addTearDown(() => AttachedLibraryRegistry.startupGate = previous);
+      final registry = AttachedLibraryRegistry(idleTimeout: null)
+        ..update([_library('a', pathA)]);
+
+      var opened = false;
+      final pending = registry.repositoryFor('a').then((r) => opened = true);
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(opened, isFalse);
+      expect(registry.isOpen('a'), isFalse);
+
+      gate.complete();
+      await pending;
+      expect(registry.isOpen('a'), isTrue);
       await registry.closeAll();
     });
 

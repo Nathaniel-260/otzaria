@@ -32,6 +32,10 @@ class AttachedLibraryRegistry {
   /// ניתן להחלפה בבדיקות.
   static AttachedLibraryRegistry instance = AttachedLibraryRegistry();
 
+  /// מונע פתיחת SQLite סינכרונית לפני חשיפת החלון הראשי.
+  static Future<void> Function() startupGate = _noGate;
+  static Future<void> _noGate() async {}
+
   /// בדיקת פתיחה ב-isolate לפני החיבור ב-main isolate: פתיחה של קובץ מת
   /// חוסמת את ה-thread, ו-timeout של Dart אינו עוזר שם.
   static Duration openTimeout = const Duration(seconds: 5);
@@ -113,8 +117,7 @@ class AttachedLibraryRegistry {
       : Future.value();
 
   Future<SeforimRepository?> _openLibrary(AttachedLibrary library) async {
-    // אין להמתין כאן לחשיפת החלון: החשיפה ממתינה לספר הפעיל, גם כשהוא ממסד
-    // מצורף, ונפתחת רק ב-failsafe. קובץ מת מטופל ב-preflight שב-isolate.
+    await startupGate();
     if (!await _preflight(library)) return null;
     final database = MyDatabase.untrusted(
       library.path,
