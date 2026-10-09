@@ -32,11 +32,6 @@ class AttachedLibraryRegistry {
   /// ניתן להחלפה בבדיקות.
   static AttachedLibraryRegistry instance = AttachedLibraryRegistry();
 
-  /// הפתיחה הראשונה ממתינה לו — main.dart מציב כאן את הצגת החלון, כך שכרטיסיה
-  /// משוחזרת של ספר מצורף אינה פותחת קובץ (אולי בכונן רשת) לפני ההצגה.
-  static Future<void> Function() startupGate = _noGate;
-  static Future<void> _noGate() async {}
-
   /// בדיקת פתיחה ב-isolate לפני החיבור ב-main isolate: פתיחה של קובץ מת
   /// חוסמת את ה-thread, ו-timeout של Dart אינו עוזר שם.
   static Duration openTimeout = const Duration(seconds: 5);
@@ -118,7 +113,8 @@ class AttachedLibraryRegistry {
       : Future.value();
 
   Future<SeforimRepository?> _openLibrary(AttachedLibrary library) async {
-    await startupGate();
+    // אין להמתין כאן לחשיפת החלון: החשיפה ממתינה לספר הפעיל, גם כשהוא ממסד
+    // מצורף, ונפתחת רק ב-failsafe. קובץ מת מטופל ב-preflight שב-isolate.
     if (!await _preflight(library)) return null;
     final database = MyDatabase.untrusted(
       library.path,
