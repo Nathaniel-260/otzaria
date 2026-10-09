@@ -401,9 +401,7 @@ String wrapHtmlRanges(String text, List<HtmlWrapRange> ranges) {
     }
     _appendWrapped(
       buffer,
-      text,
-      range.start,
-      range.end,
+      text.substring(range.start, range.end),
       range.openTag,
       range.closeTag,
     );
@@ -417,24 +415,20 @@ String wrapHtmlRanges(String text, List<HtmlWrapRange> ranges) {
   return buffer.toString();
 }
 
-/// עוטף את [text] בטווח [start,end) ב-openTag/closeTag, אך סוגר ופותח מחדש את
-/// העטיפה סביב תגיות שאינן מאוזנות בתוך הטווח (סגירה/פתיחה שבן-זוגה מחוץ לטווח,
-/// וכן <br>). בלי זה, עטיפה של טווח שחוצה גבול תגית יוצרת HTML מוצלב
-/// (למשל `<b><a>...</b>...</a>`) שמוצג חלקית. תגיות מאוזנות (כגון
-/// `<i data-commentator></i>` של שו"ע) נשארות בתוך העטיפה כדי לשמור קו רציף.
+/// עוטף את [text] וסוגר ופותח מחדש סביב תגיות לא מאוזנות, למניעת HTML מוצלב.
+/// תגיות מאוזנות נשארות בתוך העטיפה כדי לשמור קו רציף.
 void _appendWrapped(
   StringBuffer buffer,
   String text,
-  int start,
-  int end,
   String openTag,
   String closeTag,
 ) {
+  // text מכיל רק את הטווח המעוטף, כדי שחיפוש תגית לא יסרוק את המשך השורה.
+  final end = text.length;
   // שלב 1: איתור אינדקסי ה-'<' של תגיות לא-מאוזנות בטווח.
   final boundaries = <int>{};
   final openStack = <int>[];
-  // קפיצה ישירה בין תגיות — סריקה תו-תו יצרה מחרוזת לכל תו.
-  var i = text.indexOf('<', start);
+  var i = text.indexOf('<');
   while (i >= 0 && i < end) {
     final gt = text.indexOf('>', i);
     final tagEnd = (gt < 0 || gt >= end) ? end - 1 : gt;
@@ -455,7 +449,7 @@ void _appendWrapped(
 
   // שלב 2: בנייה — עוטפים רצפי טקסט, סוגרים/פותחים סביב תגיות-הגבול.
   bool wrapOpen = false;
-  i = start;
+  i = 0;
   while (i < end) {
     if (text[i] == '<') {
       final gt = text.indexOf('>', i);

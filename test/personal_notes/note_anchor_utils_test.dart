@@ -238,10 +238,69 @@ void main() {
         );
       }
     });
+
+    test('גבולות הטווח בתוך תגיות וישויות זהים לסריקה תו-תו', () {
+      const lines = [
+        'אב<b>גד</b>הו',
+        'אב<a title="x>y">גד</a>הו',
+        'אב<i data-c></i><br/>גד',
+        'אב<b גד<',
+        'אב</b>גד<b>הו',
+        'אב&lt;😀גד\uD800\uDC00',
+      ];
+      for (final text in lines) {
+        for (var start = 0; start < text.length; start++) {
+          for (var end = start + 1; end <= text.length; end++) {
+            expect(
+              wrapHtmlRanges(text, [
+                HtmlWrapRange(
+                  start: start,
+                  end: end,
+                  openTag: '<m>',
+                  closeTag: '</m>',
+                ),
+              ]),
+              text.substring(0, start) +
+                  _oldAppendWrapped(text, start, end, '<m>', '</m>') +
+                  text.substring(end),
+              reason: '$text [$start,$end)',
+            );
+          }
+        }
+      }
+    });
+
+    test('טווחים קצרים בשורה ארוכה נשמרים גם כשהתגיות מחוץ לטווח', () {
+      final body = List.filled(400000, 'א').join();
+      for (final suffix in ['', '<b>סוף</b>', '<']) {
+        final text = body + suffix;
+        final ranges = [
+          for (var i = 0; i < 43; i++)
+            HtmlWrapRange(
+              start: i * 9000 + 1,
+              end: i * 9000 + 11,
+              openTag: '<m>',
+              closeTag: '</m>',
+            ),
+        ];
+        final expected = StringBuffer();
+        var cursor = 0;
+        for (final range in ranges) {
+          expected
+            ..write(text.substring(cursor, range.start))
+            ..write('<m>')
+            ..write(text.substring(range.start, range.end))
+            ..write('</m>');
+          cursor = range.end;
+        }
+        expected.write(text.substring(cursor));
+        expect(wrapHtmlRanges(text, ranges), expected.toString());
+      }
+    });
   });
 }
 
-/// המימוש הקודם (סריקה תו-תו), כאורקל לבדיקת השקילות.
+/// אורקל עצמאי לשקילות: סריקה תו-תו בלי חיתוך הטווח לפני עיטופו.
 String _oldAppendWrapped(
   String text,
   int start,
