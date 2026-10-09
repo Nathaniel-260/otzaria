@@ -693,8 +693,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     id: 'chatzosFixedLocal',
     title: 'חצות מקומי קבוע',
     category: 'חצות',
-    explanation: '''חצות היום הקבוע לפי קו האורך הגיאוגרפי (ללא תלות בזריחה '
-        'ובשקיעה).''',
+    explanation:
+        '''חצות היום הקבוע לפי קו האורך הגיאוגרפי (ללא תלות בזריחה ובשקיעה).''',
     compute: (c) => c.cal.getFixedLocalChatzos(),
   ),
   ZmanDefinition(
@@ -712,8 +712,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'מנחה גדולה',
     subtitle: 'המאוחר',
     category: 'מנחה',
-    explanation: '''המאוחר מבין חצי שעה זמנית אחרי חצות לבין 30 דקות קבועות '
-        'אחרי חצות.''',
+    explanation:
+        '''המאוחר מבין חצי שעה זמנית אחרי חצות לבין 30 דקות קבועות אחרי חצות.''',
     defaultEnabled: true,
     compute: (c) => c.cal.getMinchaGedolaGreaterThan30(),
   ),
@@ -753,15 +753,26 @@ final List<ZmanDefinition> kZmanimRegistry = [
   ZmanDefinition(
     id: 'minchaKetana16point1',
     title: 'מנחה קטנה',
-    subtitle: '90 דק׳',
+    subtitle: '72 דק׳ (מעלות)',
+    category: 'מנחה',
+    explanation: '''9.5 שעות זמניות מעה"ש לצאה"כ 72 דק' במעלות''',
+    compute: (c) => c.cal.getMinchaKetana16Point1Degrees(),
+  ),
+  ZmanDefinition(
+    id: 'minchaKetana90Degrees',
+    title: 'מנחה קטנה',
+    subtitle: '90 דק׳ (מעלות)',
     category: 'מנחה',
     explanation: '''9.5 שעות זמניות מעה"ש לצאה"כ 90 דק' במעלות''',
-    compute: (c) => c.cal.getMinchaKetana16Point1Degrees(),
+    compute: (c) => c.cal.getMinchaKetana(
+      c.cal.getAlos19Point8Degrees(),
+      c.cal.getTzais19Point8Degrees(),
+    ),
   ),
   ZmanDefinition(
     id: 'minchaKetana72',
     title: 'מנחה קטנה',
-    subtitle: '72 דק׳',
+    subtitle: '72 דק׳ (שוות)',
     category: 'מנחה',
     explanation: '''9.5 שעות זמניות מעה"ש לצאה"כ 72 דק' שוות''',
     compute: (c) => c.cal.getMinchaKetana72Minutes(),
@@ -782,8 +793,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '72 דק׳ (שוות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-72 דקות קבועות לפני הזריחה עד 72 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-72 דקות קבועות לפני הזריחה עד 72 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha72Minutes(),
   ),
   ZmanDefinition(
@@ -791,8 +802,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '90 דק׳ (שוות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-90 דקות קבועות לפני הזריחה עד 90 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-90 דקות קבועות לפני הזריחה עד 90 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha90Minutes(),
   ),
   ZmanDefinition(
@@ -800,8 +811,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '120 דק׳ (שוות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-120 דקות קבועות לפני הזריחה עד 120 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-120 דקות קבועות לפני הזריחה עד 120 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha120Minutes(),
   ),
   ZmanDefinition(
@@ -809,8 +820,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '72 דק׳ (זמניות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-72 דקות זמניות לפני הזריחה עד 72 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-72 דקות זמניות לפני הזריחה עד 72 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha72MinutesZmanis(),
   ),
   ZmanDefinition(
@@ -818,8 +829,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '90 דק׳ (זמניות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-90 דקות זמניות לפני הזריחה עד 90 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-90 דקות זמניות לפני הזריחה עד 90 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha90MinutesZmanis(),
   ),
   ZmanDefinition(
@@ -827,8 +838,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'פלג המנחה',
     subtitle: '120 דק׳ (זמניות)',
     category: 'פלג המנחה',
-    explanation: '''פלג המנחה כשהיום מ-120 דקות זמניות לפני הזריחה עד 120 אחרי '
-        'השקיעה.''',
+    explanation:
+        '''פלג המנחה כשהיום מ-120 דקות זמניות לפני הזריחה עד 120 אחרי השקיעה.''',
     compute: (c) => c.cal.getPlagHamincha120MinutesZmanis(),
   ),
   ZmanDefinition(
@@ -913,8 +924,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'בין השמשות',
     subtitle: 'ר"ת 13.5 דק׳',
     category: 'בין השמשות',
-    explanation: '''תחילת בין השמשות לרבנו תם — 13.5 דקות לפני צאת הגאונים '
-        '7.083°.''',
+    explanation:
+        '''תחילת בין השמשות לרבנו תם — 13.5 דקות לפני צאת הגאונים 7.083°.''',
     compute: (c) =>
         c.cal.getBainHasmashosRT13Point5MinutesBefore7Point083Degrees(),
   ),
@@ -1016,8 +1027,8 @@ final List<ZmanDefinition> kZmanimRegistry = [
     title: 'צאת הכוכבים',
     subtitle: 'חזו"א (9.3°)',
     category: 'צאת הכוכבים',
-    explanation: '''צאת הכוכבים לפי חזון איש — 9.3° מתחת לאופק (כך מחשב לוח '
-        'עיתים לבינה, 9.28°).''',
+    explanation:
+        '''צאת הכוכבים לפי חזון איש — 9.3° מתחת לאופק (כך מחשב לוח עיתים לבינה, 9.28°).''',
     compute: (c) => c.cal.getTzaisGeonim9Point3Degrees(),
   ),
 
