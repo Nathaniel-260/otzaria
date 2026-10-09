@@ -5,6 +5,8 @@ import 'package:otzaria/models/books.dart';
 import 'package:otzaria/models/links.dart';
 import 'package:otzaria/settings/engine/settings_state.dart';
 import 'package:otzaria/text_book/bloc/text_book_state.dart';
+import 'package:otzaria/text_book/utils/reading_segments.dart';
+import 'package:otzaria/utils/file/toc_parser.dart';
 import 'package:otzaria/text_book/view/selection/selected_text_copy.dart';
 import 'package:otzaria/text_display/text_display_exports.dart';
 import 'package:otzaria/widgets/smart_text/render_settings.dart';
@@ -176,6 +178,157 @@ void main() {
       expect(copied!.plainText, 'אמר רבי');
     });
 
+    for (final continuous in [false, true]) {
+      test('בחירה משלימה הורה חסר במצב רציף=$continuous', () async {
+        const full = [
+          '<h1>ספר</h1>',
+          '<h2>פרק א</h2>',
+          '',
+          '<h3>הלכה א</h3><h4>סעיף א</h4>',
+          'טקסט',
+        ];
+        const partial = ['', '', '', '<h3>הלכה א</h3><h4>סעיף א</h4>', 'טקסט'];
+        final state = _state('טקסט', link, const TextDisplayPatch()).copyWith(
+          book: _TocBook(TocParser.parseEntriesFromContent(full.join('\n'))),
+          content: partial,
+          readingSegments: buildReadingSegments(
+            partial,
+            continuous: continuous,
+            loadedLineFlags: const [false, false, false, true, true],
+          ),
+        );
+        final copied = await buildSelectedTextCopy(
+          plainText: 'טקסט',
+          selectedIndex: 4,
+          sourceContent: state.content,
+          textBookState: state,
+          settingsState: SettingsState.initial().copyWith(
+            copyWithHeaders: 'book_and_path',
+            copyHeaderFormat: 'separate_line_before',
+          ),
+        );
+        expect(copied!.plainText, 'ספר, פרק א, הלכה א, סעיף א\nטקסט');
+        expect(state.isContentLineLoaded(0), isFalse);
+        expect(state.isContentLineLoaded(2), isFalse);
+        expect(state.isContentLineLoaded(3), isTrue);
+      });
+    }
+
+    test('metadata אינו נלקח מתוכן או מספר אחר בכותרת override', () async {
+      final content = ['<h2>פרק א</h2>', '', '<h3>הלכה א</h3>', 'טקסט'];
+      final book = _TocBook(const []);
+      final state = _state('טקסט', link, const TextDisplayPatch()).copyWith(
+        book: book,
+        content: content,
+        readingSegments: buildReadingSegments(
+          content,
+          continuous: true,
+          loadedLineFlags: const [false, false, true, true],
+        ),
+      );
+      for (final otherBook in [false, true]) {
+        final copied = await buildSelectedTextCopy(
+          plainText: 'טקסט',
+          selectedIndex: 3,
+          sourceContent: state.content,
+          textBookState: state,
+          settingsState: SettingsState.initial().copyWith(
+            copyWithHeaders: 'book_and_path',
+            copyHeaderFormat: 'separate_line_before',
+          ),
+          headerBookOverride: otherBook ? _TocBook(const []) : book,
+          headerContentOverride: otherBook ? state.content : List.of(content),
+        );
+        expect(copied!.plainText, 'ספר, פרק א, הלכה א\nטקסט');
+      }
+    });
+
+    test('אותם overrides שומרים את מידע הטעינה של אותו ספר ותוכן', () async {
+      const full = [
+        '<h1>ספר</h1>',
+        '<h2>פרק א</h2>',
+        '',
+        '<h3>הלכה א</h3>',
+        'טקסט',
+      ];
+      const partial = ['', '', '', '<h3>הלכה א</h3>', 'טקסט'];
+      final state = _state('טקסט', link, const TextDisplayPatch()).copyWith(
+        book: _TocBook(TocParser.parseEntriesFromContent(full.join('\n'))),
+        content: partial,
+        readingSegments: buildReadingSegments(
+          partial,
+          continuous: true,
+          loadedLineFlags: const [false, false, false, true, true],
+        ),
+      );
+      final copied = await buildSelectedTextCopy(
+        plainText: 'טקסט',
+        selectedIndex: 4,
+        sourceContent: state.content,
+        textBookState: state,
+        headerBookOverride: state.book,
+        headerContentOverride: state.content,
+        settingsState: SettingsState.initial().copyWith(
+          copyWithHeaders: 'book_and_path',
+          copyHeaderFormat: 'separate_line_before',
+        ),
+      );
+      expect(copied!.plainText, 'ספר, פרק א, הלכה א\nטקסט');
+    });
+
+    test('זמינות שורה בלי segments משמרת את חוזה התוכן הישן', () async {
+      final content = ['<h2>פרק א</h2>', '', 'טקסט'];
+      final state = _state(
+        'טקסט',
+        link,
+        const TextDisplayPatch(),
+      ).copyWith(book: _TocBook(const []), content: content);
+      expect(state.isContentLineLoaded(1), isTrue);
+      final copied = await buildSelectedTextCopy(
+        plainText: 'טקסט',
+        selectedIndex: 2,
+        sourceContent: state.content,
+        textBookState: state,
+        settingsState: SettingsState.initial().copyWith(
+          copyWithHeaders: 'book_and_path',
+          copyHeaderFormat: 'separate_line_before',
+        ),
+      );
+      expect(copied!.plainText, 'ספר, פרק א\nטקסט');
+    });
+
+    test('חיפוש זמינות מבחין בגבולות ובטווח חסר, ומאפשר מידע חסר', () {
+      final state = _state('טקסט', link, const TextDisplayPatch()).copyWith(
+        readingSegments: const [
+          ReadingSegment(
+            text: '',
+            sourceLineIndices: [0],
+            lineRanges: [],
+            isHeader: false,
+          ),
+          ReadingSegment(
+            text: '',
+            sourceLineIndices: [2, 3],
+            lineRanges: [],
+            isHeader: false,
+            isLoaded: false,
+          ),
+          ReadingSegment(
+            text: '',
+            sourceLineIndices: [5],
+            lineRanges: [],
+            isHeader: false,
+          ),
+        ],
+      );
+      for (final i in [-1, 0, 1, 4, 5, 6]) {
+        expect(state.isContentLineLoaded(i), isTrue, reason: 'index=$i');
+      }
+      for (final i in [2, 3]) {
+        expect(state.isContentLineLoaded(i), isFalse, reason: 'index=$i');
+      }
+    });
+
     test('בחירה של הציון בלבד אינה דורסת את הלוח בריק', () async {
       const line = 'אמר רבי יוחנן הלכה';
       final shown = renderSelectionLineWithMarkers(
@@ -241,4 +394,11 @@ TextBookLoaded _state(String line, Link link, TextDisplayPatch copy) {
       copy,
     ),
   );
+}
+
+class _TocBook extends TextBook {
+  _TocBook(this.toc) : super(title: 'ספר');
+  final List<TocEntry> toc;
+  @override
+  Future<List<TocEntry>> get tableOfContents async => toc;
 }

@@ -140,10 +140,16 @@ Future<({String plainText, String htmlText})?> buildSelectedTextCopy({
   if (settingsState.copyWithHeaders != 'none' && headerBook != null) {
     final bookName = CopyUtils.extractBookName(headerBook);
     final currentIndex = selectedIndex ?? 0;
+    final headerContent = headerContentOverride ?? sourceContent;
     final currentPath = await CopyUtils.extractCurrentPath(
       headerBook,
       currentIndex,
-      bookContent: headerContentOverride ?? sourceContent,
+      bookContent: headerContent,
+      isLineLoaded:
+          identical(headerBook, textBookState?.book) &&
+              identical(headerContent, textBookState?.content)
+          ? textBookState?.isContentLineLoaded
+          : null,
     );
 
     finalPlainText = CopyUtils.formatTextWithHeaders(

@@ -204,6 +204,26 @@ class TextBookLoaded extends TextBookState {
   /// אל ה-state הלוגי — selectedIndex/highlightedLine/searchText נשארים
   /// ברמת שורות מקור.
   final List<ReadingSegment> readingSegments;
+
+  /// האם שורת המקור נטענה, גם כשהיא חלק מפסקה רציפה.
+  /// בלי מידע על השורה, משמר את סריקת התוכן הרגילה.
+  bool isContentLineLoaded(int lineIndex) {
+    var low = 0;
+    var high = readingSegments.length - 1;
+    while (low <= high) {
+      final middle = (low + high) >> 1;
+      final segment = readingSegments[middle];
+      if (lineIndex < segment.startLineIndex) {
+        high = middle - 1;
+      } else if (lineIndex > segment.endLineIndex) {
+        low = middle + 1;
+      } else {
+        return segment.isLoaded;
+      }
+    }
+    return true;
+  }
+
   final List<int> visibleIndices;
 
   /// העוגן הראשי של הבחירה — מניע גלילה, highlight, ניווט TOC ודיווח טעות.

@@ -15,6 +15,7 @@ Future<({String plainText, String htmlText})> buildParagraphCopyText({
   required String copyHeaderFormat,
   TextBook? headerBook,
   List<String>? bookContent,
+  bool Function(int)? isLineLoaded,
 }) async {
   final plainText = utils.stripHtmlIfNeeded(processedText);
   var finalText = plainText;
@@ -26,6 +27,7 @@ Future<({String plainText, String htmlText})> buildParagraphCopyText({
       headerBook,
       index,
       bookContent: bookContent,
+      isLineLoaded: isLineLoaded,
     );
     finalText = CopyUtils.formatTextWithHeaders(
       originalText: plainText,
@@ -63,6 +65,7 @@ Future<void> copyParagraphToClipboard({
   required double fontSize,
   TextBook? headerBook,
   List<String>? bookContent,
+  bool Function(int)? isLineLoaded,
   bool plainTextOnly = false,
 }) async {
   final text = await buildParagraphCopyText(
@@ -72,6 +75,7 @@ Future<void> copyParagraphToClipboard({
     copyHeaderFormat: copyHeaderFormat,
     headerBook: headerBook,
     bookContent: bookContent,
+    isLineLoaded: isLineLoaded,
   );
   await SystemClipboard.instance?.write([
     CopyUtils.buildClipboardItem(
