@@ -526,13 +526,10 @@ class DictionaryLookupRepository {
   }
 
   /// בודק אם הטקסט נראה כמו ראשי תיבות.
-  bool isLikelyAcronym(String raw) {
-    final trimmed = raw.trim();
-    return trimmed.contains('"') ||
-        trimmed.contains('״') ||
-        trimmed.contains("'") ||
-        trimmed.contains('׳');
-  }
+  bool isLikelyAcronym(String raw) => _acronymMarks.hasMatch(raw);
+
+  // אותם סימנים ש-_normalizeAcronym ממיר.
+  static final _acronymMarks = RegExp('["״\'׳’‘“”]');
 
   /// מחזיר את כל הפירושים לראשי תיבות אם קיימים.
   AcronymDictionaryEntry? findAcronym(String raw) {
