@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:math';
 import 'package:bloc_concurrency/bloc_concurrency.dart';
 import 'package:flutter/animation.dart';
@@ -55,7 +56,8 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   List<OpenedTab>? _pendingSaveTabs;
   int _pendingSaveIndex = 0;
   Future<void>? _saveDrain;
-  Future<void> _openingTab = Future<void>.value();
+  final _pendingOpenTabs = Queue<Completer<void>>();
+  final _pendingRemovals = Queue<Future<void>?>();
 
   /// מבקש שמירה של הטאבים, בלי להמתין לה.
   ///
@@ -180,7 +182,13 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     on<ReplaceAllTabs>(_onReplaceAllTabs, transformer: sequential());
     on<AddTab>(_onAddTab, transformer: sequential());
     on<OpenOrFocusTab>(
-      (event, emit) => _openingTab = _onOpenOrFocusTab(event, emit),
+      (event, emit) async {
+        try {
+          await _onOpenOrFocusTab(event, emit);
+        } finally {
+          _pendingOpenTabs.removeFirst().complete();
+        }
+      },
       transformer: sequential(),
     );
     on<ReplaceTab>(_onReplaceTab, transformer: sequential());
@@ -233,6 +241,18 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
 
     _preCloseCallback = _flushPendingSaves;
     PreCloseRegistry.register(_preCloseCallback);
+  }
+
+  @override
+  void onEvent(TabsEvent event) {
+    super.onEvent(event);
+    // הרישום נעשה בשליחה: גם פתיחה שממתינה בתור חייבת להקדים את הסגירה.
+    if (event is OpenOrFocusTab) _pendingOpenTabs.add(Completer<void>());
+    if (event is RemoveTab) {
+      _pendingRemovals.add(
+        _pendingOpenTabs.isEmpty ? null : _pendingOpenTabs.last.future,
+      );
+    }
   }
 
   late final Future<void> Function() _preCloseCallback;
@@ -1031,9 +1051,11 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
   }
 
   Future<void> _onRemoveTab(RemoveTab event, Emitter<TabsState> emit) async {
-    // פתיחה שקדמה לסגירה עוד ממתינה לכותרת; בלי ההמתנה נוצר רגע בלי טאבים,
-    // ומסך העיון עובר לספרייה אף שספר נפתח.
-    await _openingTab.catchError((Object _) {});
+    final precedingOpening = _pendingRemovals.removeFirst();
+    // רק סגירת הטאב האחרון עלולה להעביר לספרייה בזמן שספר עדיין נפתח.
+    if (state.tabs.length == 1 && state.tabs.contains(event.tab)) {
+      await precedingOpening;
+    }
     final removedTabIndex = state.tabs.indexOf(event.tab);
     if (removedTabIndex == -1) return;
 
