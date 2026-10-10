@@ -147,8 +147,11 @@ void _updateAddress(List<String> address, String line) {
 
 /// ביטוי עובר לשורה הבאה רק במפריד שבין מילים, ולכן מילה אחת אינה נמשכת.
 @visibleForTesting
-bool queryCanCrossLines(String query) =>
-    normalizeLiteralQuery(query).contains(' ');
+bool queryCanCrossLines(String query) {
+  final normalized = normalizeLiteralQuery(query);
+  // Rust split_whitespace מזהה גם NEL, ש-\s של Dart משאיר בשאילתה.
+  return normalized.contains(' ') || normalized.contains('\u0085');
+}
 
 bool _isHeadingLine(String rawLine) => rawLine.trimLeft().startsWith('<h');
 
