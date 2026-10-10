@@ -147,13 +147,13 @@ jobs:
         run: flutter analyze
 
   test:
-    name: Test (shard ${{ matrix.shard }}/4)
+    name: Test (shard ${{ matrix.shard }}/5)
     runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
       matrix:
-        shard: [0, 1, 2, 3]
+        shard: [0, 1, 2, 3, 4]
 
     # בדיקות ה-zstd של line_content נכשלות כאן במקום לדלג כשחסרים libzstd או המילון.
     env:
@@ -298,19 +298,14 @@ jobs:
         run: |
           set +e
 
-          # פיצול מפורש של רשימת הקבצים (round-robin על רשימה ממוינת) במקום
+          # פיצול מפורש של רשימת הקבצים לפי זמני ריצה שנמדדו, במקום
           # --total-shards: הדגל מקמפל את כל הקבצים בכל shard והקומפילציה
           # היא רוב הזמן, כך שהפיצול לא חסך כלום.
-          mapfile -t all_files < <(find test -name "*_test.dart" | sort)
-          shard_files=()
-          for i in "${!all_files[@]}"; do
-            if [ $((i % 4)) -eq ${{ matrix.shard }} ]; then
-              shard_files+=("${all_files[$i]}")
-            fi
-          done
+          all_count=$(find test -name "*_test.dart" | wc -l)
+          mapfile -t shard_files < <(dart tool/ci/test_shards.dart ${{ strategy.job-index }} ${{ strategy.job-total }})
 
           echo "════════════════════════════════════════"
-          echo "ריצה ראשונה של הטסטים (shard ${{ matrix.shard }}/4, ${#shard_files[@]} מתוך ${#all_files[@]} קבצים)"
+          echo "ריצה ראשונה של הטסטים (shard ${{ matrix.shard }}/5, ${#shard_files[@]} מתוך $all_count קבצים)"
           echo "════════════════════════════════════════"
 
           # ברירת המחדל (ליבות÷2) משאירה כמחצית מה-CPU של הראנר פנוי.
@@ -437,6 +432,16 @@ jobs:
             echo "::error::$skipped zstd codec tests were skipped"
             exit 1
           fi
+
+      # קלט ל-tool/ci/test_shards.dart --record, לעדכון זמני הפיצול.
+      - name: Upload test timings
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: test-results-${{ matrix.shard }}
+          path: test-results.json
+          if-no-files-found: ignore
+          retention-days: 14
 
   # שער הבנייה היחיד ל-Windows על PR. עד עכשיו לא היה כזה: `analyze` ו-`test`
   # רצים שניהם על ubuntu, ו-`webview2_smoke` מסונן ב-`paths`. המשמעות הייתה
