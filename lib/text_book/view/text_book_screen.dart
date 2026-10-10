@@ -20,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_settings_screens/flutter_settings_screens.dart';
 import 'package:otzaria/bookmarks/utils/section_bookmark.dart';
@@ -231,14 +232,12 @@ class TextBookViewerBloc extends StatefulWidget {
   final void Function(OpenedTab) openBookCallback;
   final TextBookTab tab;
   final bool isInCombinedView;
-  final bool enableTourTargets;
 
   const TextBookViewerBloc({
     super.key,
     required this.openBookCallback,
     required this.tab,
     this.isInCombinedView = false,
-    this.enableTourTargets = false,
   });
 
   @override
@@ -1644,11 +1643,17 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
   }
 
   Widget _buildMenuButton(BuildContext context, TextBookLoaded state) {
-    return NavPanelToggleButton(
-      key: widget.enableTourTargets ? textBookNavigationTourTargetKey : null,
-      isOpen: state.showLeftPane,
-      onToggle: () =>
-          context.read<TextBookBloc>().add(ToggleLeftPane(!state.showLeftPane)),
+    // Builder: רק הכפתור תלוי ביעד הסיור, לא כל הסרגל העליון.
+    return Builder(
+      builder: (context) => NavPanelToggleButton(
+        key: TourTargetsScope.enabledOf(context)
+            ? textBookNavigationTourTargetKey
+            : null,
+        isOpen: state.showLeftPane,
+        onToggle: () => context.read<TextBookBloc>().add(
+          ToggleLeftPane(!state.showLeftPane),
+        ),
+      ),
     );
   }
 
@@ -1662,10 +1667,10 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         builder: (context, _, _) => ResponsiveActionBar(
           key: const ValueKey('responsive_actions'),
           overflowMenuOffset: const Offset(0, 8),
-          overflowButtonKey: widget.enableTourTargets
+          overflowButtonKey: TourTargetsScope.enabledOf(context)
               ? textBookOverflowTourTargetKey
               : null,
-          menuItemKeysByTooltip: widget.enableTourTargets
+          menuItemKeysByTooltip: TourTargetsScope.enabledOf(context)
               ? {
                   _getViewModeTooltip(state):
                       textBookOverflowCommentatorsTourTargetKey,
@@ -1713,7 +1718,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
       // 2) View Mode Dropdown (מאחד את Split View ו-Page Shape View)
       ActionButtonData(
         widget: KeyedSubtree(
-          key: widget.enableTourTargets
+          key: TourTargetsScope.enabledOf(context)
               ? textBookCommentatorsTourTargetKey
               : null,
           child: _buildViewModeDropdown(context, state),
@@ -1787,7 +1792,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
         widget: _buildSearchButton(
           context,
           state,
-          key: widget.enableTourTargets ? textBookSearchTourTargetKey : null,
+          key: TourTargetsScope.enabledOf(context)
+              ? textBookSearchTourTargetKey
+              : null,
         ),
         icon: FluentIcons.search_24_regular,
         tooltip: 'חיפוש',
@@ -1854,7 +1861,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           context,
           book: state.book,
           compact: context.read<SettingsBloc>().state.compactMenuMode,
-          tourKey: widget.enableTourTargets
+          tourKey: TourTargetsScope.enabledOf(context)
               ? textBookBookmarkTourTargetKey
               : null,
         ),
@@ -1974,7 +1981,9 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
             widget: _buildPrintButton(
               context,
               state,
-              key: widget.enableTourTargets ? textBookPrintTourTargetKey : null,
+              key: TourTargetsScope.enabledOf(context)
+                  ? textBookPrintTourTargetKey
+                  : null,
             ),
             icon: FluentIcons.print_24_regular,
             tooltip: 'הדפסה',
@@ -2748,8 +2757,7 @@ class _TextBookViewerBlocState extends State<TextBookViewerBloc>
           context.read<TextBookBloc>().add(const ToggleLeftPane(false)),
       paneContent: NavPanelSearchScope(
         host: _searchHost,
-        child: TextBookNavPanelTourTarget(
-          isActiveTab: widget.enableTourTargets,
+        child: _NavPanelTourTargetBuilder(
           child: _buildLeftPaneContent(state),
         ),
       ),
@@ -3720,5 +3728,18 @@ void _togglePdfView(
     ignoreHistory: true,
     requiresStableLayout: true,
     insertAdjacent: true,
+  );
+}
+
+/// קורא את [TourTargetsScope] בהקשר משלו, כדי שמעבר טאב יבנה רק את העטיפה.
+class _NavPanelTourTargetBuilder extends StatelessWidget {
+  final Widget child;
+
+  const _NavPanelTourTargetBuilder({required this.child});
+
+  @override
+  Widget build(BuildContext context) => TextBookNavPanelTourTarget(
+    isActiveTab: TourTargetsScope.enabledOf(context),
+    child: child,
   );
 }

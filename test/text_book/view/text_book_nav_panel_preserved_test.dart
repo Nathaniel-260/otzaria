@@ -29,6 +29,7 @@ import 'package:otzaria/text_book/view/widgets/nav_panel_tour_target.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provider.dart';
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:provider/provider.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -36,7 +37,7 @@ import '../../test_helpers/memory_cache_provider.dart';
 
 /// חלונית הניווט של ספר טקסט חייבת לשרוד מעבר בין טאב פעיל לטאב רקע.
 ///
-/// `enableTourTargets` מתהפך בכל מעבר טאב, וכשהוא שינה את מבנה העץ של החלונית
+/// `TourTargetsScope.enabled` מתהפך בכל מעבר טאב, וכשהוא שינה את מבנה העץ של החלונית
 /// Flutter השמיד את כל תת-העץ שלה — ולכן החיפוש-בספר רץ מחדש בכל חזרה לטאב.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -129,11 +130,13 @@ void main() {
             home: StatefulBuilder(
               builder: (context, setState) {
                 setHostState = setState;
-                return TextBookViewerBloc(
-                  tab: tab,
-                  isInCombinedView: false,
-                  enableTourTargets: isActiveTab,
-                  openBookCallback: (_) {},
+                return TourTargetsScope(
+                  enabled: isActiveTab,
+                  child: TextBookViewerBloc(
+                    tab: tab,
+                    isInCombinedView: false,
+                    openBookCallback: (_) {},
+                  ),
                 );
               },
             ),

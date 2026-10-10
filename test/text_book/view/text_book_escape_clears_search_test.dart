@@ -28,6 +28,7 @@ import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_data_provide
 import 'package:otzaria/tools/shamor_zachor/providers/shamor_zachor_progress_provider.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:provider/provider.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../test_helpers/memory_cache_provider.dart';
@@ -115,11 +116,13 @@ Future<void> main() async {
             BlocProvider<TourCubit>.value(value: tourCubit),
           ],
           child: MaterialApp(
-            home: TextBookViewerBloc(
-              tab: tab,
-              isInCombinedView: false,
-              enableTourTargets: true,
-              openBookCallback: (_) {},
+            home: TourTargetsScope(
+              enabled: true,
+              child: TextBookViewerBloc(
+                tab: tab,
+                isInCombinedView: false,
+                openBookCallback: (_) {},
+              ),
             ),
           ),
         ),

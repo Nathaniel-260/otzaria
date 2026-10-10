@@ -148,19 +148,11 @@ class _ReadingScreenState extends State<ReadingScreen>
 
   /// Handing Flutter the same widget instance skips rebuilding that subtree, so
   /// a tab switch only rebuilds the tabs whose content actually changed.
-  final Map<OpenedTab, ({bool enableTourTargets, Widget view})> _tabViewCache =
-      Map.identity();
+  final Map<OpenedTab, Widget> _tabViewCache = Map.identity();
   int? _tabViewCacheCounter;
 
-  Widget _cachedTabView(OpenedTab tab, {required bool enableTourTargets}) {
-    final cached = _tabViewCache[tab];
-    if (cached != null && cached.enableTourTargets == enableTourTargets) {
-      return cached.view;
-    }
-    final view = _buildTabView(tab, enableTourTargets: enableTourTargets);
-    _tabViewCache[tab] = (enableTourTargets: enableTourTargets, view: view);
-    return view;
-  }
+  Widget _cachedTabView(OpenedTab tab) =>
+      _tabViewCache[tab] ??= _buildTabView(tab);
 
   void _pruneTabViewCache(TabsState state) {
     // updateCounter marks tabs mutated in place (e.g. pin); their
@@ -516,9 +508,11 @@ class _ReadingScreenState extends State<ReadingScreen>
                                       key: TabContentBoundaries.instance.keyFor(
                                         state.tabs[i],
                                       ),
-                                      child: _cachedTabView(
-                                        state.tabs[i],
-                                        enableTourTargets: i == validIndex,
+                                      child: TourTargetsScope(
+                                        enabled:
+                                            i == validIndex &&
+                                            state.tabs[i] is! CombinedTab,
+                                        child: _cachedTabView(state.tabs[i]),
                                       ),
                                     ),
                                   ),
@@ -541,10 +535,7 @@ class _ReadingScreenState extends State<ReadingScreen>
   /// חלונית יהיה זהה בשני המצבים: כך מיזוג טאבים לתצוגה מפוצלת (ופירוקה
   /// בחזרה) מעביר את החלונית הקיימת במקום לבנות אותה מחדש, ואין רגע שבו
   /// שני מסכים מחוברים לאותו `scrollController`.
-  Widget _buildTabView(
-    OpenedTab tab, {
-    required bool enableTourTargets,
-  }) {
+  Widget _buildTabView(OpenedTab tab) {
     final isSplit = tab is CombinedTab;
     // רק חלוניות PDF מתחלקות בתקציב מטמון התמונות.
     final pdfPanes = leafPanes(tab).whereType<PdfBookTab>().length;
@@ -581,7 +572,6 @@ class _ReadingScreenState extends State<ReadingScreen>
                 child: _buildPaneContent(
                   pane,
                   isInCombinedView: isSplit,
-                  enableTourTargets: enableTourTargets && !isSplit,
                   // חימום מטמון התוכן טוען את הספר כולו; בטאב מפוצל שתי
                   // החלוניות היו מחממות ספרים גדולים במקביל ומכפילות את
                   // צריכת הזיכרון.
@@ -607,7 +597,6 @@ class _ReadingScreenState extends State<ReadingScreen>
   Widget _buildPaneContent(
     OpenedTab tab, {
     required bool isInCombinedView,
-    required bool enableTourTargets,
     bool allowBackgroundWarming = true,
     int pdfPaneCount = 1,
   }) {
@@ -616,7 +605,6 @@ class _ReadingScreenState extends State<ReadingScreen>
         key: ValueKey(tab),
         tab: tab,
         isInCombinedView: isInCombinedView,
-        enableTourTargets: enableTourTargets,
         pdfPaneCount: pdfPaneCount,
       );
     } else if (tab is TextBookTab) {
@@ -634,7 +622,6 @@ class _ReadingScreenState extends State<ReadingScreen>
             },
             tab: tab,
             isInCombinedView: isInCombinedView,
-            enableTourTargets: enableTourTargets,
           ),
         ),
       );
