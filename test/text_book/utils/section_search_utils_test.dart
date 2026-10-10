@@ -594,6 +594,46 @@ void main() {
       );
       expect(results, isEmpty);
     });
+
+    test('רק שאילתה של כמה מילים נבדקת מעבר לשורה', () {
+      expect(queryCanCrossLines('המים'), isFalse);
+      expect(queryCanCrossLines('  המים  '), isFalse);
+      expect(queryCanCrossLines('ובין המים'), isTrue);
+      expect(queryCanCrossLines('אשר־שמע'), isTrue);
+    });
+
+    test('מילה בסוף שורה ובתחילת הבאה — תוצאה לכל הופעה, בלי המשך', () async {
+      final results = await searchInContent(
+        content: content,
+        query: 'המים',
+        patternSource: literalPatternSource('המים'),
+      );
+      expect(results.map((r) => (r.index, r.continuesToNextLine)), [
+        (1, false),
+        (1, false),
+        (2, false),
+      ]);
+    });
+
+    test('שאילתה של מילה אחת אינה סורקת מעבר לשורה', () async {
+      // תבנית-גשש שמתאימה רק מעבר לשורה: תוצאה בה מוכיחה שהסריקה רצה.
+      const probe = 'המים\\nויאמר';
+      final oneWord = await searchInContent(
+        content: content,
+        query: 'המים',
+        patternSource: probe,
+      );
+      expect(oneWord, isEmpty);
+
+      final phrase = await searchInContent(
+        content: content,
+        query: 'המים ויאמר',
+        patternSource: probe,
+      );
+      expect(phrase.map((r) => (r.index, r.continuesToNextLine)), [
+        (1, true),
+      ]);
+    });
   });
 
   group('matchFractionInLine', () {
