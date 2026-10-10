@@ -57,7 +57,7 @@ abstract class OpenedTab {
       String highlightText = tab.highlightText;
       int? permanentHighlightLine = tab.permanentHighlightLine;
       Set<int>? searchResultLines = tab.initialSearchResultLines;
-      final state = tab.bloc.state;
+      final state = tab.blocState;
       if (state is TextBookLoaded) {
         splitedView = state.showSplitView;
         showPageShapeView = state.showPageShapeView;
