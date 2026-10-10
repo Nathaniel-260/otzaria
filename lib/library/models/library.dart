@@ -248,6 +248,7 @@ class Library extends Category {
 
 /// מנרמל כותרת ספר להשוואה: רווחים עודפים, גרשיים וסוגריים משולשים.
 String normalizeBookTitle(String title) {
+  if (_isNormalizedBookTitle(title)) return title;
   return title
       .trim()
       .replaceAll(RegExp(r'\s+'), ' ')
@@ -257,4 +258,30 @@ String normalizeBookTitle(String title) {
       .replaceAll('׳', '')
       .replaceAll('<', '')
       .replaceAll('>', '');
+}
+
+/// איתור ספר נלווה בלי מלווה מנרמל כל כותרת בספרייה, ורובן כבר נקיות.
+/// כל רווח שאינו רווח יחיד פנימי, כולל רווחי Unicode, נשלח למסלול המלא.
+bool _isNormalizedBookTitle(String title) {
+  final last = title.length - 1;
+  for (var i = 0; i <= last; i++) {
+    final c = title.codeUnitAt(i);
+    if (c == 0x20) {
+      if (i == 0 || i == last || title.codeUnitAt(i - 1) == 0x20) return false;
+    } else if (c < 0x20 ||
+        c == 0x22 || // "
+        c == 0x27 || // '
+        c == 0x3C ||
+        c == 0x3E ||
+        c == 0x05F3 || // ׳
+        c == 0x05F4 || // ״
+        c == 0x85 ||
+        c == 0xA0 ||
+        c == 0x1680 ||
+        (c >= 0x2000 && c <= 0x3000) ||
+        c == 0xFEFF) {
+      return false;
+    }
+  }
+  return true;
 }
