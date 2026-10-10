@@ -145,6 +145,11 @@ void _updateAddress(List<String> address, String line) {
   address.add(line);
 }
 
+/// ביטוי עובר לשורה הבאה רק במפריד שבין מילים, ולכן מילה אחת אינה נמשכת.
+@visibleForTesting
+bool queryCanCrossLines(String query) =>
+    normalizeLiteralQuery(query).contains(' ');
+
 bool _isHeadingLine(String rawLine) => rawLine.trimLeft().startsWith('<h');
 
 /// התאמה של [pattern] שמתחילה בסוף השורה הנקייה [line] ונמשכת בתחילת
@@ -498,6 +503,7 @@ class SectionSearchWorkerRuntime {
           final pattern = compileLiteralPattern(
             request['patternSource'] as String,
           );
+          final canCrossLines = queryCanCrossLines(query);
 
           // ודא שה-cache תואם לתוכן המבוקש; אחרת בנה אותו פעם אחת.
           // בקשה ללא contentId (תאימות לאחור) נחשבת תמיד כתוכן חדש.
@@ -614,7 +620,7 @@ class SectionSearchWorkerRuntime {
             }
 
             // ביטוי שנמשך לשורה הבאה נספר פעם אחת, בשורה שבה הוא מתחיל.
-            if (i + 1 < rangeEnd) {
+            if (canCrossLines && i + 1 < rangeEnd) {
               final crossing = crossLineMatch(
                 pattern,
                 rawLine: rawLine,
