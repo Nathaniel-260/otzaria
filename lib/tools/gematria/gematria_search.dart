@@ -772,7 +772,7 @@ class GimatriaSearch {
   }
 
   static List<String> _splitWords(String line) =>
-      line.split(_wordSeparatorRe).where((w) => w.isNotEmpty).toList();
+      line.split(_wordSeparatorRe).where((w) => w.trim().isNotEmpty).toList();
 
   /// ניקוי תגיות HTML ו-HTML entities
   static String _cleanHtml(String s) {

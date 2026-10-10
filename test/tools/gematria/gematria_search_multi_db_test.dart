@@ -396,12 +396,28 @@ void main() {
       );
       expect(withKolel, hasLength(1));
     });
+
+    test('NEL אינו יוצר תוצאה כפולה ואינו נספר בכולל', () async {
+      final folder = path.join(tempDir.path, 'txtbooks');
+      await Directory(folder).create(recursive: true);
+      await File(
+        path.join(folder, 'בראשית.txt'),
+      ).writeAsString('אב \u0085 גדול');
+
+      final results = await GimatriaSearch.searchInFiles([folder], 3);
+      final withKolel = await GimatriaSearch.searchInFiles(
+        [folder],
+        48,
+        wholeVerseOnly: true,
+        useWithKolel: true,
+      );
+
+      expect(results.map((result) => result.text).toList(), ['אב']);
+      expect(withKolel.map((result) => result.text).toList(), ['אב גדול']);
+    });
   });
 
   group('GimatriaSearch.extractPathFromTocEntries — פונקציה טהורה', () {
-    // הטסט הקיים מכסה זאת ב-test/gematria_search_test.dart; כאן רק וידוא
-    // שה-API מאופשר גם מתוך הסביבה הזו (multi-DB) — לא מבוצעת שום אינטראקציה
-    // עם DB.
     test('רשימת TOC ריקה מחזירה מחרוזת ריקה (אין מידע לבנות נתיב)', () {
       final result = GimatriaSearch.extractPathFromTocEntries(
         currentLineIndex: 0,
