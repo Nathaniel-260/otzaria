@@ -5,9 +5,12 @@ import 'package:otzaria/text_book/utils/inline_notes_utils.dart' as notes;
 import 'package:otzaria/text_book/utils/section_search_utils.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 
+import '../../support/search_engine_test_init.dart';
 import 'literal_pattern_test_helper.dart';
 
-void main() {
+Future<void> main() async {
+  final engineReady = await tryInitSearchEngine();
+
   tearDown(() async {
     await resetSectionSearchWorkerForTesting();
   });
@@ -593,6 +596,70 @@ void main() {
         range: (start: 0, end: 2),
       );
       expect(results, isEmpty);
+    });
+
+    test('רק שאילתה של כמה מילים נבדקת מעבר לשורה', () {
+      expect(queryCanCrossLines('המים'), isFalse);
+      expect(queryCanCrossLines('  המים  '), isFalse);
+      expect(queryCanCrossLines('ובין המים'), isTrue);
+      expect(queryCanCrossLines('אשר־שמע'), isTrue);
+      expect(queryCanCrossLines('הלכה\u0085ברורה'), isTrue);
+      expect(queryCanCrossLines('\u0085הלכה\u0085'), isFalse);
+      expect(queryCanCrossLines('הלכה\uFEFFברורה'), isTrue);
+    });
+
+    for (final wholeWord in [true, false]) {
+      test(
+        'מפריד NEL מוצא ביטוי בין שורות עם המנוע, wholeWord=$wholeWord',
+        () async {
+          final results = await searchInContent(
+            content: const ['<h2>פרק א</h2>', 'תחילת הלכה', 'ברורה סוף'],
+            query: 'הלכה\u0085ברורה',
+            wholeWord: wholeWord,
+          );
+          expect(
+            results.map(
+              (r) => (r.index, r.matchOffset, r.continuesToNextLine),
+            ),
+            [(1, 6, true)],
+          );
+          expect(results.single.snippet, contains('הלכה\nברורה'));
+        },
+        skip: engineReady ? false : searchEngineSkipReason,
+      );
+    }
+
+    test('מילה בסוף שורה ובתחילת הבאה — תוצאה לכל הופעה, בלי המשך', () async {
+      final results = await searchInContent(
+        content: content,
+        query: 'המים',
+        patternSource: literalPatternSource('המים'),
+      );
+      expect(results.map((r) => (r.index, r.continuesToNextLine)), [
+        (1, false),
+        (1, false),
+        (2, false),
+      ]);
+    });
+
+    test('שאילתה של מילה אחת אינה סורקת מעבר לשורה', () async {
+      // תבנית-גשש שמתאימה רק מעבר לשורה: תוצאה בה מוכיחה שהסריקה רצה.
+      const probe = 'המים\\nויאמר';
+      final oneWord = await searchInContent(
+        content: content,
+        query: 'המים',
+        patternSource: probe,
+      );
+      expect(oneWord, isEmpty);
+
+      final phrase = await searchInContent(
+        content: content,
+        query: 'המים ויאמר',
+        patternSource: probe,
+      );
+      expect(phrase.map((r) => (r.index, r.continuesToNextLine)), [
+        (1, true),
+      ]);
     });
   });
 
