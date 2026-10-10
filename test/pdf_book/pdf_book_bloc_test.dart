@@ -72,6 +72,14 @@ PdfBookBloc _makeBloc(PdfBookTab tab, {Duration? loadTimeout}) => PdfBookBloc(
   pdfrxInit: () async {},
 );
 
+// הטיפול באירוע בודק קיום קובץ בדיסק לפני ה-emit, ו-blocTest סוגר את ה-bloc
+// אחרי סבב אחד בלבד; בעומס הבדיקה מסתיימת אחרי הסגירה וה-emit נבלע.
+Future<void> _addAndAwaitState(PdfBookBloc bloc, PdfBookEvent event) async {
+  final next = bloc.stream.first;
+  bloc.add(event);
+  await next;
+}
+
 PdfBookLoaded _loaded({
   PdfBook? book,
   int currentPageNumber = 1,
@@ -141,14 +149,14 @@ void main() {
     blocTest<PdfBookBloc, PdfBookState>(
       'קובץ שלא קיים → PdfBookError',
       build: () => _makeBloc(_tab()),
-      act: (b) => b.add(const LoadPdfDocument()),
+      act: (b) => _addAndAwaitState(b, const LoadPdfDocument()),
       expect: () => [isA<PdfBookError>()],
     );
 
     blocTest<PdfBookBloc, PdfBookState>(
       'שגיאת "ספר איננו קיים" כשהקובץ לא נמצא',
       build: () => _makeBloc(_tab()),
-      act: (b) => b.add(const LoadPdfDocument()),
+      act: (b) => _addAndAwaitState(b, const LoadPdfDocument()),
       verify: (b) {
         final s = b.state as PdfBookError;
         expect(s.message, 'הספר איננו קיים');
@@ -1380,7 +1388,7 @@ void main() {
         book: _book(path: existingPdfPath),
         message: 'הטעינה ארכה זמן רב מדי',
       ),
-      act: (b) => b.add(const RetryLoad()),
+      act: (b) => _addAndAwaitState(b, const RetryLoad()),
       expect: () => [isA<PdfBookLoading>()],
     );
 
@@ -1399,7 +1407,7 @@ void main() {
         book: _book(path: '/totally/missing/file.pdf'),
         message: 'שגיאה קודמת',
       ),
-      act: (b) => b.add(const RetryLoad()),
+      act: (b) => _addAndAwaitState(b, const RetryLoad()),
       expect: () => [isA<PdfBookError>()],
       verify: (b) {
         expect((b.state as PdfBookError).message, 'הספר איננו קיים');
