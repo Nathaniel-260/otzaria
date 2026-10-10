@@ -39,6 +39,7 @@ class _ClosedTabEntry {
 
 class TabsBloc extends Bloc<TabsEvent, TabsState> {
   final TabsRepository _repository;
+  final Duration _disposeDelay;
   final List<_ClosedTabEntry> _recentlyClosedTabs = <_ClosedTabEntry>[];
 
   /// הכרטיסיות שנסגרו לאחרונה, מהאחרונה שנסגרה ואילך. הרשימה אינה חלק
@@ -158,7 +159,7 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     final inherited = leafPanes(tab).where(_transferSourceTabOwnership).toSet();
     if (inherited.isEmpty) {
       unawaited(
-        Future<void>.delayed(const Duration(milliseconds: 350), () {
+        Future<void>.delayed(_disposeDelay, () {
           tab.dispose();
         }),
       );
@@ -167,15 +168,17 @@ class TabsBloc extends Bloc<TabsEvent, TabsState> {
     for (final pane in leafPanes(tab)) {
       if (inherited.contains(pane)) continue;
       unawaited(
-        Future<void>.delayed(const Duration(milliseconds: 350), () {
+        Future<void>.delayed(_disposeDelay, () {
           pane.dispose();
         }),
       );
     }
   }
 
+  /// [disposeDelay] - השהיית השחרור של טאב שיצא מהרשימה; טסטים מעבירים אפס.
   TabsBloc({
     required this._repository,
+    this._disposeDelay = const Duration(milliseconds: 350),
   }) : super(TabsState.initial()) {
     on<LoadTabs>(_onLoadTabs, transformer: sequential());
     on<RemapBookPaths>(_onRemapBookPaths, transformer: sequential());
