@@ -13,7 +13,12 @@ import 'support/search_engine_test_init.dart';
 /// שנבנתה מקומית. כשאין build זמין (CI ללא Rust) האתחול נכשל בשקט וטסטים
 /// שתלויים במנוע ידווחו על כך.
 Future<void> testExecutable(FutureOr<void> Function() testMain) async {
-  await tryInitSearchEngine();
+  // ב-CI הספרייה הנייטיבית חייבת להיטען: בלעדיה טסטי המנוע מדלגים על עצמם
+  // והריצה ירוקה בלי לבדוק דבר.
+  if (!await tryInitSearchEngine() &&
+      Platform.environment['OTZARIA_REQUIRE_SEARCH_ENGINE'] == '1') {
+    throw StateError(searchEngineSkipReason);
+  }
   // שורש נתונים זמני לכל קובץ בדיקה — אחרת לוג השגיאות והאינדקס נכתבים
   // לפרופיל האמיתי של המפתח.
   final profileRoot = Directory.systemTemp.createTempSync('otzaria_test_data_');

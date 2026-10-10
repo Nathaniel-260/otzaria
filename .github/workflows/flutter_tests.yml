@@ -13,8 +13,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # הג'ובים הנייטיביים אינם תלויים באפליקציה; בלי שינוי במקורות שלהם הם רק תופסים
+  # ראנרים (macOS במיוחד). כשל בזיהוי מריץ אותם.
+  changes:
+    name: Detect native changes
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      native_linux: ${{ steps.filter.outputs.native_linux }}
+      native_macos: ${{ steps.filter.outputs.native_macos }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -z "$PR" ] || ! files=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$PR/files" --jq '.[].filename'); then
+            echo native_linux=true >> "$GITHUB_OUTPUT"
+            echo native_macos=true >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          shared='^(tool/(download_assistant|updater|release)/|installer/assistant_art\.pin\.json$|\.github/workflows/flutter_tests\.yml$)'
+          macos='^(lib/utils/file/native_sha256\.dart|test/utils/file/native_sha256_test\.dart|pubspec\.lock)$'
+          linux=false; mac=false
+          grep -qE "$shared" <<< "$files" && linux=true && mac=true
+          grep -qE "$macos" <<< "$files" && mac=true
+          echo "native_linux=$linux" | tee -a "$GITHUB_OUTPUT"
+          echo "native_macos=$mac" | tee -a "$GITHUB_OUTPUT"
+
   native_linux:
     name: Native updater and download assistant (Linux)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.native_linux == 'true') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -28,6 +59,8 @@ jobs:
 
   native_macos:
     name: Native updater and download assistant (macOS)
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.native_macos == 'true') }}
     runs-on: macos-latest
     steps:
       - name: Checkout code
@@ -125,6 +158,8 @@ jobs:
     # בדיקות ה-zstd של line_content נכשלות כאן במקום לדלג כשחסרים libzstd או המילון.
     env:
       OTZARIA_REQUIRE_CODEC_TESTS: '1'
+      # מנוע שלא נטען מפיל כל קובץ בטעינה, במקום שטסטי המנוע ידלגו על עצמם.
+      OTZARIA_REQUIRE_SEARCH_ENGINE: '1'
 
     steps:
       - name: Checkout code
@@ -256,26 +291,6 @@ jobs:
           curl -fsSL --retry 3 --retry-delay 5 "$base/jvmTest/resources/zstd/line_content_golden_frames.json" \
             | cmp - test/fixtures/line_content_codec/sl_golden_frames.json
           ldconfig -p | grep -F 'libzstd.so.1'
-
-      # Fail immediately if a missing or incompatible binary would make the
-      # engine-dependent test groups skip themselves.
-      - name: Verify the cached native engine loads
-        run: |
-          preflight=$(mktemp --suffix=_test.dart test/search_engine_ci_XXXXXX)
-          trap 'rm -f "$preflight"' EXIT
-          cat > "$preflight" <<'DART'
-          import 'package:flutter_test/flutter_test.dart';
-          import 'support/search_engine_test_init.dart';
-
-          void main() {
-            test('CI loads the resolved native search engine', () async {
-              if (!await tryInitSearchEngine()) {
-                throw StateError(searchEngineSkipReason);
-              }
-            });
-          }
-          DART
-          flutter test "$preflight"
 
       # הרצת הטסטים עם retry: אם הריצה הראשונה נכשלה, נחלץ את קבצי הטסט
       # שנכשלו ונריץ אותם שוב. רק אם הם נכשלים גם בריצה השנייה - הסטפ נכשל.
@@ -433,6 +448,7 @@ jobs:
     env:
       # MSBuild FileTracker still limits llama.cpp scratch paths to MAX_PATH.
       CARGOKIT_TEMP_DIR: D:/ck
+      OTZARIA_REQUIRE_SEARCH_ENGINE: '1'
       # כמו בבניית ההפצה: בלי אלה MSBuild מקמפל קובץ C++ אחד בכל פעם.
       UseMultiToolTask: 'true'
       EnforceProcessCountAcrossBuilds: 'true'
@@ -477,37 +493,14 @@ jobs:
       # ⚠️ הבנייה חייבת לקדום לבדיקות, ולא רק כדי לחסוך זמן:
       # `test/support/search_engine_test_init.dart` מאתר את מנוע החיפוש
       # בין השאר תחת `build/windows/x64/plugins/otzaria_search_engine/Debug`.
-      # בלי בנייה קודמת האתחול נכשל **בשקט**, וכל בדיקה שתלויה במנוע
-      # מדולגת בלי להיכשל — כלומר ה-job היה ירוק ולא בודק כלום.
+      # בלי בנייה קודמת האתחול נכשל, ו-OTZARIA_REQUIRE_SEARCH_ENGINE מפיל
+      # את כל הקבצים (בלעדיו טסטי המנוע היו מדלגים והריצה ירוקה).
       #
       # ההיקף מכוון וצר: הסוללה המלאה רצה על Linux ב-4 shards. כאן רצות
       # רק הקבוצות שאומתו כירוקות ב-Windows (1,073 בדיקות, ועוד 146 של
       # personal_notes), והקבוצות הידועות כתלויות-סביבה או flaky (migration,
       # installer, tools/calendar) נשארות ל-Linux בלבד. הרחבת ההיקף מחייבת אימות
       # מקומי ב-Windows קודם — אחרת ה-job נהיה רועש ומתחילים להתעלם ממנו.
-      - name: Verify the built native engine loads
-        shell: pwsh
-        run: |
-          $preflight = Join-Path "test" ("search_engine_ci_{0}_test.dart" -f [guid]::NewGuid().ToString("N"))
-          try {
-            @'
-          import 'package:flutter_test/flutter_test.dart';
-          import 'support/search_engine_test_init.dart';
-
-          void main() {
-            test('CI loads the resolved native search engine', () async {
-              if (!await tryInitSearchEngine()) {
-                throw StateError(searchEngineSkipReason);
-              }
-            });
-          }
-          '@ | Set-Content -Path $preflight -Encoding utf8
-            flutter test $preflight
-            if ($LASTEXITCODE -ne 0) { throw "Native engine initialization failed" }
-          } finally {
-            Remove-Item -Path $preflight -ErrorAction SilentlyContinue
-          }
-
       - name: Run Windows-relevant tests
         run: flutter test -j 4 test/core/ test/tabs/ test/navigation/ test/workspaces/ test/personal_notes/ test/utils/file/native_sha256_test.dart
 
