@@ -155,8 +155,15 @@ Future<void> main() async {
     });
 
     tearDownAll(() async {
+      engine.dispose();
       if (Platform.isWindows) return;
-      await temporary.delete(recursive: true);
+      // תהליכוני המיזוג של המנוע עשויים עוד לכתוב לתיקייה; ניקוי תיקייה
+      // זמנית אינו סיבה להפיל את הקובץ.
+      try {
+        await temporary.delete(recursive: true);
+      } on FileSystemException {
+        // ignore
+      }
     });
 
     for (final entry in <String, List<int>>{
