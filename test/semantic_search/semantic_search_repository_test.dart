@@ -152,7 +152,11 @@ void main() {
       final first = repository.search(
         const SemanticSearchRequest(query: 'ראשון', facets: ['/']),
       );
-      await pumpEventQueue();
+      // השני חייב להגיע כשהראשון כבר במנוע; בעומס ensureOpen מתעכב והראשון
+      // היה מבוטל לפני שהגיע אליו.
+      while (backend.searchHandles.length < 2) {
+        await Future<void>.delayed(const Duration(milliseconds: 1));
+      }
       final second = repository.search(
         const SemanticSearchRequest(query: 'שני', facets: ['/']),
       );
