@@ -109,6 +109,7 @@ import 'package:otzaria/settings/services/per_book_settings_service.dart';
 import 'package:otzaria/pdf_book/view/pdf_scrollbar.dart';
 import 'package:otzaria/tour/bloc/tour_cubit.dart';
 import 'package:otzaria/tour/models/live_tip.dart';
+import 'package:otzaria/tour/tour_target_keys.dart';
 import 'package:otzaria/utils/text/text_manipulation.dart' as utils;
 import 'package:otzaria/models/pdf_headings.dart';
 import 'package:otzaria/book_common/models/commentator_group.dart';
@@ -322,7 +323,6 @@ bool pdfViewerStaysMountedFor(PdfBookState state) =>
 class PdfBookScreen extends StatefulWidget {
   final PdfBookTab tab;
   final bool isInCombinedView;
-  final bool enableTourTargets;
 
   /// מספר חלוניות ה-PDF בטאב — קובע את חלקו של ה-viewer בתקציב הזיכרון.
   final int pdfPaneCount;
@@ -331,7 +331,6 @@ class PdfBookScreen extends StatefulWidget {
     super.key,
     required this.tab,
     this.isInCombinedView = false,
-    this.enableTourTargets = false,
     this.pdfPaneCount = 1,
   });
 
@@ -4232,7 +4231,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
                 leadingItems: [
                   AppTopBarItem(
                     widget: NavPanelToggleButton(
-                      key: widget.enableTourTargets
+                      key: TourTargetsScope.enabledOf(context)
                           ? pdfBookNavigationTourTargetKey
                           : null,
                       isOpen: showLeftPane,
@@ -5011,10 +5010,10 @@ class _PdfBookScreenState extends State<PdfBookScreen>
       builder: (context, _) => ResponsiveActionBar(
         key: const ValueKey('pdf_actions'),
         overflowMenuOffset: const Offset(0, 8),
-        overflowButtonKey: widget.enableTourTargets
+        overflowButtonKey: TourTargetsScope.enabledOf(context)
             ? pdfBookOverflowTourTargetKey
             : null,
-        menuItemKeysByTooltip: widget.enableTourTargets
+        menuItemKeysByTooltip: TourTargetsScope.enabledOf(context)
             ? {
                 'סימניות בספר זה': pdfBookOverflowBookmarkTourTargetKey,
                 'חיפוש': pdfBookOverflowSearchTourTargetKey,
@@ -5080,7 +5079,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         onPressed: null,
       ),
       ActionButtonData.simple(
-        key: widget.enableTourTargets ? pdfBookSearchTourTargetKey : null,
+        key: TourTargetsScope.enabledOf(context)
+            ? pdfBookSearchTourTargetKey
+            : null,
         icon: FluentIcons.search_24_regular,
         tooltip: 'חיפוש',
         onPressed: _ensureSearchTabIsActive,
@@ -5161,7 +5162,7 @@ class _PdfBookScreenState extends State<PdfBookScreen>
           context,
           book: widget.tab.book,
           compact: isCompact,
-          tourKey: widget.enableTourTargets
+          tourKey: TourTargetsScope.enabledOf(context)
               ? pdfBookBookmarkTourTargetKey
               : null,
         ),
@@ -5181,7 +5182,9 @@ class _PdfBookScreenState extends State<PdfBookScreen>
         (
           60,
           ActionButtonData.simple(
-            key: widget.enableTourTargets ? pdfBookPrintTourTargetKey : null,
+            key: TourTargetsScope.enabledOf(context)
+                ? pdfBookPrintTourTargetKey
+                : null,
             icon: FluentIcons.print_24_regular,
             tooltip: 'הדפס',
             onPressed: () => _handlePrintPress(context),
